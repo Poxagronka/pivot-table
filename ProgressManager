@@ -1,0 +1,64 @@
+/**
+ * Progress Management
+ * Used only for manual comment saving to show progress to user
+ */
+class ProgressManager {
+  constructor(title = 'Processing...') {
+    this.progressSheet = null;
+    this.startTime = new Date();
+    this.title = title;
+  }
+
+  /**
+   * Start showing progress with initial status
+   */
+  start(initialStatus = 'Initializing...') {
+    try {
+      const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      this.progressSheet = spreadsheet.insertSheet(this.title);
+      this.progressSheet.getRange('A1').setValue(this.title).setFontSize(16).setFontWeight('bold');
+      this.progressSheet.getRange('A2').setValue(`Started: ${this.startTime.toLocaleString()}`);
+      this.progressSheet.getRange('A3').setValue('Status: ' + initialStatus);
+      this.progressSheet.getRange('A5').setValue('Please wait, do not modify the spreadsheet...');
+      this.progressSheet.setColumnWidth(1, 500);
+      SpreadsheetApp.flush();
+    } catch (e) {
+      console.error('Error creating progress sheet:', e);
+    }
+    return this;
+  }
+
+  /**
+   * Update progress status
+   */
+  update(status, details = null) {
+    if (!this.progressSheet) return;
+    try {
+      this.progressSheet.getRange('A3').setValue('Status: ' + status);
+      if (details) {
+        this.progressSheet.getRange('A4').setValue('Details: ' + details);
+      }
+      const elapsed = Math.round((new Date() - this.startTime) / 1000);
+      this.progressSheet.getRange('A6').setValue(`Elapsed: ${elapsed} seconds`);
+      SpreadsheetApp.flush();
+    } catch (e) {
+      console.error('Error updating progress:', e);
+    }
+  }
+
+  /**
+   * End progress tracking and cleanup
+   */
+  end(showSuccess = true) {
+    if (!this.progressSheet) return;
+    try {
+      if (showSuccess) {
+        this.update('Completed successfully!');
+        Utilities.sleep(1500);
+      }
+      SpreadsheetApp.getActiveSpreadsheet().deleteSheet(this.progressSheet);
+    } catch (e) {
+      console.error('Error removing progress sheet:', e);
+    }
+  }
+}
