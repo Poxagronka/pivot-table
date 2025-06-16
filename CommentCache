@@ -277,160 +277,6 @@ function startAutoCache() {
 }
 
 /**
- * GROUP STATE MANAGEMENT
- * Функции для сохранения и восстановления состояния групп
- */
-
-/**
- * Сохранить текущее состояние групп (какие свернуты, какие развернуты)
- */
-function saveGroupState(sheet) {
-  try {
-    const groupState = {
-      collapsedRanges: []
-    };
-    
-    const maxRows = sheet.getMaxRows();
-    
-    // Проходим по всем строкам и определяем свернутые группы
-    // К сожалению, Google Apps Script не предоставляет прямого API для проверки состояния групп
-    // Поэтому используем workaround через попытку развернуть
-    let currentRow = 1;
-    while (currentRow <= maxRows) {
-      try {
-        // Пробуем найти группы, проверяя видимость строк
-        const range = sheet.getRange(currentRow, 1, 1, 1);
-        
-        // Попробуем определить, является ли строка частью свернутой группы
-        // Это сложно сделать точно с текущим API, поэтому используем упрощенный подход
-        
-        currentRow++;
-      } catch (e) {
-        currentRow++;
-      }
-    }
-    
-    // Упрощенное решение: просто запоминаем, что нужно будет свернуть все группы обратно
-    groupState.shouldCollapseAll = true;
-    
-    return groupState;
-    
-  } catch (error) {
-    console.error('Error saving group state:', error);
-    return { collapsedRanges: [], shouldCollapseAll: false };
-  }
-}
-
-/**
- * Восстановить состояние групп
- */
-function restoreGroupState(sheet, groupState) {
-  try {
-    if (!groupState || !groupState.shouldCollapseAll) {
-      return;
-    }
-    
-    // Поскольку точное определение состояния групп сложно,
-    // используем эвристику: сворачиваем все группы после автокеширования
-    // Это предполагает, что пользователь обычно держит группы свернутыми
-    
-    // Получаем данные для определения структуры
-    const data = sheet.getDataRange().getValues();
-    
-    // Находим все группы (APP и WEEK уровни) и сворачиваем их
-    collapseAllGroupsIntelligently(sheet, data);
-    
-  } catch (error) {
-    console.error('Error restoring group state:', error);
-  }
-}
-
-/**
- * Умное сворачивание групп на основе структуры данных
- */
-function collapseAllGroupsIntelligently(sheet, data) {
-  try {
-    // Сначала сворачиваем группы более глубокого уровня (WEEK уровень)
-    let currentApp = '';
-    let weekGroupStart = -1;
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      
-      if (level === 'APP') {
-        // Если была открыта группа недель, сворачиваем её
-        if (weekGroupStart !== -1) {
-          try {
-            const groupSize = i - weekGroupStart;
-            if (groupSize > 1) {
-              sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
-            }
-          } catch (e) {
-            // Игнорируем ошибки группировки
-          }
-        }
-        
-        currentApp = data[i][1];
-        weekGroupStart = -1;
-      } else if (level === 'WEEK') {
-        if (weekGroupStart === -1) {
-          weekGroupStart = i + 1; // Начинаем группу с следующей строки (CAMPAIGN)
-        }
-      }
-    }
-    
-    // Сворачиваем последнюю группу недель если есть
-    if (weekGroupStart !== -1) {
-      try {
-        const groupSize = data.length - weekGroupStart;
-        if (groupSize > 0) {
-          sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
-        }
-      } catch (e) {
-        // Игнорируем ошибки группировки
-      }
-    }
-    
-    // Теперь сворачиваем группы уровня приложений
-    let appGroupStart = -1;
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      
-      if (level === 'APP') {
-        // Если была открыта группа приложения, сворачиваем её
-        if (appGroupStart !== -1) {
-          try {
-            const groupSize = i - appGroupStart;
-            if (groupSize > 1) {
-              sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
-            }
-          } catch (e) {
-            // Игнорируем ошибки группировки
-          }
-        }
-        
-        appGroupStart = i + 1; // Начинаем новую группу приложения
-      }
-    }
-    
-    // Сворачиваем последнюю группу приложения
-    if (appGroupStart !== -1) {
-      try {
-        const groupSize = data.length - appGroupStart;
-        if (groupSize > 0) {
-          sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
-        }
-      } catch (e) {
-        // Игнорируем ошибки группировки
-      }
-    }
-    
-  } catch (error) {
-    console.error('Error in intelligent group collapsing:', error);
-  }
-
-/**
  * Остановить автоматическое кеширование комментариев
  * Удаляет все триггеры автокеширования
  */
@@ -682,11 +528,13 @@ function forceCache() {
   const ui = SpreadsheetApp.getUi();
   
   try {
+    // Используем ту же логику что и автокеширование
     autoCacheComments();
     ui.alert(
       'Кеширование выполнено',
       'Комментарии успешно сохранены в кеш.\n\n' +
-      'Время выполнения: ' + new Date().toLocaleString(),
+      'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
+      'Примечание: Использованы те же настройки групп, что и для автокеширования.',
       ui.ButtonSet.OK
     );
   } catch (error) {
@@ -695,5 +543,160 @@ function forceCache() {
       'Не удалось выполнить кеширование:\n\n' + error.toString(),
       ui.ButtonSet.OK
     );
+  }
+}
+
+/**
+ * GROUP STATE MANAGEMENT
+ * Функции для сохранения и восстановления состояния групп
+ */
+
+/**
+ * Сохранить текущее состояние групп (какие свернуты, какие развернуты)
+ */
+function saveGroupState(sheet) {
+  try {
+    const groupState = {
+      collapsedRanges: []
+    };
+    
+    const maxRows = sheet.getMaxRows();
+    
+    // Проходим по всем строкам и определяем свернутые группы
+    // К сожалению, Google Apps Script не предоставляет прямого API для проверки состояния групп
+    // Поэтому используем workaround через попытку развернуть
+    let currentRow = 1;
+    while (currentRow <= maxRows) {
+      try {
+        // Пробуем найти группы, проверяя видимость строк
+        const range = sheet.getRange(currentRow, 1, 1, 1);
+        
+        // Попробуем определить, является ли строка частью свернутой группы
+        // Это сложно сделать точно с текущим API, поэтому используем упрощенный подход
+        
+        currentRow++;
+      } catch (e) {
+        currentRow++;
+      }
+    }
+    
+    // Упрощенное решение: просто запоминаем, что нужно будет свернуть все группы обратно
+    groupState.shouldCollapseAll = true;
+    
+    return groupState;
+    
+  } catch (error) {
+    console.error('Error saving group state:', error);
+    return { collapsedRanges: [], shouldCollapseAll: false };
+  }
+}
+
+/**
+ * Восстановить состояние групп
+ */
+function restoreGroupState(sheet, groupState) {
+  try {
+    if (!groupState || !groupState.shouldCollapseAll) {
+      return;
+    }
+    
+    // Поскольку точное определение состояния групп сложно,
+    // используем эвристику: сворачиваем все группы после автокеширования
+    // Это предполагает, что пользователь обычно держит группы свернутыми
+    
+    // Получаем данные для определения структуры
+    const data = sheet.getDataRange().getValues();
+    
+    // Находим все группы (APP и WEEK уровни) и сворачиваем их
+    collapseAllGroupsIntelligently(sheet, data);
+    
+  } catch (error) {
+    console.error('Error restoring group state:', error);
+  }
+}
+
+/**
+ * Умное сворачивание групп на основе структуры данных
+ */
+function collapseAllGroupsIntelligently(sheet, data) {
+  try {
+    // Сначала сворачиваем группы более глубокого уровня (WEEK уровень)
+    let currentApp = '';
+    let weekGroupStart = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      
+      if (level === 'APP') {
+        // Если была открыта группа недель, сворачиваем её
+        if (weekGroupStart !== -1) {
+          try {
+            const groupSize = i - weekGroupStart;
+            if (groupSize > 1) {
+              sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
+            }
+          } catch (e) {
+            // Игнорируем ошибки группировки
+          }
+        }
+        
+        currentApp = data[i][1];
+        weekGroupStart = -1;
+      } else if (level === 'WEEK') {
+        if (weekGroupStart === -1) {
+          weekGroupStart = i + 1; // Начинаем группу с следующей строки (CAMPAIGN)
+        }
+      }
+    }
+    
+    // Сворачиваем последнюю группу недель если есть
+    if (weekGroupStart !== -1) {
+      try {
+        const groupSize = data.length - weekGroupStart;
+        if (groupSize > 0) {
+          sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
+        }
+      } catch (e) {
+        // Игнорируем ошибки группировки
+      }
+    }
+    
+    // Теперь сворачиваем группы уровня приложений
+    let appGroupStart = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      
+      if (level === 'APP') {
+        // Если была открыта группа приложения, сворачиваем её
+        if (appGroupStart !== -1) {
+          try {
+            const groupSize = i - appGroupStart;
+            if (groupSize > 1) {
+              sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
+            }
+          } catch (e) {
+            // Игнорируем ошибки группировки
+          }
+        }
+        
+        appGroupStart = i + 1; // Начинаем новую группу приложения
+      }
+    }
+    
+    // Сворачиваем последнюю группу приложения
+    if (appGroupStart !== -1) {
+      try {
+        const groupSize = data.length - appGroupStart;
+        if (groupSize > 0) {
+          sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
+        }
+      } catch (e) {
+        // Игнорируем ошибки группировки
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error in intelligent group collapsing:', error);
   }
 }
