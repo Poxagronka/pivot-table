@@ -20,7 +20,7 @@ function onOpen() {
     .addItem('Save comments to cache', 'saveCommentsToCache')
     .addSeparator()
     .addSubMenu(ui.createMenu('💾 Auto Cache')
-      .addItem('▶️ Start auto cache (15 min)', 'startAutoCache')
+      .addItem('▶️ Start auto cache (60 min)', 'startAutoCache')
       .addItem('⏹️ Stop auto cache', 'stopAutoCache')
       .addItem('📊 Check status', 'checkAutoCacheStatus')
       .addSeparator()
