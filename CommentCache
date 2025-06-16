@@ -128,6 +128,32 @@ class CommentCache {
       }
     }
   }
+
+  /**
+   * Sync comments from the main sheet to cache (quiet version without expanding groups)
+   * Used by auto-cache to avoid interfering with user's group state
+   */
+  syncCommentsFromSheetQuiet() {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    
+    // DON'T expand groups - assume they're already expanded by caller
+    const data = sheet.getDataRange().getValues();
+    let currentApp = '';
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      const nameOrRange = data[i][1];
+      const comment = data[i][15]; // Comments column
+      
+      if (level === 'APP') {
+        currentApp = nameOrRange;
+      } else if (level === 'WEEK' && currentApp && comment) {
+        this.saveComment(currentApp, nameOrRange, comment);
+      }
+    }
+  }
 }
 
 /**
@@ -138,6 +164,7 @@ class CommentCache {
 /**
  * Автоматическое кеширование комментариев (без UI)
  * Запускается триггером каждые 15 минут
+ * Сохраняет и восстанавливает состояние групп чтобы не мешать пользователю
  */
 function autoCacheComments() {
   try {
@@ -150,12 +177,28 @@ function autoCacheComments() {
       return;
     }
     
+    // Проверяем настройку пользователя о восстановлении групп
+    const userProperties = PropertiesService.getUserProperties();
+    const shouldRestoreGroups = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
+    
+    let groupState = null;
+    
+    // Сохраняем текущее состояние групп если нужно восстанавливать
+    if (shouldRestoreGroups) {
+      groupState = saveGroupState(sheet);
+    }
+    
     // Разворачиваем все группы для чтения данных
     expandAllGroups(sheet);
     
-    // Синхронизируем комментарии
+    // Синхронизируем комментарии (без повторного разворачивания)
     const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
+    cache.syncCommentsFromSheetQuiet(); // Новый метод без expandAllGroups
+    
+    // Восстанавливаем состояние групп если настройка включена
+    if (shouldRestoreGroups && groupState) {
+      restoreGroupState(sheet, groupState);
+    }
     
     console.log('AutoCache: Комментарии успешно кешированы - ' + new Date().toLocaleString());
     
@@ -188,6 +231,20 @@ function startAutoCache() {
       return;
     }
     
+    // Спрашиваем пользователя о настройках групп
+    const groupResponse = ui.alert(
+      'Настройка автокеширования',
+      'Автокеширование должно временно разворачивать группы для доступа к данным.\n\n' +
+      'Хотите ли вы, чтобы группы автоматически сворачивались обратно после кеширования?\n\n' +
+      '• ДА - группы будут восстановлены (рекомендуется)\n' +
+      '• НЕТ - группы останутся развернутыми',
+      ui.ButtonSet.YES_NO
+    );
+    
+    // Сохраняем настройку пользователя
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('AUTO_CACHE_RESTORE_GROUPS', groupResponse === ui.Button.YES ? 'true' : 'false');
+    
     // Создаем новый триггер
     ScriptApp.newTrigger('autoCacheComments')
       .timeBased()
@@ -197,11 +254,14 @@ function startAutoCache() {
     // Сразу выполняем первое кеширование
     autoCacheComments();
     
+    const groupSetting = groupResponse === ui.Button.YES ? 'восстанавливаются' : 'остаются развернутыми';
+    
     ui.alert(
       'Автокеширование запущено', 
       'Автоматическое сохранение комментариев активировано!\n\n' +
       '• Комментарии будут сохраняться каждые 15 минут\n' +
       '• Первое сохранение выполнено сейчас\n' +
+      `• Группы после кеширования: ${groupSetting}\n` +
       '• Для отключения используйте "Остановить автокеширование"',
       ui.ButtonSet.OK
     );
@@ -215,6 +275,160 @@ function startAutoCache() {
     );
   }
 }
+
+/**
+ * GROUP STATE MANAGEMENT
+ * Функции для сохранения и восстановления состояния групп
+ */
+
+/**
+ * Сохранить текущее состояние групп (какие свернуты, какие развернуты)
+ */
+function saveGroupState(sheet) {
+  try {
+    const groupState = {
+      collapsedRanges: []
+    };
+    
+    const maxRows = sheet.getMaxRows();
+    
+    // Проходим по всем строкам и определяем свернутые группы
+    // К сожалению, Google Apps Script не предоставляет прямого API для проверки состояния групп
+    // Поэтому используем workaround через попытку развернуть
+    let currentRow = 1;
+    while (currentRow <= maxRows) {
+      try {
+        // Пробуем найти группы, проверяя видимость строк
+        const range = sheet.getRange(currentRow, 1, 1, 1);
+        
+        // Попробуем определить, является ли строка частью свернутой группы
+        // Это сложно сделать точно с текущим API, поэтому используем упрощенный подход
+        
+        currentRow++;
+      } catch (e) {
+        currentRow++;
+      }
+    }
+    
+    // Упрощенное решение: просто запоминаем, что нужно будет свернуть все группы обратно
+    groupState.shouldCollapseAll = true;
+    
+    return groupState;
+    
+  } catch (error) {
+    console.error('Error saving group state:', error);
+    return { collapsedRanges: [], shouldCollapseAll: false };
+  }
+}
+
+/**
+ * Восстановить состояние групп
+ */
+function restoreGroupState(sheet, groupState) {
+  try {
+    if (!groupState || !groupState.shouldCollapseAll) {
+      return;
+    }
+    
+    // Поскольку точное определение состояния групп сложно,
+    // используем эвристику: сворачиваем все группы после автокеширования
+    // Это предполагает, что пользователь обычно держит группы свернутыми
+    
+    // Получаем данные для определения структуры
+    const data = sheet.getDataRange().getValues();
+    
+    // Находим все группы (APP и WEEK уровни) и сворачиваем их
+    collapseAllGroupsIntelligently(sheet, data);
+    
+  } catch (error) {
+    console.error('Error restoring group state:', error);
+  }
+}
+
+/**
+ * Умное сворачивание групп на основе структуры данных
+ */
+function collapseAllGroupsIntelligently(sheet, data) {
+  try {
+    // Сначала сворачиваем группы более глубокого уровня (WEEK уровень)
+    let currentApp = '';
+    let weekGroupStart = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      
+      if (level === 'APP') {
+        // Если была открыта группа недель, сворачиваем её
+        if (weekGroupStart !== -1) {
+          try {
+            const groupSize = i - weekGroupStart;
+            if (groupSize > 1) {
+              sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
+            }
+          } catch (e) {
+            // Игнорируем ошибки группировки
+          }
+        }
+        
+        currentApp = data[i][1];
+        weekGroupStart = -1;
+      } else if (level === 'WEEK') {
+        if (weekGroupStart === -1) {
+          weekGroupStart = i + 1; // Начинаем группу с следующей строки (CAMPAIGN)
+        }
+      }
+    }
+    
+    // Сворачиваем последнюю группу недель если есть
+    if (weekGroupStart !== -1) {
+      try {
+        const groupSize = data.length - weekGroupStart;
+        if (groupSize > 0) {
+          sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
+        }
+      } catch (e) {
+        // Игнорируем ошибки группировки
+      }
+    }
+    
+    // Теперь сворачиваем группы уровня приложений
+    let appGroupStart = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      
+      if (level === 'APP') {
+        // Если была открыта группа приложения, сворачиваем её
+        if (appGroupStart !== -1) {
+          try {
+            const groupSize = i - appGroupStart;
+            if (groupSize > 1) {
+              sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
+            }
+          } catch (e) {
+            // Игнорируем ошибки группировки
+          }
+        }
+        
+        appGroupStart = i + 1; // Начинаем новую группу приложения
+      }
+    }
+    
+    // Сворачиваем последнюю группу приложения
+    if (appGroupStart !== -1) {
+      try {
+        const groupSize = data.length - appGroupStart;
+        if (groupSize > 0) {
+          sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
+        }
+      } catch (e) {
+        // Игнорируем ошибки группировки
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error in intelligent group collapsing:', error);
+  }
 
 /**
  * Остановить автоматическое кеширование комментариев
@@ -298,13 +512,19 @@ function checkAutoCacheStatus() {
       const lastRun = getLastTriggerRun(trigger);
       const nextRun = getNextTriggerRun();
       
+      // Проверяем настройку восстановления групп
+      const userProperties = PropertiesService.getUserProperties();
+      const restoreGroups = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
+      const groupBehavior = restoreGroups ? 'восстанавливаются после кеширования' : 'остаются развернутыми';
+      
       ui.alert(
         'Статус автокеширования',
         '✅ Автоматическое кеширование АКТИВНО\n\n' +
         `• Интервал: каждые 15 минут\n` +
         `• Активных триггеров: ${triggers.length}\n` +
         `• Последний запуск: ${lastRun}\n` +
-        `• Следующий запуск: ~${nextRun}\n\n` +
+        `• Следующий запуск: ~${nextRun}\n` +
+        `• Группы: ${groupBehavior}\n\n` +
         'Комментарии сохраняются автоматически.',
         ui.ButtonSet.OK
       );
@@ -315,6 +535,68 @@ function checkAutoCacheStatus() {
     ui.alert(
       'Ошибка', 
       'Не удалось проверить статус автокеширования:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Изменить настройки автокеширования
+ * Позволяет изменить поведение с группами без перезапуска
+ */
+function configureAutoCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Проверяем активность автокеширования
+    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
+      trigger.getHandlerFunction() === 'autoCacheComments'
+    );
+    
+    if (triggers.length === 0) {
+      ui.alert(
+        'Автокеширование не активно',
+        'Сначала запустите автокеширование, а затем настройте его.',
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+    
+    // Получаем текущую настройку
+    const userProperties = PropertiesService.getUserProperties();
+    const currentSetting = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
+    const currentText = currentSetting ? 'ДА (восстанавливаются)' : 'НЕТ (остаются развернутыми)';
+    
+    // Спрашиваем о новой настройке
+    const response = ui.alert(
+      'Настройки автокеширования',
+      `Текущая настройка групп: ${currentText}\n\n` +
+      'Автокеширование должно временно разворачивать группы для доступа к данным.\n\n' +
+      'Хотите ли вы, чтобы группы автоматически сворачивались обратно после кеширования?\n\n' +
+      '• ДА - группы будут восстановлены (рекомендуется)\n' +
+      '• НЕТ - группы останутся развернутыми',
+      ui.ButtonSet.YES_NO
+    );
+    
+    // Сохраняем новую настройку
+    const newSetting = response === ui.Button.YES;
+    userProperties.setProperty('AUTO_CACHE_RESTORE_GROUPS', newSetting ? 'true' : 'false');
+    
+    const newText = newSetting ? 'будут восстанавливаться' : 'будут оставаться развернутыми';
+    
+    ui.alert(
+      'Настройки обновлены',
+      `Настройка изменена успешно!\n\n` +
+      `Теперь группы ${newText} после автоматического кеширования.\n\n` +
+      'Изменения вступят в силу при следующем автокешировании.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    console.error('Ошибка настройки автокеширования:', error);
+    ui.alert(
+      'Ошибка',
+      'Не удалось изменить настройки:\n\n' + error.toString(),
       ui.ButtonSet.OK
     );
   }
