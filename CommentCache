@@ -431,15 +431,15 @@ function clearAllAutoCacheTriggers() {
 
 /**
  * GROUP MANAGEMENT
- * Простое управление группами - использует встроенные функции Google Sheets
+ * Правильное управление группами - только APP и WEEK уровни
  */
 
 /**
- * Свернуть все группы строк (аналог "Collapse all row groups" из меню)
+ * Свернуть все группы строк (только WEEK и APP)
  */
 function collapseAllGroups(sheet) {
   try {
-    console.log('Сворачиваем все группы строк...');
+    console.log('Сворачиваем все группы (WEEK -> APP)...');
     
     const lastRow = sheet.getLastRow();
     
@@ -448,41 +448,18 @@ function collapseAllGroups(sheet) {
       return;
     }
     
-    // Простой подход - многократно вызываем collapseGroups на всем диапазоне
-    // пока не получим ошибку (что означает - больше нет групп для сворачивания)
-    let attempt = 0;
-    const maxAttempts = 20; // Увеличиваем лимит попыток
+    // Сначала полностью разворачиваем все группы
+    console.log('1. Разворачиваем все группы...');
+    expandAllGroupsCompletely(sheet);
     
-    while (attempt < maxAttempts) {
-      attempt++;
-      try {
-        // Пробуем свернуть все группы на листе
-        const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
-        range.collapseGroups();
-        
-        console.log(`Попытка ${attempt}: группы свернуты`);
-        SpreadsheetApp.flush();
-        
-        // Небольшая пауза между попытками для стабильности
-        if (attempt < maxAttempts) {
-          Utilities.sleep(50);
-        }
-        
-      } catch (error) {
-        console.log(`Попытка ${attempt}: ${error.toString()}`);
-        // Если получили ошибку "Cannot find group" или подобную - значит все группы свернуты
-        if (error.toString().includes('Cannot find group') || 
-            error.toString().includes('No groups found') ||
-            error.toString().includes('группы не найдены')) {
-          console.log('Все группы успешно свернуты');
-          break;
-        }
-        // Если другая ошибка - тоже прекращаем
-        break;
-      }
-    }
+    // Теперь сворачиваем в правильном порядке: WEEK -> APP
+    console.log('2. Сворачиваем группы WEEK (внутренние)...');
+    collapseGroupsByType(sheet, 'WEEK');
     
-    console.log(`Сворачивание завершено за ${attempt} попыток`);
+    console.log('3. Сворачиваем группы APP (внешние)...');
+    collapseGroupsByType(sheet, 'APP');
+    
+    console.log('Сворачивание завершено');
     
   } catch (error) {
     console.error('Error in collapseAllGroups:', error);
@@ -490,11 +467,85 @@ function collapseAllGroups(sheet) {
 }
 
 /**
- * Альтернативный метод сворачивания - построчный анализ
+ * Свернуть группы определенного типа
  */
-function collapseAllGroupsAlternative(sheet) {
+function collapseGroupsByType(sheet, groupType) {
   try {
-    console.log('Альтернативный метод сворачивания...');
+    const data = sheet.getDataRange().getValues();
+    let collapsedCount = 0;
+    
+    // Идем снизу вверх по данным, ищем строки нужного типа
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (data[i][0] === groupType) {
+        try {
+          // Пробуем свернуть группу на этой строке
+          const range = sheet.getRange(i + 1, 1, 1, 1);
+          range.collapseGroups();
+          collapsedCount++;
+          
+          // Логируем прогресс каждые 5 групп
+          if (collapsedCount % 5 === 0) {
+            console.log(`  ${groupType}: свернуто ${collapsedCount} групп`);
+            SpreadsheetApp.flush();
+          }
+          
+        } catch (e) {
+          // Игнорируем ошибки - возможно эта строка не имеет группы
+        }
+      }
+    }
+    
+    SpreadsheetApp.flush();
+    console.log(`  ${groupType}: итого свернуто ${collapsedCount} групп`);
+    
+  } catch (error) {
+    console.error(`Error collapsing ${groupType} groups:`, error);
+  }
+}
+
+/**
+ * Полностью развернуть все группы
+ */
+function expandAllGroupsCompletely(sheet) {
+  try {
+    const lastRow = sheet.getLastRow();
+    
+    if (lastRow <= 1) {
+      return;
+    }
+    
+    // Делаем несколько итераций разворачивания
+    let attempt = 0;
+    const maxAttempts = 10;
+    
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
+        range.expandGroups();
+        SpreadsheetApp.flush();
+        
+        // Небольшая пауза между итерациями
+        Utilities.sleep(20);
+        
+      } catch (e) {
+        // Если ошибка - значит больше нет групп для разворачивания
+        console.log(`  Разворачивание завершено на итерации ${attempt}`);
+        break;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error in expandAllGroupsCompletely:', error);
+  }
+}
+
+/**
+ * Альтернативный метод - простое двухэтапное сворачивание
+ */
+function collapseAllGroupsSimple(sheet) {
+  try {
+    console.log('Простое двухэтапное сворачивание...');
     
     const lastRow = sheet.getLastRow();
     
@@ -503,48 +554,71 @@ function collapseAllGroupsAlternative(sheet) {
       return;
     }
     
-    // Пробуем свернуть каждую строку отдельно
-    for (let row = lastRow; row >= 2; row--) {
-      try {
-        const range = sheet.getRange(row, 1, 1, 1);
-        range.collapseGroups();
-      } catch (e) {
-        // Игнорируем ошибки для строк без групп
-      }
+    // Полностью разворачиваем
+    expandAllGroupsCompletely(sheet);
+    
+    // Этап 1: Сворачиваем один раз (должны свернуться внутренние группы WEEK)
+    console.log('Этап 1: Сворачиваем внутренние группы...');
+    try {
+      const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
+      range.collapseGroups();
+      SpreadsheetApp.flush();
+      console.log('Этап 1 выполнен');
+    } catch (e) {
+      console.log('Этап 1: ' + e.toString());
     }
     
-    SpreadsheetApp.flush();
-    console.log('Альтернативный метод завершен');
+    // Небольшая пауза
+    Utilities.sleep(200);
+    
+    // Этап 2: Сворачиваем еще раз (должны свернуться внешние группы APP)
+    console.log('Этап 2: Сворачиваем внешние группы...');
+    try {
+      const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
+      range.collapseGroups();
+      SpreadsheetApp.flush();
+      console.log('Этап 2 выполнен');
+    } catch (e) {
+      console.log('Этап 2: ' + e.toString());
+    }
+    
+    console.log('Простое двухэтапное сворачивание завершено');
     
   } catch (error) {
-    console.error('Alternative collapse failed:', error);
+    console.error('Simple collapse failed:', error);
   }
 }
 
 /**
- * Принудительно свернуть все группы (комбинированный подход)
+ * Принудительно свернуть все группы (комбинированные методы)
  */
 function forceCollapseAllGroups(sheet) {
   try {
     console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ВСЕХ ГРУПП ===');
     
-    // Основной подход - аналог "Collapse all row groups"
-    console.log('1. Основной метод (аналог Collapse all row groups)...');
+    // Метод 1: Точное сворачивание по типам групп
+    console.log('Метод 1: Сворачивание по типам (WEEK -> APP)...');
     collapseAllGroups(sheet);
     
-    // Дополнительная проверка через альтернативный метод
-    console.log('2. Альтернативный метод для подстраховки...');
-    Utilities.sleep(200);
-    collapseAllGroupsAlternative(sheet);
+    // Небольшая пауза между методами
+    Utilities.sleep(300);
     
-    // Финальная попытка
-    console.log('3. Финальная проверка...');
+    // Метод 2: Простое двухэтапное сворачивание для подстраховки
+    console.log('Метод 2: Простое двухэтапное сворачивание...');
+    collapseAllGroupsSimple(sheet);
+    
+    // Финальная проверка
+    console.log('Финальная проверка...');
     try {
+      expandAllGroupsCompletely(sheet);
+      Utilities.sleep(100);
+      
+      // Пробуем свернуть что осталось
       const range = sheet.getRange(1, 1, sheet.getLastRow(), 1);
       range.collapseGroups();
-      console.log('Финальная попытка выполнена');
+      console.log('Финальная проверка: дополнительное сворачивание выполнено');
     } catch (e) {
-      console.log('Финальная попытка: ' + e.toString());
+      console.log('Финальная проверка: ' + e.toString());
     }
     
     console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ЗАВЕРШЕНО ===');
@@ -555,7 +629,7 @@ function forceCollapseAllGroups(sheet) {
 }
 
 /**
- * Развернуть все группы (аналог "Expand all row groups")
+ * Развернуть все группы (простая версия)
  */
 function expandAllGroupsSimple(sheet) {
   try {
@@ -570,7 +644,7 @@ function expandAllGroupsSimple(sheet) {
     
     // Многократно вызываем expandGroups пока не получим ошибку
     let attempt = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 15;
     
     while (attempt < maxAttempts) {
       attempt++;
@@ -582,7 +656,7 @@ function expandAllGroupsSimple(sheet) {
         SpreadsheetApp.flush();
         
         if (attempt < maxAttempts) {
-          Utilities.sleep(50);
+          Utilities.sleep(30);
         }
         
       } catch (error) {
