@@ -1,0 +1,516 @@
+/**
+ * Debug Functions для Campaign Report
+ * Содержит функции для диагностики проблем с генерацией репорта
+ */
+
+/**
+ * Главная дебаг функция - запускается из меню
+ */
+function debugReportGeneration() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Создаем дебаг лист для вывода результатов
+    const debugSheet = createDebugSheet();
+    logDebug(debugSheet, '=== НАЧАЛО ДИАГНОСТИКИ ===', 'HEADER');
+    
+    // 1. Проверяем конфигурацию
+    logDebug(debugSheet, '1. ПРОВЕРКА КОНФИГУРАЦИИ', 'SECTION');
+    debugConfiguration(debugSheet);
+    
+    // 2. Тестируем API запрос
+    logDebug(debugSheet, '2. ТЕСТИРОВАНИЕ API ЗАПРОСА', 'SECTION');
+    const apiResult = debugAPIRequest(debugSheet);
+    
+    if (!apiResult.success) {
+      logDebug(debugSheet, 'ОШИБКА: API запрос не прошел. Дальнейшая диагностика невозможна.', 'ERROR');
+      ui.alert('Дебаг завершен', 'Проверьте лист "Debug_Log" для подробностей ошибки API.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // 3. Анализируем структуру данных
+    logDebug(debugSheet, '3. АНАЛИЗ СТРУКТУРЫ ДАННЫХ', 'SECTION');
+    debugDataStructure(debugSheet, apiResult.data);
+    
+    // 4. Проверяем обработку данных
+    logDebug(debugSheet, '4. ПРОВЕРКА ОБРАБОТКИ ДАННЫХ', 'SECTION');
+    debugDataProcessing(debugSheet, apiResult.data);
+    
+    // 5. Проверяем фильтры
+    logDebug(debugSheet, '5. ПРОВЕРКА ФИЛЬТРОВ', 'SECTION');
+    debugFilters(debugSheet, apiResult.data);
+    
+    logDebug(debugSheet, '=== ДИАГНОСТИКА ЗАВЕРШЕНА ===', 'HEADER');
+    
+    ui.alert('Дебаг завершен', 'Проверьте лист "Debug_Log" для подробного анализа проблемы.', ui.ButtonSet.OK);
+    
+  } catch (error) {
+    console.error('Ошибка в дебаг функции:', error);
+    ui.alert('Ошибка дебага', 'Ошибка: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Создает или очищает лист для дебага
+ */
+function createDebugSheet() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let debugSheet = spreadsheet.getSheetByName('Debug_Log');
+  
+  if (debugSheet) {
+    debugSheet.clear();
+  } else {
+    debugSheet = spreadsheet.insertSheet('Debug_Log');
+  }
+  
+  // Настраиваем заголовки
+  debugSheet.getRange(1, 1, 1, 4).setValues([['Время', 'Тип', 'Сообщение', 'Детали']]);
+  debugSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
+  debugSheet.setColumnWidth(1, 120);
+  debugSheet.setColumnWidth(2, 100);
+  debugSheet.setColumnWidth(3, 400);
+  debugSheet.setColumnWidth(4, 500);
+  
+  return debugSheet;
+}
+
+/**
+ * Логирует сообщение в дебаг лист
+ */
+function logDebug(sheet, message, type = 'INFO', details = '') {
+  const timestamp = new Date().toLocaleString();
+  const lastRow = sheet.getLastRow();
+  const newRow = lastRow + 1;
+  
+  sheet.getRange(newRow, 1, 1, 4).setValues([[timestamp, type, message, details]]);
+  
+  // Применяем цветовое кодирование
+  const colors = {
+    'HEADER': { background: '#1c4587', fontColor: 'white' },
+    'SECTION': { background: '#6fa8dc', fontColor: 'white' },
+    'ERROR': { background: '#cc0000', fontColor: 'white' },
+    'WARNING': { background: '#ff9900', fontColor: 'white' },
+    'SUCCESS': { background: '#00aa00', fontColor: 'white' },
+    'INFO': { background: '#f3f3f3', fontColor: 'black' }
+  };
+  
+  if (colors[type]) {
+    sheet.getRange(newRow, 1, 1, 4)
+         .setBackground(colors[type].background)
+         .setFontColor(colors[type].fontColor);
+  }
+  
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Проверяет конфигурацию
+ */
+function debugConfiguration(debugSheet) {
+  try {
+    logDebug(debugSheet, 'Sheet ID: ' + CONFIG.SHEET_ID, 'INFO');
+    logDebug(debugSheet, 'API URL: ' + CONFIG.API_URL, 'INFO');
+    logDebug(debugSheet, 'Target eROAS: ' + CONFIG.TARGET_EROAS + '%', 'INFO');
+    
+    // Проверяем токен
+    if (CONFIG.BEARER_TOKEN && CONFIG.BEARER_TOKEN.length > 50) {
+      logDebug(debugSheet, 'Bearer Token: Найден (длина: ' + CONFIG.BEARER_TOKEN.length + ')', 'SUCCESS');
+    } else {
+      logDebug(debugSheet, 'Bearer Token: Отсутствует или слишком короткий!', 'ERROR');
+    }
+    
+    // Проверяем API фильтры
+    logDebug(debugSheet, 'API Фильтры:', 'INFO');
+    logDebug(debugSheet, '- Users: ' + API_CONFIG.FILTERS.USER.length + ' элементов', 'INFO', JSON.stringify(API_CONFIG.FILTERS.USER));
+    logDebug(debugSheet, '- Attribution Partner: ' + API_CONFIG.FILTERS.ATTRIBUTION_PARTNER.join(', '), 'INFO');
+    logDebug(debugSheet, '- Campaign Search: ' + API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH, 'INFO');
+    
+  } catch (error) {
+    logDebug(debugSheet, 'Ошибка проверки конфигурации: ' + error.toString(), 'ERROR');
+  }
+}
+
+/**
+ * Тестирует API запрос
+ */
+function debugAPIRequest(debugSheet) {
+  try {
+    // Используем период последние 30 дней для теста
+    const dateRange = getDateRange(30);
+    logDebug(debugSheet, 'Период запроса: ' + dateRange.from + ' до ' + dateRange.to, 'INFO');
+    
+    // Создаем payload
+    const payload = {
+      operationName: API_CONFIG.OPERATION_NAME,
+      variables: {
+        dateFilters: [{
+          dimension: "INSTALL_DATE",
+          from: dateRange.from,
+          to: dateRange.to,
+          include: true
+        }],
+        filters: [
+          { dimension: "USER", values: API_CONFIG.FILTERS.USER, include: true },
+          { dimension: "ATTRIBUTION_PARTNER", values: API_CONFIG.FILTERS.ATTRIBUTION_PARTNER, include: true },
+          { dimension: "ATTRIBUTION_NETWORK_HID", values: API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID, include: true },
+          { dimension: "ATTRIBUTION_CAMPAIGN_HID", values: [], include: true, searchByString: API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH }
+        ],
+        groupBy: API_CONFIG.GROUP_BY,
+        measures: API_CONFIG.MEASURES,
+        havingFilters: [],
+        anonymizationMode: "OFF",
+        topFilter: null,
+        revenuePredictionVersion: "",
+        isMultiMediation: true
+      },
+      query: getGraphQLQuery()
+    };
+    
+    logDebug(debugSheet, 'Payload создан', 'SUCCESS', 'Размер: ' + JSON.stringify(payload).length + ' символов');
+    
+    // Делаем запрос
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Authorization: `Bearer ${CONFIG.BEARER_TOKEN}`,
+        Connection: 'keep-alive',
+        DNT: '1',
+        Origin: 'https://app.appodeal.com',
+        Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest',
+        'Trace-Id': Utilities.getUuid()
+      },
+      payload: JSON.stringify(payload)
+    };
+    
+    logDebug(debugSheet, 'Отправляем API запрос...', 'INFO');
+    
+    const response = UrlFetchApp.fetch(CONFIG.API_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    
+    logDebug(debugSheet, 'HTTP код ответа: ' + responseCode, responseCode === 200 ? 'SUCCESS' : 'ERROR');
+    logDebug(debugSheet, 'Размер ответа: ' + responseText.length + ' символов', 'INFO');
+    
+    if (responseCode !== 200) {
+      logDebug(debugSheet, 'Ошибка API запроса', 'ERROR', responseText.substring(0, 1000));
+      return { success: false, error: 'HTTP ' + responseCode };
+    }
+    
+    // Парсим ответ
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseText);
+      logDebug(debugSheet, 'JSON ответ успешно распарсен', 'SUCCESS');
+    } catch (parseError) {
+      logDebug(debugSheet, 'Ошибка парсинга JSON ответа', 'ERROR', parseError.toString());
+      return { success: false, error: 'JSON parse error' };
+    }
+    
+    // Проверяем ошибки в ответе
+    if (parsedResponse.errors) {
+      logDebug(debugSheet, 'API вернул ошибки', 'ERROR', JSON.stringify(parsedResponse.errors));
+      return { success: false, error: 'API errors', data: parsedResponse };
+    }
+    
+    logDebug(debugSheet, 'API запрос выполнен успешно', 'SUCCESS');
+    return { success: true, data: parsedResponse };
+    
+  } catch (error) {
+    logDebug(debugSheet, 'Исключение при API запросе: ' + error.toString(), 'ERROR');
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * Анализирует структуру полученных данных
+ */
+function debugDataStructure(debugSheet, apiResponse) {
+  try {
+    // Проверяем основную структуру
+    if (!apiResponse.data) {
+      logDebug(debugSheet, 'Отсутствует поле data в ответе!', 'ERROR');
+      return;
+    }
+    
+    if (!apiResponse.data.analytics) {
+      logDebug(debugSheet, 'Отсутствует поле analytics в data!', 'ERROR');
+      return;
+    }
+    
+    if (!apiResponse.data.analytics.richStats) {
+      logDebug(debugSheet, 'Отсутствует поле richStats в analytics!', 'ERROR');
+      return;
+    }
+    
+    const richStats = apiResponse.data.analytics.richStats;
+    logDebug(debugSheet, 'Структура richStats найдена', 'SUCCESS');
+    
+    // Проверяем stats
+    if (!richStats.stats) {
+      logDebug(debugSheet, 'Отсутствует поле stats в richStats!', 'ERROR');
+      return;
+    }
+    
+    const stats = richStats.stats;
+    logDebug(debugSheet, 'Количество записей в stats: ' + stats.length, stats.length > 0 ? 'SUCCESS' : 'WARNING');
+    
+    if (stats.length === 0) {
+      logDebug(debugSheet, 'Массив stats пуст - нет данных для обработки!', 'WARNING');
+      return;
+    }
+    
+    // Анализируем первую запись
+    const firstRecord = stats[0];
+    logDebug(debugSheet, 'Структура первой записи:', 'INFO', JSON.stringify(firstRecord, null, 2));
+    
+    // Проверяем ожидаемые поля в первой записи
+    if (Array.isArray(firstRecord)) {
+      logDebug(debugSheet, 'Первая запись - массив с ' + firstRecord.length + ' элементами', 'INFO');
+      
+      // Анализируем элементы массива
+      firstRecord.forEach((item, index) => {
+        if (item && typeof item === 'object') {
+          logDebug(debugSheet, `Элемент [${index}]: ${item.__typename || 'неизвестный тип'}`, 'INFO', 
+                  JSON.stringify(item, null, 2).substring(0, 200));
+        }
+      });
+    } else {
+      logDebug(debugSheet, 'Первая запись - объект', 'INFO', JSON.stringify(firstRecord, null, 2));
+    }
+    
+    // Проверяем totals
+    if (richStats.totals) {
+      logDebug(debugSheet, 'Поле totals найдено, записей: ' + richStats.totals.length, 'INFO');
+    } else {
+      logDebug(debugSheet, 'Поле totals отсутствует', 'WARNING');
+    }
+    
+  } catch (error) {
+    logDebug(debugSheet, 'Ошибка анализа структуры данных: ' + error.toString(), 'ERROR');
+  }
+}
+
+/**
+ * Проверяет обработку данных
+ */
+function debugDataProcessing(debugSheet, apiResponse) {
+  try {
+    if (!apiResponse.data?.analytics?.richStats?.stats) {
+      logDebug(debugSheet, 'Нет данных для обработки', 'ERROR');
+      return;
+    }
+    
+    const stats = apiResponse.data.analytics.richStats.stats;
+    logDebug(debugSheet, 'Начинаем обработку ' + stats.length + ' записей', 'INFO');
+    
+    // Получаем текущую неделю для фильтрации
+    const today = new Date();
+    const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+    logDebug(debugSheet, 'Текущая неделя (исключается): ' + currentWeekStart, 'INFO');
+    
+    const processedData = {};
+    let totalProcessed = 0;
+    let skippedCurrentWeek = 0;
+    let errorCount = 0;
+    
+    stats.forEach((row, index) => {
+      try {
+        // Проверяем структуру записи
+        if (!Array.isArray(row) || row.length < 11) {
+          logDebug(debugSheet, `Запись ${index}: неверная структура (длина: ${row ? row.length : 'undefined'})`, 'WARNING');
+          errorCount++;
+          return;
+        }
+        
+        const date = row[0]?.value;
+        if (!date) {
+          logDebug(debugSheet, `Запись ${index}: отсутствует дата`, 'WARNING');
+          errorCount++;
+          return;
+        }
+        
+        const monday = getMondayOfWeek(new Date(date));
+        const weekKey = formatDateForAPI(monday);
+        
+        // Проверяем фильтрацию текущей недели
+        if (weekKey >= currentWeekStart) {
+          skippedCurrentWeek++;
+          return;
+        }
+        
+        const campaign = row[1];
+        const app = row[2];
+        
+        if (!campaign || !app) {
+          logDebug(debugSheet, `Запись ${index}: отсутствует campaign или app`, 'WARNING');
+          errorCount++;
+          return;
+        }
+        
+        // Обрабатываем запись
+        const appKey = app.id;
+        if (!processedData[appKey]) {
+          processedData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            weeks: {}
+          };
+        }
+        
+        if (!processedData[appKey].weeks[weekKey]) {
+          processedData[appKey].weeks[weekKey] = {
+            weekStart: weekKey,
+            campaigns: []
+          };
+        }
+        
+        totalProcessed++;
+        
+        // Логируем первые несколько записей для анализа
+        if (index < 3) {
+          logDebug(debugSheet, `Запись ${index}: ${app.name}, ${campaign.campaignName}, ${date}`, 'INFO');
+        }
+        
+      } catch (error) {
+        logDebug(debugSheet, `Ошибка обработки записи ${index}: ${error.toString()}`, 'ERROR');
+        errorCount++;
+      }
+    });
+    
+    logDebug(debugSheet, 'Обработка завершена:', 'SUCCESS');
+    logDebug(debugSheet, '- Всего записей: ' + stats.length, 'INFO');
+    logDebug(debugSheet, '- Успешно обработано: ' + totalProcessed, 'INFO');
+    logDebug(debugSheet, '- Пропущено (текущая неделя): ' + skippedCurrentWeek, 'INFO');
+    logDebug(debugSheet, '- Ошибок обработки: ' + errorCount, errorCount > 0 ? 'WARNING' : 'INFO');
+    logDebug(debugSheet, '- Уникальных приложений: ' + Object.keys(processedData).length, 'INFO');
+    
+    // Анализируем результат
+    if (Object.keys(processedData).length === 0) {
+      logDebug(debugSheet, 'ПРОБЛЕМА: После обработки не осталось данных!', 'ERROR');
+      
+      if (skippedCurrentWeek === stats.length) {
+        logDebug(debugSheet, 'Все записи относятся к текущей неделе и были отфильтрованы', 'WARNING');
+        logDebug(debugSheet, 'РЕШЕНИЕ: Попробуйте изменить период запроса или отключить фильтрацию текущей недели', 'INFO');
+      }
+    } else {
+      logDebug(debugSheet, 'Данные успешно обработаны', 'SUCCESS');
+      
+      // Показываем детали по приложениям
+      Object.values(processedData).forEach(app => {
+        const weekCount = Object.keys(app.weeks).length;
+        logDebug(debugSheet, `Приложение: ${app.appName} (${weekCount} недель)`, 'INFO');
+      });
+    }
+    
+  } catch (error) {
+    logDebug(debugSheet, 'Ошибка проверки обработки данных: ' + error.toString(), 'ERROR');
+  }
+}
+
+/**
+ * Проверяет работу фильтров
+ */
+function debugFilters(debugSheet, apiResponse) {
+  try {
+    if (!apiResponse.data?.analytics?.richStats?.stats) {
+      logDebug(debugSheet, 'Нет данных для проверки фильтров', 'ERROR');
+      return;
+    }
+    
+    const stats = apiResponse.data.analytics.richStats.stats;
+    
+    // Анализируем уникальные значения
+    const uniqueApps = new Set();
+    const uniqueCampaigns = new Set();
+    const uniqueDates = new Set();
+    const campaignPatterns = new Set();
+    
+    stats.forEach(row => {
+      if (Array.isArray(row) && row.length >= 3) {
+        const date = row[0]?.value;
+        const campaign = row[1];
+        const app = row[2];
+        
+        if (date) uniqueDates.add(date);
+        if (app?.name) uniqueApps.add(app.name);
+        if (campaign?.campaignName) {
+          uniqueCampaigns.add(campaign.campaignName);
+          
+          // Проверяем соответствие паттерну поиска
+          const searchPattern = API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+          const regex = new RegExp(searchPattern.slice(1, -2), 'i'); // Убираем /.../ и флаги
+          if (regex.test(campaign.campaignName)) {
+            campaignPatterns.add(campaign.campaignName);
+          }
+        }
+      }
+    });
+    
+    logDebug(debugSheet, 'Анализ уникальных значений:', 'INFO');
+    logDebug(debugSheet, '- Уникальных приложений: ' + uniqueApps.size, 'INFO');
+    logDebug(debugSheet, '- Уникальных кампаний: ' + uniqueCampaigns.size, 'INFO');
+    logDebug(debugSheet, '- Уникальных дат: ' + uniqueDates.size, 'INFO');
+    logDebug(debugSheet, '- Кампаний, соответствующих паттерну: ' + campaignPatterns.size, 'INFO');
+    
+    // Показываем примеры приложений
+    const appsList = Array.from(uniqueApps).slice(0, 5);
+    logDebug(debugSheet, 'Примеры приложений: ' + appsList.join(', '), 'INFO');
+    
+    // Показываем примеры кампаний
+    const campaignsList = Array.from(uniqueCampaigns).slice(0, 3);
+    logDebug(debugSheet, 'Примеры кампаний:', 'INFO', campaignsList.join('\n'));
+    
+    // Показываем диапазон дат
+    const sortedDates = Array.from(uniqueDates).sort();
+    if (sortedDates.length > 0) {
+      logDebug(debugSheet, `Диапазон дат: ${sortedDates[0]} - ${sortedDates[sortedDates.length - 1]}`, 'INFO');
+    }
+    
+    // Проверяем фильтр кампаний
+    const searchPattern = API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+    logDebug(debugSheet, `Паттерн поиска кампаний: ${searchPattern}`, 'INFO');
+    
+    if (campaignPatterns.size === 0) {
+      logDebug(debugSheet, 'ПРОБЛЕМА: Ни одна кампания не соответствует паттерну поиска!', 'ERROR');
+      logDebug(debugSheet, 'РЕШЕНИЕ: Проверьте правильность паттерна ATTRIBUTION_CAMPAIGN_SEARCH', 'INFO');
+    } else {
+      logDebug(debugSheet, 'Фильтр кампаний работает корректно', 'SUCCESS');
+    }
+    
+  } catch (error) {
+    logDebug(debugSheet, 'Ошибка проверки фильтров: ' + error.toString(), 'ERROR');
+  }
+}
+
+/**
+ * Быстрая проверка API без создания полного лога
+ */
+function quickAPICheck() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    const dateRange = getDateRange(7); // Последние 7 дней
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('API Проверка', 'API не возвращает данные за последние 7 дней.\nЗапустите полную диагностику для детального анализа.', ui.ButtonSet.OK);
+    } else {
+      const count = raw.data.analytics.richStats.stats.length;
+      ui.alert('API Проверка', `API работает: получено ${count} записей за последние 7 дней.`, ui.ButtonSet.OK);
+    }
+    
+  } catch (error) {
+    ui.alert('API Проверка', 'Ошибка API: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Добавляем дебаг функции в меню
+ */
