@@ -1,0 +1,432 @@
+/**
+ * Sheet Formatting and Table Creation
+ * Handles all table creation, formatting, and styling
+ */
+
+/**
+ * Create enhanced pivot table with week-level WoW analysis
+ */
+function createEnhancedPivotTable(appData) {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(CONFIG.SHEET_NAME);
+  else sheet.clear();
+
+  const wow = calculateWoWMetrics(appData);
+
+  const headers = TABLE_CONFIG.HEADERS;
+  const tableData = [headers];
+  const formatData = [];
+
+  // Process each app
+  const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
+  appKeys.forEach(appKey => {
+    const app = appData[appKey];
+    
+    // APP row
+    formatData.push({ row: tableData.length + 1, type: 'APP' });
+    tableData.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+
+    // Process weeks for this app
+    const weekKeys = Object.keys(app.weeks).sort();
+    weekKeys.forEach(weekKey => {
+      const week = app.weeks[weekKey];
+      const campaigns = week.campaigns;
+      
+      // Calculate week totals
+      const weekTotals = calculateWeekTotals(campaigns);
+      
+      // WEEK row
+      const appWeekKey = `${app.appName}_${weekKey}`;
+      const weekWoW = wow.appWeekWoW[appWeekKey] || {};
+      const spendWoW = weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitWoW = weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const status = weekWoW.growthStatus || '';
+      
+      formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+      tableData.push([
+        'WEEK',
+        `${week.weekStart} - ${week.weekEnd}`,
+        '', '',
+        weekTotals.totalSpend.toFixed(2),
+        spendWoW,
+        weekTotals.totalInstalls,
+        weekTotals.avgCpi.toFixed(3),
+        weekTotals.avgRoas.toFixed(2),
+        weekTotals.avgIpm.toFixed(1),
+        weekTotals.avgArpu.toFixed(3),
+        `${weekTotals.avgERoas.toFixed(0)}%`,
+        weekTotals.totalProfit.toFixed(2),
+        profitWoW,
+        status,
+        '' // Comments column
+      ]);
+      
+      // Add campaign rows
+      addCampaignRows(tableData, campaigns, week, weekKey, wow);
+    });
+  });
+
+  // Write data to sheet
+  const range = sheet.getRange(1, 1, tableData.length, headers.length);
+  range.setValues(tableData);
+  
+  // Apply formatting and grouping
+  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData);
+  createRowGrouping(sheet, tableData, appData);
+  sheet.setFrozenRows(1);
+}
+
+/**
+ * Calculate totals for a week's campaigns
+ */
+function calculateWeekTotals(campaigns) {
+  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
+  const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
+  const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
+  const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
+  const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
+  const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
+  
+  // Filter reliable campaigns for eROAS calculation
+  const reliable = campaigns.filter(c => 
+    c.eRoasForecast >= 1 && 
+    c.eRoasForecast <= 1000 && 
+    c.installs >= 10 && 
+    c.spend > 0
+  );
+  const avgERoas = reliable.length ? reliable.reduce((s, c) => s + c.eRoasForecast, 0) / reliable.length : 0;
+  const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+
+  return {
+    totalSpend,
+    totalInstalls,
+    avgCpi,
+    avgRoas,
+    avgIpm,
+    avgArpu,
+    avgERoas,
+    totalProfit
+  };
+}
+
+/**
+ * Add campaign rows to table data
+ */
+function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
+  // Sort campaigns by spend (highest first)
+  campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
+    const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+    const key = `${campaign.sourceApp}_${weekKey}`;
+    const sourceWoW = wow.sourceAppWoW[key] || {};
+    const spendPct = sourceWoW.spendChangePercent ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
+    const profitPct = sourceWoW.eProfitChangePercent ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const growthStatus = sourceWoW.growthStatus || '';
+    
+    tableData.push([
+      'CAMPAIGN',
+      campaign.sourceApp,
+      link,
+      campaign.geo,
+      campaign.spend.toFixed(2),
+      spendPct,
+      campaign.installs,
+      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+      campaign.roas.toFixed(2),
+      campaign.ipm.toFixed(1),
+      campaign.eArpuForecast.toFixed(3),
+      `${campaign.eRoasForecast.toFixed(0)}%`,
+      campaign.eProfitForecast.toFixed(2),
+      profitPct,
+      growthStatus,
+      '' // Comments column
+    ]);
+  });
+}
+
+/**
+ * Enhanced formatting function using batch operations
+ */
+function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
+  // Header formatting
+  sheet.getRange(1, 1, 1, numCols)
+       .setBackground(COLORS.HEADER.background)
+       .setFontColor(COLORS.HEADER.fontColor)
+       .setFontWeight('bold')
+       .setHorizontalAlignment('center')
+       .setFontSize(11);
+
+  // Set column widths
+  TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => {
+    sheet.setColumnWidth(col.c, col.w);
+  });
+
+  // Categorize rows by type
+  const appRows = [], weekRows = [];
+  formatData.forEach(item => {
+    if (item.type === 'APP') appRows.push(item.row);
+    if (item.type === 'WEEK') weekRows.push(item.row);
+  });
+  
+  const campaignRows = [];
+  for (let r = 2; r <= numRows; r++) {
+    if (!appRows.includes(r) && !weekRows.includes(r)) campaignRows.push(r);
+  }
+
+  // Apply row formatting
+  appRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.APP_ROW.background)
+         .setFontColor(COLORS.APP_ROW.fontColor)
+         .setFontWeight('bold')
+         .setFontSize(11)
+  );
+
+  weekRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.WEEK_ROW.background)
+         .setFontSize(11)
+  );
+
+  campaignRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.CAMPAIGN_ROW.background)
+         .setFontSize(10)
+  );
+
+  // Apply numeric formats
+  if (numRows > 1) {
+    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00'); // Spend
+    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000'); // CPI
+    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00'); // ROAS
+    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0'); // IPM
+    sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000'); // E-ARPU
+    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+  }
+
+  // Apply conditional formatting
+  applyConditionalFormatting(sheet, numRows);
+  
+  // Hide Level column
+  sheet.hideColumns(1);
+}
+
+/**
+ * Enhanced conditional formatting with color gradients
+ */
+function applyConditionalFormatting(sheet, numRows) {
+  const rules = [];
+  if (numRows > 1) {
+    // Spend WoW % formatting
+    const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenTextContains('%').whenNumberGreaterThan(0)
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([spendRange]).build()
+    );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenTextContains('%').whenNumberLessThan(0)
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([spendRange]).build()
+    );
+
+    // E-ROAS 365d formatting
+    const eroasRange = sheet.getRange(2, 12, numRows - 1, 1);
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= ${CONFIG.TARGET_EROAS})`)
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([eroasRange]).build()
+    );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= 120, VALUE(SUBSTITUTE(L2,"%","")) < ${CONFIG.TARGET_EROAS})`)
+        .setBackground(COLORS.WARNING.background)
+        .setFontColor(COLORS.WARNING.fontColor)
+        .setRanges([eroasRange]).build()
+    );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) < 120)')
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([eroasRange]).build()
+    );
+
+    // eProfit WoW % formatting
+    const profitRange = sheet.getRange(2, 14, numRows - 1, 1);
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenTextContains('%').whenNumberGreaterThan(0)
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([profitRange]).build()
+    );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenTextContains('%').whenNumberLessThan(0)
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([profitRange]).build()
+    );
+
+    // Growth Status formatting
+    const growthRange = sheet.getRange(2, 15, numRows - 1, 1);
+    const statusColors = {
+      '🟢 Healthy Growth': COLORS.POSITIVE,
+      '🔴 Inefficient Growth': { background: '#f5c6cb', fontColor: '#721c24' },
+      '🟡 Moderate Growth': COLORS.WARNING,
+      '🔵 Scaling Down': COLORS.INFO
+    };
+
+    Object.entries(statusColors).forEach(([status, colors]) => {
+      rules.push(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenTextContains(status)
+          .setBackground(colors.background)
+          .setFontColor(colors.fontColor)
+          .setRanges([growthRange]).build()
+      );
+    });
+  }
+  sheet.setConditionalFormatRules(rules);
+}
+
+/**
+ * Create row grouping: App → Week → Campaign
+ */
+function createRowGrouping(sheet, tableData, appData) {
+  const numCols = TABLE_CONFIG.HEADERS.length;
+
+  // If appData not provided, parse structure from tableData
+  if (!appData) {
+    parseAndCreateGrouping(sheet, tableData, numCols);
+    return;
+  }
+
+  // Original logic when appData is provided
+  createGroupingFromAppData(sheet, appData, numCols);
+}
+
+/**
+ * Parse table data and create grouping
+ */
+function parseAndCreateGrouping(sheet, tableData, numCols) {
+  let currentApp = null;
+  let appStartRow = null;
+  let weekStartRow = null;
+  const appGroups = [];
+  const weekGroups = [];
+  
+  for (let i = 1; i < tableData.length; i++) {
+    const row = tableData[i];
+    const level = row[0];
+    
+    if (level === 'APP') {
+      // Close previous week if exists
+      if (weekStartRow !== null && i > weekStartRow + 1) {
+        weekGroups.push({start: weekStartRow + 1, count: i - weekStartRow - 1});
+      }
+      // Close previous app if exists
+      if (appStartRow !== null && i > appStartRow + 1) {
+        appGroups.push({start: appStartRow + 1, count: i - appStartRow - 1});
+      }
+      
+      currentApp = row[1];
+      appStartRow = i;
+      weekStartRow = null;
+    } else if (level === 'WEEK') {
+      // Close previous week if exists
+      if (weekStartRow !== null && i > weekStartRow + 1) {
+        weekGroups.push({start: weekStartRow + 1, count: i - weekStartRow - 1});
+      }
+      weekStartRow = i;
+    }
+  }
+  
+  // Close last week and app
+  if (weekStartRow !== null && tableData.length > weekStartRow + 1) {
+    weekGroups.push({start: weekStartRow + 1, count: tableData.length - weekStartRow - 1});
+  }
+  if (appStartRow !== null && tableData.length > appStartRow + 1) {
+    appGroups.push({start: appStartRow + 1, count: tableData.length - appStartRow - 1});
+  }
+  
+  // Apply grouping - weeks first (deeper level)
+  weekGroups.forEach(group => {
+    try {
+      sheet.getRange(group.start, 1, group.count, numCols).shiftRowGroupDepth(1);
+      sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
+    } catch (e) {
+      // Ignore grouping errors
+    }
+  });
+  
+  // Then apps
+  appGroups.forEach(group => {
+    try {
+      sheet.getRange(group.start, 1, group.count, numCols).shiftRowGroupDepth(1);
+      sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
+    } catch (e) {
+      // Ignore grouping errors
+    }
+  });
+}
+
+/**
+ * Create grouping from app data structure
+ */
+function createGroupingFromAppData(sheet, appData, numCols) {
+  let rowPointer = 2; // Start from second row (first is headers)
+
+  // Sort apps by name
+  const sortedApps = Object.keys(appData).sort((a, b) => 
+    appData[a].appName.localeCompare(appData[b].appName)
+  );
+
+  sortedApps.forEach(appKey => {
+    const app = appData[appKey];
+    const appRow = rowPointer; // APP row
+    rowPointer++; // Move to first WEEK
+
+    // Process weeks within app
+    const sortedWeeks = Object.keys(app.weeks).sort();
+    sortedWeeks.forEach(weekKey => {
+      const week = app.weeks[weekKey];
+      const weekRow = rowPointer; // WEEK row
+      rowPointer++; // Take this row
+
+      const campaignCount = week.campaigns.length;
+      if (campaignCount > 0) {
+        try {
+          // Group campaigns under this week
+          sheet.getRange(weekRow + 1, 1, campaignCount, numCols)
+               .shiftRowGroupDepth(1);
+          sheet.getRange(weekRow + 1, 1, campaignCount, 1)
+               .collapseGroups();
+        } catch (e) {
+          // Ignore grouping errors
+        }
+        rowPointer += campaignCount; // Skip all CAMPAIGN rows
+      }
+    });
+
+    // Group all WEEK+CAMPAIGN rows within app
+    const totalRowsInApp = rowPointer - appRow - 1; // -1 to exclude APP row itself
+    if (totalRowsInApp > 0) {
+      try {
+        sheet.getRange(appRow + 1, 1, totalRowsInApp, numCols)
+             .shiftRowGroupDepth(1);
+        sheet.getRange(appRow + 1, 1, totalRowsInApp, 1)
+             .collapseGroups();
+      } catch (e) {
+        // Ignore grouping errors
+      }
+    }
+  });
+}
