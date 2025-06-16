@@ -1,0 +1,254 @@
+/**
+ * Menu Functions and UI Handlers
+ * Contains all menu creation and user interface functions
+ */
+
+/**
+ * Create custom menu in Google Sheets interface
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Campaign Report')
+    .addItem('Create report - Last 30 days', 'generateReport30')
+    .addItem('Create report - Last 60 days', 'generateReport60')
+    .addItem('Create report - Last 90 days', 'generateReport90')
+    .addItem('Create report - Custom days', 'showDaysDialog')
+    .addItem('Create report - Date range', 'showDateRangeDialog')
+    .addSeparator()
+    .addItem('Update all data to current', 'updateAllDataToCurrent')
+    .addSeparator()
+    .addItem('Save comments to cache', 'saveCommentsToCache')
+    .addItem('Clear all data', 'clearAllData')
+    .addToUi();
+}
+
+// Quick report functions
+function generateReport30() { generateReport(30); }
+function generateReport60() { generateReport(60); }
+function generateReport90() { generateReport(90); }
+
+/**
+ * Save comments to cache manually - only this function shows progress
+ */
+function saveCommentsToCache() {
+  const progress = new ProgressManager('Saving Comments').start('Preparing sheet...');
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      progress.end(false);
+      SpreadsheetApp.getUi().alert('No data found in the sheet.');
+      return;
+    }
+    
+    progress.update('Expanding all groups...');
+    expandAllGroups(sheet);
+    
+    progress.update('Reading comments from sheet...');
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    progress.update('Comments saved successfully!');
+    progress.end();
+    SpreadsheetApp.getUi().alert('Success', 'Comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    progress.end(false);
+    SpreadsheetApp.getUi().alert('Error', 'Error saving comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Dialog for entering number of days
+ */
+function showDaysDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const daysResp = ui.prompt('Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
+  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(daysResp.getResponseText(), 10);
+  if (![30, 60, 90, 120, 360].includes(days)) {
+    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
+    return;
+  }
+  generateReport(days);
+}
+
+/**
+ * Dialog for entering date range
+ */
+function showDateRangeDialog() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Get start date
+  const startResp = ui.prompt(
+    'Date Range Report - Start Date',
+    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (startResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const startDate = startResp.getResponseText().trim();
+  if (!isValidDate(startDate)) {
+    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Get end date
+  const endResp = ui.prompt(
+    'Date Range Report - End Date',
+    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (endResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const endDate = endResp.getResponseText().trim();
+  if (!isValidDate(endDate)) {
+    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Validate date range
+  if (startDate > endDate) {
+    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Generate report without confirmation
+  generateReportForDateRange(startDate, endDate);
+}
+
+/**
+ * Update all data to current - fetches from first existing week to current date
+ */
+function updateAllDataToCurrent() {
+  const ui = SpreadsheetApp.getUi();
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    ui.alert('No existing data found. Please create a report first.');
+    return;
+  }
+  
+  try {
+    // Expand all groups first to ensure we can read all data
+    expandAllGroups(sheet);
+    
+    // Save existing comments first
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    // Find the earliest week in the sheet
+    let earliestDate = null;
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === 'WEEK') {
+        const weekRange = data[i][1];
+        const [startStr, endStr] = weekRange.split(' - ');
+        const startDate = new Date(startStr);
+        if (!earliestDate || startDate < earliestDate) {
+          earliestDate = startDate;
+        }
+      }
+    }
+    
+    if (!earliestDate) {
+      ui.alert('No week data found in the sheet.');
+      return;
+    }
+    
+    // Calculate date range from earliest date to yesterday (excluding current incomplete week)
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // If today is Sunday (0), we include up to Saturday (yesterday)
+    // Otherwise, we include up to last Saturday
+    let endDate;
+    if (dayOfWeek === 0) {
+      // Today is Sunday, include up to yesterday (Saturday)
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - 1);
+    } else {
+      // Today is Mon-Sat, include up to last Saturday
+      const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - daysFromLastSaturday);
+    }
+    
+    const dateRange = {
+      from: formatDateForAPI(earliestDate),
+      to: formatDateForAPI(endDate)
+    };
+    
+    // Fetch all data for the complete range
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('No data found for the date range.');
+      return;
+    }
+    
+    // Process data
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      ui.alert('No valid data to process.');
+      return;
+    }
+    
+    // Clear old data silently
+    clearAllDataSilent();
+    
+    // Create updated report
+    createEnhancedPivotTable(processed);
+    
+    // Restore comments
+    cache.applyCommentsToSheet();
+    
+    ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    console.error('Error updating data:', e);
+    ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Clear all data by deleting and recreating the sheet - only shows confirmation when called from menu
+ */
+function clearAllData() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Show confirmation dialog only for manual clearing
+  const result = ui.alert(
+    'Clear All Data',
+    'This will delete all data in the Pivot sheet.\n\n' +
+    'Comments will be preserved and can be restored later.\n\n' +
+    'Are you sure you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (result !== ui.Button.YES) {
+    return;
+  }
+  
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet();
+    }
+    
+    clearAllDataSilent();
+    
+    ui.alert('Success', 'All data has been cleared. Comments have been preserved in cache.', ui.ButtonSet.OK);
+  } catch (error) {
+    console.error('Error during sheet recreation:', error);
+    ui.alert('Error', 'Error clearing data: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
