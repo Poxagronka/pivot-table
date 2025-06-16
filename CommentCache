@@ -1,0 +1,130 @@
+/**
+ * Comment Cache Management
+ * Handles saving and loading comments from a hidden sheet
+ */
+class CommentCache {
+  constructor() {
+    this.cacheSheet = this.getOrCreateCacheSheet();
+  }
+
+  /**
+   * Get or create the comments cache sheet
+   */
+  getOrCreateCacheSheet() {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(CONFIG.COMMENTS_CACHE_SHEET);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(CONFIG.COMMENTS_CACHE_SHEET);
+      sheet.hideSheet();
+      // Headers: AppName, WeekRange, Comment, LastUpdated
+      sheet.getRange(1, 1, 1, 4).setValues([['AppName', 'WeekRange', 'Comment', 'LastUpdated']]);
+    }
+    return sheet;
+  }
+
+  /**
+   * Generate a unique key for app-week combination
+   */
+  getCommentKey(appName, weekRange) {
+    return `${appName}|||${weekRange}`;
+  }
+
+  /**
+   * Load all comments from cache sheet
+   */
+  loadAllComments() {
+    const comments = {};
+    const data = this.cacheSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const [appName, weekRange, comment, lastUpdated] = data[i];
+      if (comment) {
+        const key = this.getCommentKey(appName, weekRange);
+        comments[key] = comment;
+      }
+    }
+    return comments;
+  }
+
+  /**
+   * Save a comment to cache
+   */
+  saveComment(appName, weekRange, comment) {
+    if (!comment || !comment.trim()) return;
+    
+    const data = this.cacheSheet.getDataRange().getValues();
+    let found = false;
+    
+    // Update existing or add new
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === appName && data[i][1] === weekRange) {
+        // Only update if new comment is longer (appending text)
+        const existingComment = data[i][2] || '';
+        if (comment.length > existingComment.length) {
+          this.cacheSheet.getRange(i + 1, 3, 1, 2).setValues([[comment, new Date()]]);
+        }
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      const lastRow = this.cacheSheet.getLastRow();
+      this.cacheSheet.getRange(lastRow + 1, 1, 1, 4).setValues([[appName, weekRange, comment, new Date()]]);
+    }
+  }
+
+  /**
+   * Sync comments from the main sheet to cache
+   */
+  syncCommentsFromSheet() {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    
+    // Expand all groups to ensure we can read all data
+    expandAllGroups(sheet);
+    
+    const data = sheet.getDataRange().getValues();
+    let currentApp = '';
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      const nameOrRange = data[i][1];
+      const comment = data[i][15]; // Comments column
+      
+      if (level === 'APP') {
+        currentApp = nameOrRange;
+      } else if (level === 'WEEK' && currentApp && comment) {
+        this.saveComment(currentApp, nameOrRange, comment);
+      }
+    }
+  }
+
+  /**
+   * Apply cached comments back to the main sheet
+   */
+  applyCommentsToSheet() {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    
+    const comments = this.loadAllComments();
+    const data = sheet.getDataRange().getValues();
+    let currentApp = '';
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      const nameOrRange = data[i][1];
+      
+      if (level === 'APP') {
+        currentApp = nameOrRange;
+      } else if (level === 'WEEK' && currentApp) {
+        const key = this.getCommentKey(currentApp, nameOrRange);
+        const comment = comments[key];
+        if (comment) {
+          sheet.getRange(i + 1, 16).setValue(comment); // Comments column
+        }
+      }
+    }
+  }
+}
