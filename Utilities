@@ -1,0 +1,315 @@
+/**
+ * Utility Functions
+ * Contains helper functions for date manipulation, validation, and sheet operations
+ */
+
+/**
+ * Date Utility Functions
+ */
+
+/**
+ * Get Monday of the week for a given date
+ */
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Get Sunday of the week for a given date
+ */
+function getSundayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() + (day === 0 ? 0 : 7 - day);
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Format date for API (YYYY-MM-DD)
+ */
+function formatDateForAPI(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calculate date range for last N days (inclusive)
+ */
+function getDateRange(days) {
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const today = new Date();
+  // Zero out time portion
+  today.setHours(0, 0, 0, 0);
+  const endDate = new Date(today);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - days + 1);
+  return {
+    from: Utilities.formatDate(startDate, tz, 'yyyy-MM-dd'),
+    to: Utilities.formatDate(endDate, tz, 'yyyy-MM-dd')
+  };
+}
+
+/**
+ * Validate date format (YYYY-MM-DD)
+ */
+function isValidDate(dateString) {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
+  
+  const date = new Date(dateString);
+  return date instanceof Date && !isNaN(date);
+}
+
+/**
+ * Sheet Utility Functions
+ */
+
+/**
+ * Expand all groups in the sheet
+ */
+function expandAllGroups(sheet) {
+  try {
+    // Expand all row groups
+    const maxRows = sheet.getMaxRows();
+    // Try to expand multiple times to handle nested groups
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).expandGroups();
+      } catch (e) {
+        // No more groups to expand
+        break;
+      }
+    }
+  } catch (e) {
+    console.log('No groups to expand or error expanding groups:', e);
+  }
+}
+
+/**
+ * Clear all existing groups in the sheet
+ */
+function clearAllGroups(sheet) {
+  try {
+    const maxRows = sheet.getMaxRows();
+    // Keep removing group depth until there are no more groups
+    let hasGroups = true;
+    let attempts = 0;
+    
+    while (hasGroups && attempts < 10) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
+        attempts++;
+      } catch (e) {
+        // No more groups to remove
+        hasGroups = false;
+      }
+    }
+  } catch (e) {
+    console.log('Error clearing groups:', e);
+  }
+}
+
+/**
+ * Recreate grouping for the entire sheet
+ */
+function recreateGrouping(sheet) {
+  // First, expand all existing groups to ensure we can work with all rows
+  expandAllGroups(sheet);
+  
+  // Clear all existing groups
+  clearAllGroups(sheet);
+  
+  // Recreate groups
+  const data = sheet.getDataRange().getValues();
+  createRowGrouping(sheet, data, null);
+}
+
+/**
+ * Clear all data without UI prompts (for internal use)
+ */
+function clearAllDataSilent() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const tempSheetName = CONFIG.SHEET_NAME + '_temp_' + Date.now();
+    const newSheet = spreadsheet.insertSheet(tempSheetName);
+    const oldSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+    newSheet.setName(CONFIG.SHEET_NAME);
+  } catch (error) {
+    console.error('Error during sheet recreation:', error);
+    throw error;
+  }
+}
+
+/**
+ * String Utility Functions
+ */
+
+/**
+ * Sanitize string for use as sheet name or other identifiers
+ */
+function sanitizeString(str) {
+  if (!str) return '';
+  return str.toString().trim().replace(/[^\w\s-]/g, '').substring(0, 100);
+}
+
+/**
+ * Truncate string to specified length with ellipsis
+ */
+function truncateString(str, maxLength = 50) {
+  if (!str) return '';
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength - 3) + '...';
+}
+
+/**
+ * Array Utility Functions
+ */
+
+/**
+ * Remove duplicates from array
+ */
+function removeDuplicates(arr) {
+  return [...new Set(arr)];
+}
+
+/**
+ * Group array by key function
+ */
+function groupBy(arr, keyFn) {
+  return arr.reduce((groups, item) => {
+    const key = keyFn(item);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+    return groups;
+  }, {});
+}
+
+/**
+ * Sort array of objects by property
+ */
+function sortByProperty(arr, property, ascending = true) {
+  return arr.sort((a, b) => {
+    const aVal = a[property];
+    const bVal = b[property];
+    if (aVal === bVal) return 0;
+    const comparison = aVal < bVal ? -1 : 1;
+    return ascending ? comparison : -comparison;
+  });
+}
+
+/**
+ * Number Utility Functions
+ */
+
+/**
+ * Format number as currency
+ */
+function formatCurrency(amount, currency = 'USD') {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+/**
+ * Format number as percentage
+ */
+function formatPercentage(value, decimals = 1) {
+  return (value * 100).toFixed(decimals) + '%';
+}
+
+/**
+ * Round number to specified decimal places
+ */
+function roundToDecimals(num, decimals = 2) {
+  return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+}
+
+/**
+ * Check if value is a valid number
+ */
+function isValidNumber(value) {
+  return typeof value === 'number' && !isNaN(value) && isFinite(value);
+}
+
+/**
+ * Error Handling Utilities
+ */
+
+/**
+ * Safe execution wrapper that catches and logs errors
+ */
+function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
+  try {
+    return fn();
+  } catch (error) {
+    console.error(`Error in ${context}:`, error);
+    return fallbackValue;
+  }
+}
+
+/**
+ * Retry function execution with exponential backoff
+ */
+function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+  let attempts = 0;
+  
+  function attempt() {
+    try {
+      return fn();
+    } catch (error) {
+      attempts++;
+      if (attempts >= maxRetries) {
+        throw error;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempts - 1);
+      console.log(`Attempt ${attempts} failed, retrying in ${delay}ms...`);
+      Utilities.sleep(delay);
+      return attempt();
+    }
+  }
+  
+  return attempt();
+}
+
+/**
+ * Performance Utilities
+ */
+
+/**
+ * Measure execution time of a function
+ */
+function measureExecutionTime(fn, label = 'Function') {
+  const startTime = new Date().getTime();
+  const result = fn();
+  const endTime = new Date().getTime();
+  console.log(`${label} execution time: ${endTime - startTime}ms`);
+  return result;
+}
+
+/**
+ * Batch operations to avoid quota limits
+ */
+function batchOperation(items, batchSize, operation) {
+  const results = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = operation(batch, i);
+    results.push(...batchResults);
+    
+    // Small delay between batches to avoid quota issues
+    if (i + batchSize < items.length) {
+      Utilities.sleep(100);
+    }
+  }
+  return results;
+}
