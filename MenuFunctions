@@ -19,6 +19,11 @@ function onOpen() {
     .addSeparator()
     .addItem('Save comments to cache', 'saveCommentsToCache')
     .addItem('Clear all data', 'clearAllData')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🔧 Debug')
+      .addItem('Full Diagnostic', 'debugReportGeneration')
+      .addItem('Quick API Check', 'quickAPICheck')
+    )
     .addToUi();
 }
 
