@@ -1,0 +1,261 @@
+/**
+ * Analytics Functions
+ * Contains all analytical calculations and metrics
+ */
+
+/**
+ * Calculate Week-over-Week metrics per app and per sourceApp
+ */
+function calculateWoWMetrics(appData) {
+  if (!appData || typeof appData !== 'object') {
+    console.error('Invalid appData provided to calculateWoWMetrics');
+    return { sourceAppWoW: {}, appWeekWoW: {} };
+  }
+
+  try {
+    const sourceAppData = {};
+    const appWeekData = {};
+
+    // Aggregate raw data
+    Object.values(appData).forEach(app => {
+      appWeekData[app.appName] = {};
+      Object.values(app.weeks).forEach(week => {
+        const spend = week.campaigns.reduce((s, c) => s + c.spend, 0);
+        const profit = week.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
+
+        week.campaigns.forEach(c => {
+          if (c.sourceApp) {
+            const key = `${c.sourceApp}_${week.weekStart}`;
+            if (!sourceAppData[key]) {
+              sourceAppData[key] = { 
+                sourceApp: c.sourceApp, 
+                weekStart: week.weekStart, 
+                spend: 0, 
+                eRoasForecast: 0, 
+                eProfitForecast: 0, 
+                count: 0 
+              };
+            }
+            sourceAppData[key].spend += c.spend;
+            sourceAppData[key].eRoasForecast += c.eRoasForecast;
+            sourceAppData[key].eProfitForecast += c.eProfitForecast;
+            sourceAppData[key].count += 1;
+          }
+        });
+      });
+    });
+
+    // Compute sourceApp WoW
+    const sourceApps = {};
+    Object.values(sourceAppData).forEach(d => {
+      if (d.count) d.eRoasForecast /= d.count;
+      if (!sourceApps[d.sourceApp]) sourceApps[d.sourceApp] = [];
+      sourceApps[d.sourceApp].push(d);
+    });
+
+    const sourceAppWoW = {};
+    Object.keys(sourceApps).forEach(sourceAppName => {
+      sourceApps[sourceAppName].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+      sourceApps[sourceAppName].forEach((curr, i) => {
+        const key = `${sourceAppName}_${curr.weekStart}`;
+        sourceAppWoW[key] = { 
+          spendChangePercent: 0, 
+          eProfitChangePercent: 0, 
+          growthStatus: 'First Week' 
+        };
+        
+        if (i > 0) {
+          const prev = sourceApps[sourceAppName][i - 1];
+          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+          const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
+          
+          const status = calculateGrowthStatus(prev, curr, spendPct, profitPct);
+          sourceAppWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: status 
+          };
+        }
+      });
+    });
+
+    // Compute app-level WoW
+    const appWeekWoW = {};
+    Object.keys(appWeekData).forEach(appName => {
+      const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+      weeks.forEach((curr, i) => {
+        const key = `${appName}_${curr.weekStart}`;
+        appWeekWoW[key] = { 
+          spendChangePercent: 0, 
+          eProfitChangePercent: 0, 
+          growthStatus: 'First Week' 
+        };
+        
+        if (i > 0) {
+          const prev = weeks[i - 1];
+          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+          const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+          
+          const status = calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit');
+          appWeekWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: status 
+          };
+        }
+      });
+    });
+
+    return { sourceAppWoW, appWeekWoW };
+  } catch (error) {
+    console.error('Error calculating WoW metrics:', error);
+    return { sourceAppWoW: {}, appWeekWoW: {} };
+  }
+}
+
+/**
+ * Calculate growth status based on spend and profit changes
+ */
+function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
+  const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
+  const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
+  
+  // Transition from negative to positive profit
+  if (prevProfit < 0 && currProfit > 0) {
+    return '🟢 Healthy Growth';
+  }
+  
+  // Transition from positive to negative profit
+  if (prevProfit > 0 && currProfit < 0) {
+    return '🔴 Inefficient Growth';
+  }
+  
+  // High spend increase with good profit growth
+  if (spendPct > 10 && profitPct > 5) {
+    return '🟢 Healthy Growth';
+  }
+  
+  // High spend increase with profit decline
+  if (spendPct > 10 && profitPct < -5) {
+    return '🔴 Inefficient Growth';
+  }
+  
+  // Moderate positive growth
+  if (spendPct > 0 && profitPct > 0) {
+    return '🟡 Moderate Growth';
+  }
+  
+  // Significant spend reduction
+  if (spendPct < -10) {
+    return '🔵 Scaling Down';
+  }
+  
+  return '⚪ Stable';
+}
+
+/**
+ * Main: generate report for the last N days without progress indicators
+ */
+function generateReport(days) {
+  try {
+    // Save existing comments first
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet();
+    } else {
+      const cache = new CommentCache();
+    }
+    
+    // Calculate date range
+    const dateRange = getDateRange(days);
+    
+    // Fetch data from API
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      SpreadsheetApp.getUi().alert('No data found for the specified period.');
+      return;
+    }
+    
+    // Process data
+    const processed = processApiData(raw);
+    if (Object.keys(processed).length === 0) {
+      SpreadsheetApp.getUi().alert('No valid data to process.');
+      return;
+    }
+    
+    // Clear and create report
+    clearAllDataSilent();
+    createEnhancedPivotTable(processed);
+    
+    // Restore comments
+    const cache = new CommentCache();
+    cache.applyCommentsToSheet();
+    
+  } catch (e) {
+    console.error('Error generating report:', e);
+    SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Generate report for specific date range without progress indicators
+ */
+function generateReportForDateRange(startDate, endDate) {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Save existing comments first
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet();
+    } else {
+      const cache = new CommentCache();
+    }
+    
+    // Fetch data from API
+    const dateRange = { from: startDate, to: endDate };
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('No Data', 'No data found for the selected date range.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // Process data
+    const processed = processApiData(raw);
+    if (Object.keys(processed).length === 0) {
+      ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // Clear and create report
+    clearAllDataSilent();
+    createEnhancedPivotTable(processed);
+    
+    // Restore comments
+    const cache = new CommentCache();
+    cache.applyCommentsToSheet();
+    
+    ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
+  } catch (e) {
+    console.error('Error generating report for date range:', e);
+    ui.alert(
+      'Error', 
+      'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n' +
+      '1. Your internet connection\n' +
+      '2. The API token is still valid\n' +
+      '3. Try a smaller date range',
+      ui.ButtonSet.OK
+    );
+  }
+}
