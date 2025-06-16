@@ -1,0 +1,66 @@
+/**
+ * Configuration file for Campaign Report Google Apps Script
+ * Contains all constants and configuration settings
+ */
+
+// Main configuration object
+const CONFIG = {
+  SHEET_ID: '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE',
+  SHEET_NAME: 'Pivot',
+  API_URL: 'https://app.appodeal.com/graphql',
+  TARGET_EROAS: 160, // Target eROAS percentage
+  BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6MTc1MDAxNzM4MX0.qstjfLVhoxajqhv82INuqs0fDDGWYFOCDf4gkV17Rv9HTLwG2OM_IbOqh4dh6vko1VINteY4AE9C3ZL6h15zGA',
+  COMMENTS_CACHE_SHEET: 'CommentsCache' // Hidden sheet for storing comments
+};
+
+// API query configuration
+const API_CONFIG = {
+  OPERATION_NAME: "RichStats",
+  FILTERS: {
+    USER: ["79950","127168","157350","150140","11628","233863","239157"],
+    ATTRIBUTION_PARTNER: ["Stack"],
+    ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
+    ATTRIBUTION_CAMPAIGN_SEARCH: "/tricky/i"
+  },
+  GROUP_BY: [
+    { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+    { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+    { dimension: "APP" }
+  ],
+  MEASURES: [
+    { id: "cpi", day: null },
+    { id: "installs", day: null },
+    { id: "ipm", day: null },
+    { id: "spend", day: null },
+    { id: "roas", day: 1 },
+    { id: "e_arpu_forecast", day: 365 },
+    { id: "e_roas_forecast", day: 365 },
+    { id: "e_profit_forecast", day: 730 }
+  ]
+};
+
+// Table configuration
+const TABLE_CONFIG = {
+  HEADERS: [
+    'Level', 'Week Range / Source App', 'ID', 'GEO',
+    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+    'E-ARPU 365d', 'E-ROAS 365d', 'E-Profit 730d', 'eProfit WoW %', 'Growth Status', 'Comments'
+  ],
+  COLUMN_WIDTHS: [
+    {c:1,w:80},{c:2,w:300},{c:3,w:50},{c:4,w:50},{c:5,w:75},
+    {c:6,w:150},{c:7,w:75},{c:8,w:75},{c:9,w:75},{c:10,w:75},
+    {c:11,w:100},{c:12,w:120},{c:13,w:125},{c:14,w:125},{c:15,w:150},{c:16,w:200}
+  ]
+};
+
+// Formatting colors
+const COLORS = {
+  HEADER: { background: '#4285f4', fontColor: 'white' },
+  APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
+  WEEK_ROW: { background: '#e8f0fe' },
+  CAMPAIGN_ROW: { background: '#ffffff' },
+  POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },
+  NEGATIVE: { background: '#f8d7da', fontColor: '#721c24' },
+  WARNING: { background: '#fff3cd', fontColor: '#856404' },
+  INFO: { background: '#d1ecf1', fontColor: '#0c5460' }
+};
