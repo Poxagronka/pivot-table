@@ -1,0 +1,275 @@
+/**
+ * API Client
+ * Handles all API communication and data fetching
+ */
+
+/**
+ * Fetch data from API with updated headers
+ */
+function fetchCampaignData(dateRange) {
+  const payload = {
+    operationName: API_CONFIG.OPERATION_NAME,
+    variables: {
+      dateFilters: [{
+        dimension: "INSTALL_DATE",
+        from: dateRange.from,
+        to: dateRange.to,
+        include: true
+      }],
+      filters: [
+        { dimension: "USER", values: API_CONFIG.FILTERS.USER, include: true },
+        { dimension: "ATTRIBUTION_PARTNER", values: API_CONFIG.FILTERS.ATTRIBUTION_PARTNER, include: true },
+        { dimension: "ATTRIBUTION_NETWORK_HID", values: API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID, include: true },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID", values: [], include: true, searchByString: API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH }
+      ],
+      groupBy: API_CONFIG.GROUP_BY,
+      measures: API_CONFIG.MEASURES,
+      havingFilters: [],
+      anonymizationMode: "OFF",
+      topFilter: null,
+      revenuePredictionVersion: "",
+      isMultiMediation: true
+    },
+    query: getGraphQLQuery()
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Authorization: `Bearer ${CONFIG.BEARER_TOKEN}`,
+      Connection: 'keep-alive',
+      DNT: '1',
+      Origin: 'https://app.appodeal.com',
+      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+      'x-requested-with': 'XMLHttpRequest',
+      'Trace-Id': Utilities.getUuid()
+    },
+    payload: JSON.stringify(payload)
+  };
+
+  const resp = UrlFetchApp.fetch(CONFIG.API_URL, options);
+  if (resp.getResponseCode() !== 200) {
+    throw new Error('API request failed: ' + resp.getContentText());
+  }
+  return JSON.parse(resp.getContentText());
+}
+
+/**
+ * Get GraphQL query string
+ */
+function getGraphQLQuery() {
+  return `query RichStats($dateFilters: [DateFilterInput!]!, $filters: [FilterInput!]!, $groupBy: [GroupByInput!]!, $measures: [RichMeasureInput!]!, $havingFilters: [HavingFilterInput!], $anonymizationMode: DataAnonymizationMode, $revenuePredictionVersion: String!, $topFilter: TopFilterInput, $funnelFilter: FunnelAttributes, $isMultiMediation: Boolean) {
+    analytics(anonymizationMode: $anonymizationMode) {
+      richStats(
+        funnelFilter: $funnelFilter
+        dateFilters: $dateFilters
+        filters: $filters
+        groupBy: $groupBy
+        measures: $measures
+        havingFilters: $havingFilters
+        revenuePredictionVersion: $revenuePredictionVersion
+        topFilter: $topFilter
+        isMultiMediation: $isMultiMediation
+      ) {
+        stats {
+          id
+          ... on RetentionStatsValue { value cohortSize __typename }
+          ... on ForecastStatsItem { value uncertainForecast __typename }
+          ... on AppInfo { name platform bundleId __typename }
+          ... on LineItemInfo { value appId __typename }
+          ... on StatsValue { value __typename }
+          ... on SegmentInfo { name description __typename }
+          ... on WaterfallConfigurationStats { value appId __typename }
+          ... on CountryInfo { code value __typename }
+          ... on UaAdSet {
+            hid accountId adSetId appId budget budgetPeriod name cpc createdAt lastBidChangedAt
+            network recommendedTargetCpa targetCpa targetDayN updatedAt isBeingUpdated isAutomated
+            status url type permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename }
+            __typename
+          }
+          ... on UaCampaign {
+            hid accountId campaignId appId budget budgetPeriod campaignName cpc createdAt
+            lastBidChangedAt network recommendedTargetCpa targetCpa targetDayN updatedAt
+            isBeingUpdated isAutomated autoBidsIgnored status url type permissions {
+              canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename
+            }
+            __typename
+          }
+          ... on UaCampaignCountry { code bid isBeingUpdated recommendedBid budget country countryId status permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename } __typename }
+          ... on UaCampaignCountrySourceApp { bid iconUrl isBeingUpdated name recommendedBid sourceApp status storeUrl permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename } __typename }
+          ... on SourceAppInfo { name iconUrl storeUrl __typename }
+          __typename
+        }
+        totals {
+          day measure value {
+            id
+            ... on StatsValue { value __typename }
+            ... on WaterfallConfigurationStats { value __typename }
+            ... on RetentionStatsValue { value cohortSize __typename }
+            ... on ForecastStatsItem { value uncertainForecast __typename }
+            __typename
+          }
+          __typename
+        }
+        anonDict {
+          id
+          from { id ... on StatsValue { value __typename } __typename }
+          to {
+            id
+            ... on RetentionStatsValue { value cohortSize __typename }
+            ... on ForecastStatsItem { value uncertainForecast __typename }
+            ... on AppInfo { name __typename }
+            ... on StatsValue { value __typename }
+            ... on SegmentInfo { name description __typename }
+            ... on UaAdSet { name __typename }
+            ... on UaCampaign { campaignName __typename }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+  }`;
+}
+
+/**
+ * Process API data and group by apps, then weeks
+ * Skip current week data as it's incomplete
+ */
+function processApiData(rawData) {
+  const stats = rawData.data.analytics.richStats.stats;
+  const appData = {};
+
+  // Calculate current week start (Monday)
+  const today = new Date();
+  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+
+  stats.forEach((row, index) => {
+    try {
+      const date = row[0].value;
+      const monday = getMondayOfWeek(new Date(date));
+      const weekKey = formatDateForAPI(monday);
+
+      // Skip current week as it's incomplete
+      if (weekKey >= currentWeekStart) {
+        return;
+      }
+
+      const campaign = row[1];
+      const app = row[2];
+      const cpi = parseFloat(row[3].value) || 0;
+      const installs = parseInt(row[4].value) || 0;
+      const ipm = parseFloat(row[5].value) || 0;
+      const spend = parseFloat(row[6].value) || 0;
+      const roas = parseFloat(row[7].value) || 0;
+      const eArpuForecast = parseFloat(row[8].value) || 0;
+      const eRoasForecast = parseFloat(row[9].value) || 0;
+      const eProfitForecast = parseFloat(row[10].value) || 0;
+
+      const sunday = getSundayOfWeek(new Date(date));
+
+      const appKey = app.id;
+      if (!appData[appKey]) {
+        appData[appKey] = {
+          appId: app.id,
+          appName: app.name,
+          platform: app.platform,
+          bundleId: app.bundleId,
+          weeks: {}
+        };
+      }
+
+      if (!appData[appKey].weeks[weekKey]) {
+        appData[appKey].weeks[weekKey] = {
+          weekStart: formatDateForAPI(monday),
+          weekEnd: formatDateForAPI(sunday),
+          campaigns: []
+        };
+      }
+
+      const geo = extractGeoFromCampaign(campaign.campaignName);
+      const sourceApp = extractSourceApp(campaign.campaignName);
+
+      appData[appKey].weeks[weekKey].campaigns.push({
+        date: date,
+        campaignId: campaign.campaignId,
+        campaignName: campaign.campaignName,
+        cpi,
+        installs,
+        ipm,
+        spend,
+        roas,
+        eArpuForecast,
+        eRoasForecast,
+        eProfitForecast,
+        status: campaign.status,
+        type: campaign.type,
+        geo,
+        sourceApp,
+        isAutomated: campaign.isAutomated
+      });
+
+    } catch (error) {
+      console.error(`Error processing row ${index}:`, error);
+    }
+  });
+
+  return appData;
+}
+
+/**
+ * Extract geo information from campaign name
+ */
+function extractGeoFromCampaign(campaignName) {
+  const geoMap = {
+    '| USA |': 'USA',
+    '| MEX |': 'MEX',
+    '| AUS |': 'AUS',
+    '| DEU |': 'DEU',
+    '| JPN |': 'JPN',
+    '| KOR |': 'KOR',
+    '| BRA |': 'BRA',
+    '| CAN |': 'CAN',
+    '| GBR |': 'GBR'
+  };
+
+  for (const [pattern, geo] of Object.entries(geoMap)) {
+    if (campaignName.includes(pattern)) {
+      return geo;
+    }
+  }
+  return 'OTHER';
+}
+
+/**
+ * Extract source app from campaign name
+ */
+function extractSourceApp(campaignName) {
+  try {
+    const eq = campaignName.indexOf('=');
+    if (eq !== -1) {
+      let t = campaignName.substring(eq + 1).trim();
+      const subs = [];
+      let idx = t.indexOf('subj');
+      while (idx !== -1) {
+        subs.push(idx);
+        idx = t.indexOf('subj', idx + 1);
+      }
+      if (subs.length >= 2) t = t.substring(0, subs[1]).trim();
+      else if (subs.length === 1 && subs[0] > 10) t = t.substring(0, subs[0]).trim();
+      t = t.replace(/autobudget$/, '').trim();
+      if (t) return t;
+    }
+    const lp = campaignName.lastIndexOf('|');
+    if (lp !== -1) return campaignName.substring(lp + 1).trim();
+    return 'Unknown';
+  } catch (e) {
+    return 'Unknown';
+  }
+}
