@@ -431,174 +431,232 @@ function clearAllAutoCacheTriggers() {
 
 /**
  * GROUP MANAGEMENT
- * Простое управление группами
+ * Простое управление группами - сворачивание от глубоких уровней к верхним
  */
 
 /**
- * Свернуть все группы в листе (включая вложенные)
+ * Свернуть все группы в листе (от вложенных к внешним)
+ * Сначала CAMPAIGN, потом WEEK, потом APP
  */
 function collapseAllGroups(sheet) {
   try {
-    console.log('Начинаем сворачивание всех групп...');
+    console.log('Начинаем сворачивание всех групп (от вложенных к внешним)...');
     
-    // Многократно сворачиваем группы до тех пор, пока все не будут свернуты
-    const maxAttempts = 10; // Максимум попыток
-    let attempt = 0;
-    let hasMoreGroups = true;
+    // Анализируем структуру данных для правильного сворачивания
+    const data = sheet.getDataRange().getValues();
     
-    while (hasMoreGroups && attempt < maxAttempts) {
-      attempt++;
-      console.log(`Попытка сворачивания ${attempt}...`);
-      
-      try {
-        const lastRow = sheet.getLastRow();
-        const lastCol = sheet.getLastColumn();
-        
-        if (lastRow <= 1) {
-          console.log('Нет данных для сворачивания');
-          break;
-        }
-        
-        // Попробуем свернуть все группы
-        const range = sheet.getRange(1, 1, lastRow, lastCol);
-        range.collapseGroups();
-        
-        SpreadsheetApp.flush();
-        Utilities.sleep(100); // Небольшая пауза между попытками
-        
-        console.log(`Попытка ${attempt} выполнена`);
-        
-      } catch (e) {
-        console.log(`Попытка ${attempt} завершена: ${e.toString()}`);
-        hasMoreGroups = false; // Если ошибка, значит больше нет групп для сворачивания
-      }
-    }
+    // Этап 1: Сворачиваем кампании внутри недель (самый глубокий уровень)
+    collapseGroupsByLevel(sheet, data, 'CAMPAIGN');
     
-    console.log(`Сворачивание завершено за ${attempt} попыток`);
+    // Этап 2: Сворачиваем недели внутри приложений (средний уровень)  
+    collapseGroupsByLevel(sheet, data, 'WEEK');
+    
+    // Этап 3: Сворачиваем приложения (верхний уровень)
+    collapseGroupsByLevel(sheet, data, 'APP');
+    
+    console.log('Сворачивание всех уровней завершено');
     
   } catch (error) {
     console.error('Error collapsing groups:', error);
     
-    // Если основной метод не работает, попробуем альтернативный
+    // Если структурный подход не работает, пробуем универсальный
     try {
-      console.log('Пробуем альтернативный подход...');
-      collapseGroupsDeep(sheet);
+      console.log('Пробуем универсальный подход...');
+      collapseGroupsUniversal(sheet);
     } catch (altError) {
-      console.error('Alternative approach failed:', altError);
+      console.error('Universal approach failed:', altError);
     }
   }
 }
 
 /**
- * Глубокое сворачивание групп - сворачиваем по уровням
+ * Свернуть группы определенного уровня
  */
-function collapseGroupsDeep(sheet) {
+function collapseGroupsByLevel(sheet, data, targetLevel) {
   try {
-    console.log('Глубокое сворачивание групп...');
+    console.log(`Сворачиваем группы уровня: ${targetLevel}`);
+    
+    const ranges = [];
+    let currentGroupStart = -1;
+    let currentGroupLevel = '';
+    let currentParent = '';
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      const name = data[i][1];
+      
+      if (level === 'APP') {
+        // Закрываем предыдущую группу если нужно
+        if (currentGroupStart !== -1 && currentGroupLevel === targetLevel) {
+          ranges.push(createGroupRange(currentGroupStart, i, currentGroupLevel, currentParent));
+        }
+        currentParent = name;
+        currentGroupStart = -1;
+        currentGroupLevel = '';
+        
+      } else if (level === 'WEEK') {
+        // Закрываем предыдущую группу кампаний если нужно
+        if (currentGroupStart !== -1 && currentGroupLevel === 'CAMPAIGN') {
+          ranges.push(createGroupRange(currentGroupStart, i, currentGroupLevel, currentParent));
+        }
+        
+        // Начинаем новую группу недели если это наш целевой уровень
+        if (targetLevel === 'WEEK') {
+          currentGroupStart = i + 1;
+          currentGroupLevel = 'WEEK';
+        } else {
+          currentGroupStart = -1;
+          currentGroupLevel = '';
+        }
+        
+      } else if (level === 'CAMPAIGN') {
+        // Начинаем группу кампаний если это наш целевой уровень
+        if (targetLevel === 'CAMPAIGN' && currentGroupStart === -1) {
+          currentGroupStart = i;
+          currentGroupLevel = 'CAMPAIGN';
+        }
+      }
+    }
+    
+    // Закрываем последнюю группу
+    if (currentGroupStart !== -1 && currentGroupLevel === targetLevel) {
+      ranges.push(createGroupRange(currentGroupStart, data.length, currentGroupLevel, currentParent));
+    }
+    
+    // Сворачиваем найденные диапазоны
+    ranges.forEach((range, index) => {
+      try {
+        if (range.size > 0) {
+          console.log(`  Сворачиваем ${targetLevel} группу ${index + 1}: строки ${range.start}-${range.end} (размер: ${range.size})`);
+          sheet.getRange(range.start, 1, range.size, 1).collapseGroups();
+          SpreadsheetApp.flush();
+        }
+      } catch (e) {
+        console.log(`  Ошибка сворачивания ${targetLevel} группы ${index + 1}: ${e.toString()}`);
+      }
+    });
+    
+    console.log(`Уровень ${targetLevel} обработан, найдено групп: ${ranges.length}`);
+    
+  } catch (error) {
+    console.error(`Error collapsing ${targetLevel} level:`, error);
+  }
+}
+
+/**
+ * Создать объект диапазона группы
+ */
+function createGroupRange(start, end, level, parent) {
+  return {
+    start: start,
+    end: end - 1,
+    size: end - start,
+    level: level,
+    parent: parent
+  };
+}
+
+/**
+ * Универсальное сворачивание групп (запасной вариант)
+ */
+function collapseGroupsUniversal(sheet) {
+  try {
+    console.log('Универсальное сворачивание групп...');
     
     const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
     
     if (lastRow <= 1) {
       console.log('Нет данных для сворачивания');
       return;
     }
     
-    // Попробуем разные диапазоны и стратегии
-    const strategies = [
-      // Стратегия 1: Полный диапазон, несколько попыток
-      () => {
-        console.log('Стратегия 1: Полный диапазон');
-        for (let i = 0; i < 5; i++) {
-          try {
-            sheet.getRange(1, 1, lastRow, lastCol).collapseGroups();
-            SpreadsheetApp.flush();
-            console.log(`  Итерация ${i + 1} успешна`);
-          } catch (e) {
-            console.log(`  Итерация ${i + 1} завершена: ${e.toString()}`);
-            break;
-          }
-        }
-      },
-      
-      // Стратегия 2: Только первая колонка
-      () => {
-        console.log('Стратегия 2: Первая колонка');
-        for (let i = 0; i < 5; i++) {
-          try {
-            sheet.getRange(1, 1, lastRow, 1).collapseGroups();
-            SpreadsheetApp.flush();
-            console.log(`  Итерация ${i + 1} успешна`);
-          } catch (e) {
-            console.log(`  Итерация ${i + 1} завершена: ${e.toString()}`);
-            break;
-          }
-        }
-      },
-      
-      // Стратегия 3: По блокам строк
-      () => {
-        console.log('Стратегия 3: По блокам строк');
-        const blockSize = Math.max(10, Math.floor(lastRow / 10));
-        for (let startRow = 2; startRow <= lastRow; startRow += blockSize) {
-          const endRow = Math.min(startRow + blockSize - 1, lastRow);
-          const rowCount = endRow - startRow + 1;
-          
-          try {
-            sheet.getRange(startRow, 1, rowCount, 1).collapseGroups();
-            console.log(`  Блок строк ${startRow}-${endRow} обработан`);
-          } catch (e) {
-            console.log(`  Блок строк ${startRow}-${endRow} пропущен: ${e.toString()}`);
-          }
-        }
-        SpreadsheetApp.flush();
-      }
-    ];
-    
-    // Выполняем все стратегии
-    strategies.forEach((strategy, index) => {
+    // Попробуем несколько итераций сворачивания
+    for (let iteration = 1; iteration <= 5; iteration++) {
       try {
-        strategy();
+        console.log(`Итерация ${iteration}...`);
+        
+        // Пробуем разные диапазоны
+        const approaches = [
+          () => sheet.getRange(1, 1, lastRow, 1).collapseGroups(),
+          () => sheet.getRange(2, 1, lastRow - 1, 1).collapseGroups(),
+          () => {
+            // Построчно
+            for (let row = lastRow; row >= 2; row--) {
+              try {
+                sheet.getRange(row, 1, 1, 1).collapseGroups();
+              } catch (e) {
+                // Игнорируем ошибки отдельных строк
+              }
+            }
+          }
+        ];
+        
+        let success = false;
+        for (let i = 0; i < approaches.length; i++) {
+          try {
+            approaches[i]();
+            SpreadsheetApp.flush();
+            success = true;
+            console.log(`  Подход ${i + 1} успешен`);
+            break;
+          } catch (e) {
+            console.log(`  Подход ${i + 1} не сработал: ${e.toString()}`);
+          }
+        }
+        
+        if (!success) {
+          console.log(`Итерация ${iteration} не дала результатов`);
+          break;
+        }
+        
+        Utilities.sleep(200); // Пауза между итерациями
+        
       } catch (e) {
-        console.log(`Стратегия ${index + 1} не сработала: ${e.toString()}`);
+        console.log(`Итерация ${iteration} завершена: ${e.toString()}`);
+        break;
       }
-    });
+    }
     
-    console.log('Глубокое сворачивание завершено');
+    console.log('Универсальное сворачивание завершено');
     
   } catch (error) {
-    console.error('Deep collapse failed:', error);
+    console.error('Universal collapse failed:', error);
   }
 }
 
 /**
- * Принудительно свернуть все группы (самый агрессивный метод)
+ * Принудительно свернуть все группы (комбинированный подход)
  */
 function forceCollapseAllGroups(sheet) {
   try {
-    console.log('Принудительное сворачивание всех групп...');
+    console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ВСЕХ ГРУПП ===');
     
-    // Сначала пробуем стандартный метод
+    // Основной подход - структурное сворачивание
+    console.log('1. Структурное сворачивание...');
     collapseAllGroups(sheet);
     
-    // Затем дополнительно пробуем глубокое сворачивание
-    Utilities.sleep(500); // Пауза между методами
-    collapseGroupsDeep(sheet);
-    
-    // Финальная проверка - еще одна попытка стандартного метода
     Utilities.sleep(500);
+    
+    // Дополнительный подход - универсальное сворачивание
+    console.log('2. Универсальное сворачивание...');
+    collapseGroupsUniversal(sheet);
+    
+    Utilities.sleep(300);
+    
+    // Финальная проверка
+    console.log('3. Финальная проверка...');
     try {
       const lastRow = sheet.getLastRow();
       if (lastRow > 1) {
         sheet.getRange(1, 1, lastRow, 1).collapseGroups();
         SpreadsheetApp.flush();
-        console.log('Финальная попытка сворачивания выполнена');
+        console.log('Финальная попытка выполнена');
       }
     } catch (e) {
       console.log('Финальная попытка завершена: ' + e.toString());
     }
     
-    console.log('Принудительное сворачивание завершено');
+    console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ЗАВЕРШЕНО ===');
     
   } catch (error) {
     console.error('Force collapse failed:', error);
