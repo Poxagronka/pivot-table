@@ -1,702 +1,268 @@
 /**
- * Comment Cache Management
- * Handles saving and loading comments from a hidden sheet
- * Includes automatic caching functionality with 15-minute intervals
+ * Menu Functions and UI Handlers
+ * Contains all menu creation and user interface functions
  */
-class CommentCache {
-  constructor() {
-    this.cacheSheet = this.getOrCreateCacheSheet();
-  }
 
-  /**
-   * Get or create the comments cache sheet
-   */
-  getOrCreateCacheSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    let sheet = spreadsheet.getSheetByName(CONFIG.COMMENTS_CACHE_SHEET);
-    if (!sheet) {
-      sheet = spreadsheet.insertSheet(CONFIG.COMMENTS_CACHE_SHEET);
-      sheet.hideSheet();
-      // Headers: AppName, WeekRange, Comment, LastUpdated
-      sheet.getRange(1, 1, 1, 4).setValues([['AppName', 'WeekRange', 'Comment', 'LastUpdated']]);
-    }
-    return sheet;
-  }
-
-  /**
-   * Generate a unique key for app-week combination
-   */
-  getCommentKey(appName, weekRange) {
-    return `${appName}|||${weekRange}`;
-  }
-
-  /**
-   * Load all comments from cache sheet
-   */
-  loadAllComments() {
-    const comments = {};
-    const data = this.cacheSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      const [appName, weekRange, comment, lastUpdated] = data[i];
-      if (comment) {
-        const key = this.getCommentKey(appName, weekRange);
-        comments[key] = comment;
-      }
-    }
-    return comments;
-  }
-
-  /**
-   * Save a comment to cache
-   */
-  saveComment(appName, weekRange, comment) {
-    if (!comment || !comment.trim()) return;
-    
-    const data = this.cacheSheet.getDataRange().getValues();
-    let found = false;
-    
-    // Update existing or add new
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === appName && data[i][1] === weekRange) {
-        // Only update if new comment is longer (appending text)
-        const existingComment = data[i][2] || '';
-        if (comment.length > existingComment.length) {
-          this.cacheSheet.getRange(i + 1, 3, 1, 2).setValues([[comment, new Date()]]);
-        }
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      const lastRow = this.cacheSheet.getLastRow();
-      this.cacheSheet.getRange(lastRow + 1, 1, 1, 4).setValues([[appName, weekRange, comment, new Date()]]);
-    }
-  }
-
-  /**
-   * Sync comments from the main sheet to cache
-   */
-  syncCommentsFromSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    // Expand all groups to ensure we can read all data
-    expandAllGroups(sheet);
-    
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const comment = data[i][15]; // Comments column
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-      } else if (level === 'WEEK' && currentApp && comment) {
-        this.saveComment(currentApp, nameOrRange, comment);
-      }
-    }
-  }
-
-  /**
-   * Apply cached comments back to the main sheet
-   */
-  applyCommentsToSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    const comments = this.loadAllComments();
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-      } else if (level === 'WEEK' && currentApp) {
-        const key = this.getCommentKey(currentApp, nameOrRange);
-        const comment = comments[key];
-        if (comment) {
-          sheet.getRange(i + 1, 16).setValue(comment); // Comments column
-        }
-      }
-    }
-  }
-
-  /**
-   * Sync comments from the main sheet to cache (quiet version without expanding groups)
-   * Used by auto-cache to avoid interfering with user's group state
-   */
-  syncCommentsFromSheetQuiet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    // DON'T expand groups - assume they're already expanded by caller
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const comment = data[i][15]; // Comments column
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-      } else if (level === 'WEEK' && currentApp && comment) {
-        this.saveComment(currentApp, nameOrRange, comment);
-      }
-    }
-  }
+/**
+ * Create custom menu in Google Sheets interface
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Campaign Report')
+    .addItem('Create report - Last 30 days', 'generateReport30')
+    .addItem('Create report - Last 60 days', 'generateReport60')
+    .addItem('Create report - Last 90 days', 'generateReport90')
+    .addItem('Create report - Custom days', 'showDaysDialog')
+    .addItem('Create report - Date range', 'showDateRangeDialog')
+    .addSeparator()
+    .addItem('Update all data to current', 'updateAllDataToCurrent')
+    .addSeparator()
+    .addItem('Save comments to cache', 'saveCommentsToCache')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('💾 Auto Cache')
+      .addItem('▶️ Start auto cache (15 min)', 'startAutoCache')
+      .addItem('⏹️ Stop auto cache', 'stopAutoCache')
+      .addItem('📊 Check status', 'checkAutoCacheStatus')
+      .addSeparator()
+      .addItem('🔄 Force cache now', 'forceCache')
+      .addItem('🗑️ Clear all triggers', 'clearAllAutoCacheTriggers')
+    )
+    .addItem('Clear all data', 'clearAllData')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🔧 Debug')
+      .addItem('Full Diagnostic', 'debugReportGeneration')
+      .addItem('Quick API Check', 'quickAPICheck')
+    )
+    .addToUi();
 }
 
-/**
- * AUTO CACHE SYSTEM
- * Автоматическое кеширование комментариев каждые 15 минут
- */
+// Quick report functions
+function generateReport30() { generateReport(30); }
+function generateReport60() { generateReport(60); }
+function generateReport90() { generateReport(90); }
 
 /**
- * Автоматическое кеширование комментариев (без UI)
- * Запускается триггером каждые 15 минут
- * Сохраняет и восстанавливает состояние групп чтобы не мешать пользователю
+ * Save comments to cache manually - only this function shows progress
  */
-function autoCacheComments() {
+function saveCommentsToCache() {
+  const progress = new ProgressManager('Saving Comments').start('Preparing sheet...');
   try {
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
     
-    // Проверяем есть ли данные в таблице
     if (!sheet || sheet.getLastRow() < 2) {
-      console.log('AutoCache: Нет данных для кеширования');
+      progress.end(false);
+      SpreadsheetApp.getUi().alert('No data found in the sheet.');
       return;
     }
     
-    // Проверяем настройку пользователя о восстановлении групп
-    const userProperties = PropertiesService.getUserProperties();
-    const shouldRestoreGroups = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
-    
-    let groupState = null;
-    
-    // Сохраняем текущее состояние групп если нужно восстанавливать
-    if (shouldRestoreGroups) {
-      groupState = saveGroupState(sheet);
-    }
-    
-    // Разворачиваем все группы для чтения данных
+    progress.update('Expanding all groups...');
     expandAllGroups(sheet);
     
-    // Синхронизируем комментарии (без повторного разворачивания)
+    progress.update('Reading comments from sheet...');
     const cache = new CommentCache();
-    cache.syncCommentsFromSheetQuiet(); // Новый метод без expandAllGroups
+    cache.syncCommentsFromSheet();
     
-    // Восстанавливаем состояние групп если настройка включена
-    if (shouldRestoreGroups && groupState) {
-      restoreGroupState(sheet, groupState);
-    }
-    
-    console.log('AutoCache: Комментарии успешно кешированы - ' + new Date().toLocaleString());
-    
-  } catch (error) {
-    console.error('AutoCache Error:', error);
-    // Не показываем alert так как это автоматическая функция
+    progress.update('Comments saved successfully!');
+    progress.end();
+    SpreadsheetApp.getUi().alert('Success', 'Comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    progress.end(false);
+    SpreadsheetApp.getUi().alert('Error', 'Error saving comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
 /**
- * Запустить автоматическое кеширование комментариев
- * Создает триггер на выполнение каждые 15 минут
+ * Dialog for entering number of days
  */
-function startAutoCache() {
+function showDaysDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const daysResp = ui.prompt('Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
+  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(daysResp.getResponseText(), 10);
+  if (![30, 60, 90, 120, 360].includes(days)) {
+    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
+    return;
+  }
+  generateReport(days);
+}
+
+/**
+ * Dialog for entering date range
+ */
+function showDateRangeDialog() {
   const ui = SpreadsheetApp.getUi();
   
-  try {
-    // Проверяем, не установлен ли уже триггер
-    const existingTriggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (existingTriggers.length > 0) {
-      ui.alert(
-        'Автокеширование уже активно', 
-        'Автоматическое кеширование комментариев уже запущено.\n\n' +
-        'Комментарии сохраняются каждые 15 минут автоматически.',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-    
-    // Спрашиваем пользователя о настройках групп
-    const groupResponse = ui.alert(
-      'Настройка автокеширования',
-      'Автокеширование должно временно разворачивать группы для доступа к данным.\n\n' +
-      'Хотите ли вы, чтобы группы автоматически сворачивались обратно после кеширования?\n\n' +
-      '• ДА - группы будут восстановлены (рекомендуется)\n' +
-      '• НЕТ - группы останутся развернутыми',
-      ui.ButtonSet.YES_NO
-    );
-    
-    // Сохраняем настройку пользователя
-    const userProperties = PropertiesService.getUserProperties();
-    userProperties.setProperty('AUTO_CACHE_RESTORE_GROUPS', groupResponse === ui.Button.YES ? 'true' : 'false');
-    
-    // Создаем новый триггер
-    ScriptApp.newTrigger('autoCacheComments')
-      .timeBased()
-      .everyMinutes(15)
-      .create();
-    
-    // Сразу выполняем первое кеширование
-    autoCacheComments();
-    
-    const groupSetting = groupResponse === ui.Button.YES ? 'восстанавливаются' : 'остаются развернутыми';
-    
-    ui.alert(
-      'Автокеширование запущено', 
-      'Автоматическое сохранение комментариев активировано!\n\n' +
-      '• Комментарии будут сохраняться каждые 15 минут\n' +
-      '• Первое сохранение выполнено сейчас\n' +
-      `• Группы после кеширования: ${groupSetting}\n` +
-      '• Для отключения используйте "Остановить автокеширование"',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Ошибка запуска автокеширования:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось запустить автокеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Остановить автоматическое кеширование комментариев
- * Удаляет все триггеры автокеширования
- */
-function stopAutoCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Находим и удаляем все триггеры автокеширования
-    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (triggers.length === 0) {
-      ui.alert(
-        'Автокеширование не активно', 
-        'Автоматическое кеширование комментариев не запущено.',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-    
-    // Подтверждение остановки
-    const response = ui.alert(
-      'Остановить автокеширование?',
-      'Вы уверены, что хотите остановить автоматическое сохранение комментариев?\n\n' +
-      'После остановки комментарии нужно будет сохранять вручную.',
-      ui.ButtonSet.YES_NO
-    );
-    
-    if (response !== ui.Button.YES) {
-      return;
-    }
-    
-    // Удаляем все триггеры
-    triggers.forEach(trigger => {
-      ScriptApp.deleteTrigger(trigger);
-    });
-    
-    ui.alert(
-      'Автокеширование остановлено', 
-      `Автоматическое сохранение комментариев отключено.\n\n` +
-      `Удалено триггеров: ${triggers.length}\n\n` +
-      'Теперь комментарии нужно сохранять вручную через меню.',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Ошибка остановки автокеширования:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось остановить автокеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Проверить статус автокеширования
- * Показывает информацию о состоянии триггеров
- */
-function checkAutoCacheStatus() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (triggers.length === 0) {
-      ui.alert(
-        'Статус автокеширования',
-        '❌ Автоматическое кеширование ОТКЛЮЧЕНО\n\n' +
-        'Комментарии нужно сохранять вручную через меню.\n\n' +
-        'Для включения используйте "Запустить автокеширование".',
-        ui.ButtonSet.OK
-      );
-    } else {
-      const trigger = triggers[0];
-      const lastRun = getLastTriggerRun(trigger);
-      const nextRun = getNextTriggerRun();
-      
-      // Проверяем настройку восстановления групп
-      const userProperties = PropertiesService.getUserProperties();
-      const restoreGroups = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
-      const groupBehavior = restoreGroups ? 'восстанавливаются после кеширования' : 'остаются развернутыми';
-      
-      ui.alert(
-        'Статус автокеширования',
-        '✅ Автоматическое кеширование АКТИВНО\n\n' +
-        `• Интервал: каждые 15 минут\n` +
-        `• Активных триггеров: ${triggers.length}\n` +
-        `• Последний запуск: ${lastRun}\n` +
-        `• Следующий запуск: ~${nextRun}\n` +
-        `• Группы: ${groupBehavior}\n\n` +
-        'Комментарии сохраняются автоматически.',
-        ui.ButtonSet.OK
-      );
-    }
-    
-  } catch (error) {
-    console.error('Ошибка проверки статуса:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось проверить статус автокеширования:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Изменить настройки автокеширования
- * Позволяет изменить поведение с группами без перезапуска
- */
-function configureAutoCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Проверяем активность автокеширования
-    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (triggers.length === 0) {
-      ui.alert(
-        'Автокеширование не активно',
-        'Сначала запустите автокеширование, а затем настройте его.',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-    
-    // Получаем текущую настройку
-    const userProperties = PropertiesService.getUserProperties();
-    const currentSetting = userProperties.getProperty('AUTO_CACHE_RESTORE_GROUPS') === 'true';
-    const currentText = currentSetting ? 'ДА (восстанавливаются)' : 'НЕТ (остаются развернутыми)';
-    
-    // Спрашиваем о новой настройке
-    const response = ui.alert(
-      'Настройки автокеширования',
-      `Текущая настройка групп: ${currentText}\n\n` +
-      'Автокеширование должно временно разворачивать группы для доступа к данным.\n\n' +
-      'Хотите ли вы, чтобы группы автоматически сворачивались обратно после кеширования?\n\n' +
-      '• ДА - группы будут восстановлены (рекомендуется)\n' +
-      '• НЕТ - группы останутся развернутыми',
-      ui.ButtonSet.YES_NO
-    );
-    
-    // Сохраняем новую настройку
-    const newSetting = response === ui.Button.YES;
-    userProperties.setProperty('AUTO_CACHE_RESTORE_GROUPS', newSetting ? 'true' : 'false');
-    
-    const newText = newSetting ? 'будут восстанавливаться' : 'будут оставаться развернутыми';
-    
-    ui.alert(
-      'Настройки обновлены',
-      `Настройка изменена успешно!\n\n` +
-      `Теперь группы ${newText} после автоматического кеширования.\n\n` +
-      'Изменения вступят в силу при следующем автокешировании.',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Ошибка настройки автокеширования:', error);
-    ui.alert(
-      'Ошибка',
-      'Не удалось изменить настройки:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Получить время последнего запуска триггера (примерное)
- */
-function getLastTriggerRun(trigger) {
-  try {
-    // Google Apps Script не предоставляет точное время последнего запуска
-    // Показываем примерную информацию
-    return 'неизвестно (проверьте логи выполнения)';
-  } catch (error) {
-    return 'ошибка получения данных';
-  }
-}
-
-/**
- * Получить примерное время следующего запуска
- */
-function getNextTriggerRun() {
-  try {
-    const now = new Date();
-    const next = new Date(now.getTime() + 15 * 60 * 1000); // +15 минут
-    return next.toLocaleTimeString();
-  } catch (error) {
-    return 'неизвестно';
-  }
-}
-
-/**
- * Очистить все триггеры автокеширования (служебная функция)
- * Используется для полной очистки в случае проблем
- */
-function clearAllAutoCacheTriggers() {
-  const ui = SpreadsheetApp.getUi();
-  
-  const response = ui.alert(
-    'ВНИМАНИЕ: Очистка всех триггеров',
-    'Эта функция удалит ВСЕ триггеры автокеширования.\n\n' +
-    'Используйте только в случае проблем с триггерами.\n\n' +
-    'Продолжить?',
-    ui.ButtonSet.YES_NO
+  // Get start date
+  const startResp = ui.prompt(
+    'Date Range Report - Start Date',
+    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
+    ui.ButtonSet.OK_CANCEL
   );
   
-  if (response !== ui.Button.YES) {
+  if (startResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const startDate = startResp.getResponseText().trim();
+  if (!isValidDate(startDate)) {
+    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Get end date
+  const endResp = ui.prompt(
+    'Date Range Report - End Date',
+    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (endResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const endDate = endResp.getResponseText().trim();
+  if (!isValidDate(endDate)) {
+    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Validate date range
+  if (startDate > endDate) {
+    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Generate report without confirmation
+  generateReportForDateRange(startDate, endDate);
+}
+
+/**
+ * Update all data to current - fetches from first existing week to current date
+ */
+function updateAllDataToCurrent() {
+  const ui = SpreadsheetApp.getUi();
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    ui.alert('No existing data found. Please create a report first.');
     return;
   }
   
   try {
-    const allTriggers = ScriptApp.getProjectTriggers();
-    let deletedCount = 0;
+    // Expand all groups first to ensure we can read all data
+    expandAllGroups(sheet);
     
-    allTriggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'autoCacheComments') {
-        ScriptApp.deleteTrigger(trigger);
-        deletedCount++;
-      }
-    });
+    // Save existing comments first
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
     
-    ui.alert(
-      'Триггеры очищены',
-      `Удалено триггеров автокеширования: ${deletedCount}\n\n` +
-      'Теперь можно заново запустить автокеширование.',
-      ui.ButtonSet.OK
-    );
+    // Find the earliest week in the sheet
+    let earliestDate = null;
+    const data = sheet.getDataRange().getValues();
     
-  } catch (error) {
-    ui.alert(
-      'Ошибка',
-      'Не удалось очистить триггеры:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Принудительно выполнить кеширование сейчас
- * Ручной запуск функции автокеширования
- */
-function forceCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Используем ту же логику что и автокеширование
-    autoCacheComments();
-    ui.alert(
-      'Кеширование выполнено',
-      'Комментарии успешно сохранены в кеш.\n\n' +
-      'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
-      'Примечание: Использованы те же настройки групп, что и для автокеширования.',
-      ui.ButtonSet.OK
-    );
-  } catch (error) {
-    ui.alert(
-      'Ошибка кеширования',
-      'Не удалось выполнить кеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * GROUP STATE MANAGEMENT
- * Функции для сохранения и восстановления состояния групп
- */
-
-/**
- * Сохранить текущее состояние групп (какие свернуты, какие развернуты)
- */
-function saveGroupState(sheet) {
-  try {
-    const groupState = {
-      collapsedRanges: []
-    };
-    
-    const maxRows = sheet.getMaxRows();
-    
-    // Проходим по всем строкам и определяем свернутые группы
-    // К сожалению, Google Apps Script не предоставляет прямого API для проверки состояния групп
-    // Поэтому используем workaround через попытку развернуть
-    let currentRow = 1;
-    while (currentRow <= maxRows) {
-      try {
-        // Пробуем найти группы, проверяя видимость строк
-        const range = sheet.getRange(currentRow, 1, 1, 1);
-        
-        // Попробуем определить, является ли строка частью свернутой группы
-        // Это сложно сделать точно с текущим API, поэтому используем упрощенный подход
-        
-        currentRow++;
-      } catch (e) {
-        currentRow++;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === 'WEEK') {
+        const weekRange = data[i][1];
+        const [startStr, endStr] = weekRange.split(' - ');
+        const startDate = new Date(startStr);
+        if (!earliestDate || startDate < earliestDate) {
+          earliestDate = startDate;
+        }
       }
     }
     
-    // Упрощенное решение: просто запоминаем, что нужно будет свернуть все группы обратно
-    groupState.shouldCollapseAll = true;
-    
-    return groupState;
-    
-  } catch (error) {
-    console.error('Error saving group state:', error);
-    return { collapsedRanges: [], shouldCollapseAll: false };
-  }
-}
-
-/**
- * Восстановить состояние групп
- */
-function restoreGroupState(sheet, groupState) {
-  try {
-    if (!groupState || !groupState.shouldCollapseAll) {
+    if (!earliestDate) {
+      ui.alert('No week data found in the sheet.');
       return;
     }
     
-    // Поскольку точное определение состояния групп сложно,
-    // используем эвристику: сворачиваем все группы после автокеширования
-    // Это предполагает, что пользователь обычно держит группы свернутыми
+    // Calculate date range from earliest date to yesterday (excluding current incomplete week)
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // If today is Sunday (0), we include up to Saturday (yesterday)
+    // Otherwise, we include up to last Saturday
+    let endDate;
+    if (dayOfWeek === 0) {
+      // Today is Sunday, include up to yesterday (Saturday)
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - 1);
+    } else {
+      // Today is Mon-Sat, include up to last Saturday
+      const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - daysFromLastSaturday);
+    }
     
-    // Получаем данные для определения структуры
-    const data = sheet.getDataRange().getValues();
+    const dateRange = {
+      from: formatDateForAPI(earliestDate),
+      to: formatDateForAPI(endDate)
+    };
     
-    // Находим все группы (APP и WEEK уровни) и сворачиваем их
-    collapseAllGroupsIntelligently(sheet, data);
+    // Fetch all data for the complete range
+    const raw = fetchCampaignData(dateRange);
     
-  } catch (error) {
-    console.error('Error restoring group state:', error);
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('No data found for the date range.');
+      return;
+    }
+    
+    // Process data
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      ui.alert('No valid data to process.');
+      return;
+    }
+    
+    // Clear old data silently
+    clearAllDataSilent();
+    
+    // Create updated report
+    createEnhancedPivotTable(processed);
+    
+    // Restore comments
+    cache.applyCommentsToSheet();
+    
+    ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    console.error('Error updating data:', e);
+    ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
 
 /**
- * Умное сворачивание групп на основе структуры данных
+ * Clear all data by deleting and recreating the sheet - only shows confirmation when called from menu
  */
-function collapseAllGroupsIntelligently(sheet, data) {
+function clearAllData() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Show confirmation dialog only for manual clearing
+  const result = ui.alert(
+    'Clear All Data',
+    'This will delete all data in the Pivot sheet.\n\n' +
+    'Comments will be preserved and can be restored later.\n\n' +
+    'Are you sure you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (result !== ui.Button.YES) {
+    return;
+  }
+  
   try {
-    // Сначала сворачиваем группы более глубокого уровня (WEEK уровень)
-    let currentApp = '';
-    let weekGroupStart = -1;
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
     
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      
-      if (level === 'APP') {
-        // Если была открыта группа недель, сворачиваем её
-        if (weekGroupStart !== -1) {
-          try {
-            const groupSize = i - weekGroupStart;
-            if (groupSize > 1) {
-              sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
-            }
-          } catch (e) {
-            // Игнорируем ошибки группировки
-          }
-        }
-        
-        currentApp = data[i][1];
-        weekGroupStart = -1;
-      } else if (level === 'WEEK') {
-        if (weekGroupStart === -1) {
-          weekGroupStart = i + 1; // Начинаем группу с следующей строки (CAMPAIGN)
-        }
-      }
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet();
     }
     
-    // Сворачиваем последнюю группу недель если есть
-    if (weekGroupStart !== -1) {
-      try {
-        const groupSize = data.length - weekGroupStart;
-        if (groupSize > 0) {
-          sheet.getRange(weekGroupStart, 1, groupSize, 1).collapseGroups();
-        }
-      } catch (e) {
-        // Игнорируем ошибки группировки
-      }
-    }
+    clearAllDataSilent();
     
-    // Теперь сворачиваем группы уровня приложений
-    let appGroupStart = -1;
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      
-      if (level === 'APP') {
-        // Если была открыта группа приложения, сворачиваем её
-        if (appGroupStart !== -1) {
-          try {
-            const groupSize = i - appGroupStart;
-            if (groupSize > 1) {
-              sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
-            }
-          } catch (e) {
-            // Игнорируем ошибки группировки
-          }
-        }
-        
-        appGroupStart = i + 1; // Начинаем новую группу приложения
-      }
-    }
-    
-    // Сворачиваем последнюю группу приложения
-    if (appGroupStart !== -1) {
-      try {
-        const groupSize = data.length - appGroupStart;
-        if (groupSize > 0) {
-          sheet.getRange(appGroupStart, 1, groupSize, 1).collapseGroups();
-        }
-      } catch (e) {
-        // Игнорируем ошибки группировки
-      }
-    }
-    
+    ui.alert('Success', 'All data has been cleared. Comments have been preserved in cache.', ui.ButtonSet.OK);
   } catch (error) {
-    console.error('Error in intelligent group collapsing:', error);
+    console.error('Error during sheet recreation:', error);
+    ui.alert('Error', 'Error clearing data: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
