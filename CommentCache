@@ -226,7 +226,7 @@ function startAutoCache() {
     // Создаем новый триггер
     ScriptApp.newTrigger('autoCacheComments')
       .timeBased()
-      .everyMinutes(15)
+      .everyMinutes(60)
       .create();
     
     // Сразу выполняем первое кеширование
@@ -235,7 +235,7 @@ function startAutoCache() {
     ui.alert(
       'Автокеширование запущено', 
       'Автоматическое сохранение комментариев активировано!\n\n' +
-      '• Комментарии будут сохраняться каждые 15 минут\n' +
+      '• Комментарии будут сохраняться каждые 60 минут\n' +
       '• Первое сохранение выполнено сейчас\n' +
       '• Все группы сворачиваются после кеширования\n' +
       '• Для отключения используйте "Остановить автокеширование"',
@@ -337,7 +337,7 @@ function checkAutoCacheStatus() {
       ui.alert(
         'Статус автокеширования',
         '✅ Автоматическое кеширование АКТИВНО\n\n' +
-        `• Интервал: каждые 15 минут\n` +
+        `• Интервал: каждые 60 минут\n` +
         `• Активных триггеров: ${triggers.length}\n` +
         `• Последний запуск: ${lastRun}\n` +
         `• Следующий запуск: ~${nextRun}\n` +
@@ -781,7 +781,7 @@ function getLastTriggerRun(trigger) {
 function getNextTriggerRun() {
   try {
     const now = new Date();
-    const next = new Date(now.getTime() + 15 * 60 * 1000); // +15 минут
+    const next = new Date(now.getTime() + 60 * 60 * 1000); // +15 минут
     return next.toLocaleTimeString();
   } catch (error) {
     return 'неизвестно';
