@@ -1,6 +1,7 @@
 /**
  * Comment Cache Management
  * Handles saving and loading comments from a hidden sheet
+ * Includes automatic caching functionality with 15-minute intervals
  */
 class CommentCache {
   constructor() {
@@ -126,5 +127,291 @@ class CommentCache {
         }
       }
     }
+  }
+}
+
+/**
+ * AUTO CACHE SYSTEM
+ * Автоматическое кеширование комментариев каждые 15 минут
+ */
+
+/**
+ * Автоматическое кеширование комментариев (без UI)
+ * Запускается триггером каждые 15 минут
+ */
+function autoCacheComments() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    // Проверяем есть ли данные в таблице
+    if (!sheet || sheet.getLastRow() < 2) {
+      console.log('AutoCache: Нет данных для кеширования');
+      return;
+    }
+    
+    // Разворачиваем все группы для чтения данных
+    expandAllGroups(sheet);
+    
+    // Синхронизируем комментарии
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    console.log('AutoCache: Комментарии успешно кешированы - ' + new Date().toLocaleString());
+    
+  } catch (error) {
+    console.error('AutoCache Error:', error);
+    // Не показываем alert так как это автоматическая функция
+  }
+}
+
+/**
+ * Запустить автоматическое кеширование комментариев
+ * Создает триггер на выполнение каждые 15 минут
+ */
+function startAutoCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Проверяем, не установлен ли уже триггер
+    const existingTriggers = ScriptApp.getProjectTriggers().filter(trigger => 
+      trigger.getHandlerFunction() === 'autoCacheComments'
+    );
+    
+    if (existingTriggers.length > 0) {
+      ui.alert(
+        'Автокеширование уже активно', 
+        'Автоматическое кеширование комментариев уже запущено.\n\n' +
+        'Комментарии сохраняются каждые 15 минут автоматически.',
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+    
+    // Создаем новый триггер
+    ScriptApp.newTrigger('autoCacheComments')
+      .timeBased()
+      .everyMinutes(15)
+      .create();
+    
+    // Сразу выполняем первое кеширование
+    autoCacheComments();
+    
+    ui.alert(
+      'Автокеширование запущено', 
+      'Автоматическое сохранение комментариев активировано!\n\n' +
+      '• Комментарии будут сохраняться каждые 15 минут\n' +
+      '• Первое сохранение выполнено сейчас\n' +
+      '• Для отключения используйте "Остановить автокеширование"',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    console.error('Ошибка запуска автокеширования:', error);
+    ui.alert(
+      'Ошибка', 
+      'Не удалось запустить автокеширование:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Остановить автоматическое кеширование комментариев
+ * Удаляет все триггеры автокеширования
+ */
+function stopAutoCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Находим и удаляем все триггеры автокеширования
+    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
+      trigger.getHandlerFunction() === 'autoCacheComments'
+    );
+    
+    if (triggers.length === 0) {
+      ui.alert(
+        'Автокеширование не активно', 
+        'Автоматическое кеширование комментариев не запущено.',
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+    
+    // Подтверждение остановки
+    const response = ui.alert(
+      'Остановить автокеширование?',
+      'Вы уверены, что хотите остановить автоматическое сохранение комментариев?\n\n' +
+      'После остановки комментарии нужно будет сохранять вручную.',
+      ui.ButtonSet.YES_NO
+    );
+    
+    if (response !== ui.Button.YES) {
+      return;
+    }
+    
+    // Удаляем все триггеры
+    triggers.forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+    });
+    
+    ui.alert(
+      'Автокеширование остановлено', 
+      `Автоматическое сохранение комментариев отключено.\n\n` +
+      `Удалено триггеров: ${triggers.length}\n\n` +
+      'Теперь комментарии нужно сохранять вручную через меню.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    console.error('Ошибка остановки автокеширования:', error);
+    ui.alert(
+      'Ошибка', 
+      'Не удалось остановить автокеширование:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Проверить статус автокеширования
+ * Показывает информацию о состоянии триггеров
+ */
+function checkAutoCacheStatus() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
+      trigger.getHandlerFunction() === 'autoCacheComments'
+    );
+    
+    if (triggers.length === 0) {
+      ui.alert(
+        'Статус автокеширования',
+        '❌ Автоматическое кеширование ОТКЛЮЧЕНО\n\n' +
+        'Комментарии нужно сохранять вручную через меню.\n\n' +
+        'Для включения используйте "Запустить автокеширование".',
+        ui.ButtonSet.OK
+      );
+    } else {
+      const trigger = triggers[0];
+      const lastRun = getLastTriggerRun(trigger);
+      const nextRun = getNextTriggerRun();
+      
+      ui.alert(
+        'Статус автокеширования',
+        '✅ Автоматическое кеширование АКТИВНО\n\n' +
+        `• Интервал: каждые 15 минут\n` +
+        `• Активных триггеров: ${triggers.length}\n` +
+        `• Последний запуск: ${lastRun}\n` +
+        `• Следующий запуск: ~${nextRun}\n\n` +
+        'Комментарии сохраняются автоматически.',
+        ui.ButtonSet.OK
+      );
+    }
+    
+  } catch (error) {
+    console.error('Ошибка проверки статуса:', error);
+    ui.alert(
+      'Ошибка', 
+      'Не удалось проверить статус автокеширования:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Получить время последнего запуска триггера (примерное)
+ */
+function getLastTriggerRun(trigger) {
+  try {
+    // Google Apps Script не предоставляет точное время последнего запуска
+    // Показываем примерную информацию
+    return 'неизвестно (проверьте логи выполнения)';
+  } catch (error) {
+    return 'ошибка получения данных';
+  }
+}
+
+/**
+ * Получить примерное время следующего запуска
+ */
+function getNextTriggerRun() {
+  try {
+    const now = new Date();
+    const next = new Date(now.getTime() + 15 * 60 * 1000); // +15 минут
+    return next.toLocaleTimeString();
+  } catch (error) {
+    return 'неизвестно';
+  }
+}
+
+/**
+ * Очистить все триггеры автокеширования (служебная функция)
+ * Используется для полной очистки в случае проблем
+ */
+function clearAllAutoCacheTriggers() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const response = ui.alert(
+    'ВНИМАНИЕ: Очистка всех триггеров',
+    'Эта функция удалит ВСЕ триггеры автокеширования.\n\n' +
+    'Используйте только в случае проблем с триггерами.\n\n' +
+    'Продолжить?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) {
+    return;
+  }
+  
+  try {
+    const allTriggers = ScriptApp.getProjectTriggers();
+    let deletedCount = 0;
+    
+    allTriggers.forEach(trigger => {
+      if (trigger.getHandlerFunction() === 'autoCacheComments') {
+        ScriptApp.deleteTrigger(trigger);
+        deletedCount++;
+      }
+    });
+    
+    ui.alert(
+      'Триггеры очищены',
+      `Удалено триггеров автокеширования: ${deletedCount}\n\n` +
+      'Теперь можно заново запустить автокеширование.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert(
+      'Ошибка',
+      'Не удалось очистить триггеры:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Принудительно выполнить кеширование сейчас
+ * Ручной запуск функции автокеширования
+ */
+function forceCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    autoCacheComments();
+    ui.alert(
+      'Кеширование выполнено',
+      'Комментарии успешно сохранены в кеш.\n\n' +
+      'Время выполнения: ' + new Date().toLocaleString(),
+      ui.ButtonSet.OK
+    );
+  } catch (error) {
+    ui.alert(
+      'Ошибка кеширования',
+      'Не удалось выполнить кеширование:\n\n' + error.toString(),
+      ui.ButtonSet.OK
+    );
   }
 }
