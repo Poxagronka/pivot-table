@@ -1,6 +1,6 @@
 /**
  * Debug Functions для Campaign Report - Multi Project Support
- * Содержит функции для диагностики проблем с генерацией репорта для Tricky и Moloco
+ * Содержит функции для диагностики проблем с генерацией репорта для Tricky, Moloco и Regular
  */
 
 /**
@@ -166,7 +166,7 @@ function debugAPIRequest(debugSheet, projectName) {
       { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
     ];
     
-    // Add campaign filter only if search pattern exists (for Tricky, not for Moloco)
+    // Add campaign filter only if search pattern exists (for Tricky, not for Moloco/Regular)
     if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
@@ -386,7 +386,7 @@ function debugDataProcessing(debugSheet, apiResponse) {
         // Extract campaign name based on structure
         let campaignName = 'Unknown';
         if (campaign.campaignName) {
-          campaignName = campaign.campaignName; // Tricky format
+          campaignName = campaign.campaignName; // Tricky/Regular format
         } else if (campaign.value) {
           campaignName = campaign.value; // Moloco format
         }
@@ -486,7 +486,7 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         let campaignName = null;
         if (campaign) {
           if (campaign.campaignName) {
-            campaignName = campaign.campaignName; // Tricky format
+            campaignName = campaign.campaignName; // Tricky/Regular format
           } else if (campaign.value) {
             campaignName = campaign.value; // Moloco format
           }
@@ -495,12 +495,18 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         if (campaignName) {
           uniqueCampaigns.add(campaignName);
           
-          // For Moloco: check APD_ campaigns, for Tricky: check search pattern
+          // For Moloco: check APD_ campaigns
           if (projectName === 'MOLOCO') {
             if (campaignName.startsWith('APD_')) {
               campaignPatterns.add(campaignName);
             }
-          } else if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
+          } 
+          // For Regular: no filter, so all campaigns are valid
+          else if (projectName === 'REGULAR') {
+            campaignPatterns.add(campaignName);
+          }
+          // For Tricky: check search pattern
+          else if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
             const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
             const regex = new RegExp(searchPattern.slice(1, -2), 'i'); // Убираем /.../ и флаги
             if (regex.test(campaignName)) {
@@ -548,6 +554,20 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         } else {
           logDebug(debugSheet, 'Проблема: кампании вообще не извлекаются!', 'ERROR');
         }
+      }
+      
+    } else if (projectName === 'REGULAR') {
+      logDebug(debugSheet, 'REGULAR: Фильтр кампаний ОТКЛЮЧЕН (берем все кампании)', 'INFO');
+      logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ')} (такой же как у Tricky)`, 'INFO');
+      logDebug(debugSheet, '- Всего кампаний найдено: ' + campaignPatterns.size, 'INFO');
+      
+      if (campaignPatterns.size > 0) {
+        const examples = Array.from(campaignPatterns).slice(0, 5);
+        logDebug(debugSheet, 'Примеры кампаний:', 'INFO', examples.join('\n'));
+        logDebug(debugSheet, 'Source App будет извлекаться из названия кампании', 'INFO');
+        logDebug(debugSheet, '✅ REGULAR данные корректны!', 'SUCCESS');
+      } else {
+        logDebug(debugSheet, 'ПРОБЛЕМА: Кампании не найдены!', 'ERROR');
       }
       
     } else {
