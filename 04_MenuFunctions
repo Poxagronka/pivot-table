@@ -244,7 +244,7 @@ function clearAllData() {
   // Show confirmation dialog only for manual clearing
   const result = ui.alert(
     'Clear All Data',
-    'This will delete all data in the Pivot sheet.\n\n' +
+    'This will delete all data in the Tricky sheet.\n\n' +
     'Comments will be preserved and can be restored later.\n\n' +
     'Are you sure you want to continue?',
     ui.ButtonSet.YES_NO
