@@ -1,6 +1,6 @@
 /**
- * Menu Functions and UI Handlers
- * Contains all menu creation and user interface functions
+ * Menu Functions and UI Handlers - Multi Project Support
+ * Contains all menu creation and user interface functions for Tricky and Moloco
  */
 
 /**
@@ -9,56 +9,98 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Campaign Report')
-    .addItem('Create report - Last 30 days', 'generateReport30')
-    .addItem('Create report - Last 60 days', 'generateReport60')
-    .addItem('Create report - Last 90 days', 'generateReport90')
-    .addItem('Create report - Custom days', 'showDaysDialog')
-    .addItem('Create report - Date range', 'showDateRangeDialog')
-    .addSeparator()
-    .addItem('Update all data to current', 'updateAllDataToCurrent')
-    .addSeparator()
-    .addItem('Save comments to cache', 'saveCommentsToCache')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('💾 Auto Cache')
-      .addItem('▶️ Start auto cache (60 min)', 'startAutoCache')
-      .addItem('⏹️ Stop auto cache', 'stopAutoCache')
-      .addItem('📊 Check status', 'checkAutoCacheStatus')
+    .addSubMenu(ui.createMenu('📊 Tricky Reports')
+      .addItem('📅 Last 30 days', 'generateTrickyReport30')
+      .addItem('📅 Last 60 days', 'generateTrickyReport60')
+      .addItem('📅 Last 90 days', 'generateTrickyReport90')
+      .addItem('📅 Custom days', 'showTrickyDaysDialog')
+      .addItem('📅 Date range', 'showTrickyDateRangeDialog')
       .addSeparator()
-      .addItem('🔄 Force cache now', 'forceCache')
+      .addItem('🔄 Update all data to current', 'updateTrickyDataToCurrent')
       .addSeparator()
-      .addSubMenu(ui.createMenu('🧪 Test Groups')
-        .addItem('📥 Test collapse groups', 'testCollapseGroups')
-        .addItem('📤 Test expand groups', 'testExpandGroups')
+      .addItem('💬 Save comments to cache', 'saveTrickyCommentsToCache')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('💾 Auto Cache')
+        .addItem('▶️ Start auto cache (60 min)', 'startTrickyAutoCache')
+        .addItem('⏹️ Stop auto cache', 'stopTrickyAutoCache')
+        .addItem('📊 Check status', 'checkTrickyAutoCacheStatus')
+        .addSeparator()
+        .addItem('🔄 Force cache now', 'forceTrickyCache')
+        .addSeparator()
+        .addSubMenu(ui.createMenu('🧪 Test Groups')
+          .addItem('📥 Test collapse groups', 'testTrickyCollapseGroups')
+          .addItem('📤 Test expand groups', 'testTrickyExpandGroups')
+        )
+        .addSeparator()
+        .addItem('🗑️ Clear all triggers', 'clearTrickyAutoCacheTriggers')
       )
+      .addItem('🗑️ Clear all data', 'clearTrickyAllData')
       .addSeparator()
-      .addItem('🗑️ Clear all triggers', 'clearAllAutoCacheTriggers')
+      .addSubMenu(ui.createMenu('🔧 Debug')
+        .addItem('Full Diagnostic', 'debugTrickyReportGeneration')
+        .addItem('Quick API Check', 'quickTrickyAPICheck')
+      )
     )
-    .addItem('Clear all data', 'clearAllData')
+    .addSubMenu(ui.createMenu('🔥 Moloco Reports')
+      .addItem('📅 Last 30 days', 'generateMolocoReport30')
+      .addItem('📅 Last 60 days', 'generateMolocoReport60')
+      .addItem('📅 Last 90 days', 'generateMolocoReport90')
+      .addItem('📅 Custom days', 'showMolocoDaysDialog')
+      .addItem('📅 Date range', 'showMolocoDateRangeDialog')
+      .addSeparator()
+      .addItem('🔄 Update all data to current', 'updateMolocoDataToCurrent')
+      .addSeparator()
+      .addItem('💬 Save comments to cache', 'saveMolocoCommentsToCache')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('💾 Auto Cache')
+        .addItem('▶️ Start auto cache (60 min)', 'startMolocoAutoCache')
+        .addItem('⏹️ Stop auto cache', 'stopMolocoAutoCache')
+        .addItem('📊 Check status', 'checkMolocoAutoCacheStatus')
+        .addSeparator()
+        .addItem('🔄 Force cache now', 'forceMolocoCache')
+        .addSeparator()
+        .addSubMenu(ui.createMenu('🧪 Test Groups')
+          .addItem('📥 Test collapse groups', 'testMolocoCollapseGroups')
+          .addItem('📤 Test expand groups', 'testMolocoExpandGroups')
+        )
+        .addSeparator()
+        .addItem('🗑️ Clear all triggers', 'clearMolocoAutoCacheTriggers')
+      )
+      .addItem('🗑️ Clear all data', 'clearMolocoAllData')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('🔧 Debug')
+        .addItem('Full Diagnostic', 'debugMolocoReportGeneration')
+        .addItem('Quick API Check', 'quickMolocoAPICheck')
+      )
+    )
     .addSeparator()
-    .addSubMenu(ui.createMenu('🔧 Debug')
-      .addItem('Full Diagnostic', 'debugReportGeneration')
-      .addItem('Quick API Check', 'quickAPICheck')
-    )
+    .addItem('⚙️ Project Settings', 'showProjectSettings')
     .addToUi();
 }
 
-// Quick report functions
-function generateReport30() { generateReport(30); }
-function generateReport60() { generateReport(60); }
-function generateReport90() { generateReport(90); }
+// =============================================================================
+// TRICKY PROJECT FUNCTIONS
+// =============================================================================
+
+// Quick report functions for Tricky
+function generateTrickyReport30() { generateProjectReport('TRICKY', 30); }
+function generateTrickyReport60() { generateProjectReport('TRICKY', 60); }
+function generateTrickyReport90() { generateProjectReport('TRICKY', 90); }
 
 /**
- * Save comments to cache manually - only this function shows progress
+ * Save Tricky comments to cache manually
  */
-function saveCommentsToCache() {
-  const progress = new ProgressManager('Saving Comments').start('Preparing sheet...');
+function saveTrickyCommentsToCache() {
+  setCurrentProject('TRICKY');
+  const progress = new ProgressManager('Saving Tricky Comments').start('Preparing sheet...');
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (!sheet || sheet.getLastRow() < 2) {
       progress.end(false);
-      SpreadsheetApp.getUi().alert('No data found in the sheet.');
+      SpreadsheetApp.getUi().alert('No data found in the Tricky sheet.');
       return;
     }
     
@@ -71,37 +113,37 @@ function saveCommentsToCache() {
     
     progress.update('Comments saved successfully!');
     progress.end();
-    SpreadsheetApp.getUi().alert('Success', 'Comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Success', 'Tricky comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {
     progress.end(false);
-    SpreadsheetApp.getUi().alert('Error', 'Error saving comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Error', 'Error saving Tricky comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
 /**
- * Dialog for entering number of days
+ * Dialog for entering number of days for Tricky
  */
-function showDaysDialog() {
+function showTrickyDaysDialog() {
   const ui = SpreadsheetApp.getUi();
-  const daysResp = ui.prompt('Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
+  const daysResp = ui.prompt('Tricky Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
   if (daysResp.getSelectedButton() !== ui.Button.OK) return;
   const days = parseInt(daysResp.getResponseText(), 10);
   if (![30, 60, 90, 120, 360].includes(days)) {
     ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
     return;
   }
-  generateReport(days);
+  generateProjectReport('TRICKY', days);
 }
 
 /**
- * Dialog for entering date range
+ * Dialog for entering date range for Tricky
  */
-function showDateRangeDialog() {
+function showTrickyDateRangeDialog() {
   const ui = SpreadsheetApp.getUi();
   
   // Get start date
   const startResp = ui.prompt(
-    'Date Range Report - Start Date',
+    'Tricky Date Range Report - Start Date',
     'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
     ui.ButtonSet.OK_CANCEL
   );
@@ -116,7 +158,7 @@ function showDateRangeDialog() {
   
   // Get end date
   const endResp = ui.prompt(
-    'Date Range Report - End Date',
+    'Tricky Date Range Report - End Date',
     'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
     ui.ButtonSet.OK_CANCEL
   );
@@ -135,116 +177,209 @@ function showDateRangeDialog() {
     return;
   }
   
-  // Generate report without confirmation
+  // Generate report
+  generateProjectReportForDateRange('TRICKY', startDate, endDate);
+}
+
+/**
+ * Update Tricky data to current
+ */
+function updateTrickyDataToCurrent() {
+  updateProjectDataToCurrent('TRICKY');
+}
+
+/**
+ * Clear Tricky data
+ */
+function clearTrickyAllData() {
+  clearProjectAllData('TRICKY');
+}
+
+// Tricky Auto Cache functions
+function startTrickyAutoCache() { startProjectAutoCache('TRICKY'); }
+function stopTrickyAutoCache() { stopProjectAutoCache('TRICKY'); }
+function checkTrickyAutoCacheStatus() { checkProjectAutoCacheStatus('TRICKY'); }
+function forceTrickyCache() { forceProjectCache('TRICKY'); }
+function clearTrickyAutoCacheTriggers() { clearProjectAutoCacheTriggers('TRICKY'); }
+
+// Tricky Group test functions
+function testTrickyCollapseGroups() { testProjectCollapseGroups('TRICKY'); }
+function testTrickyExpandGroups() { testProjectExpandGroups('TRICKY'); }
+
+// Tricky Debug functions
+function debugTrickyReportGeneration() { debugProjectReportGeneration('TRICKY'); }
+function quickTrickyAPICheck() { quickProjectAPICheck('TRICKY'); }
+
+// =============================================================================
+// MOLOCO PROJECT FUNCTIONS
+// =============================================================================
+
+// Quick report functions for Moloco
+function generateMolocoReport30() { generateProjectReport('MOLOCO', 30); }
+function generateMolocoReport60() { generateProjectReport('MOLOCO', 60); }
+function generateMolocoReport90() { generateProjectReport('MOLOCO', 90); }
+
+/**
+ * Save Moloco comments to cache manually
+ */
+function saveMolocoCommentsToCache() {
+  setCurrentProject('MOLOCO');
+  const progress = new ProgressManager('Saving Moloco Comments').start('Preparing sheet...');
+  try {
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      progress.end(false);
+      SpreadsheetApp.getUi().alert('No data found in the Moloco sheet.');
+      return;
+    }
+    
+    progress.update('Expanding all groups...');
+    expandAllGroups(sheet);
+    
+    progress.update('Reading comments from sheet...');
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    progress.update('Comments saved successfully!');
+    progress.end();
+    SpreadsheetApp.getUi().alert('Success', 'Moloco comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    progress.end(false);
+    SpreadsheetApp.getUi().alert('Error', 'Error saving Moloco comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Dialog for entering number of days for Moloco
+ */
+function showMolocoDaysDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const daysResp = ui.prompt('Moloco Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
+  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(daysResp.getResponseText(), 10);
+  if (![30, 60, 90, 120, 360].includes(days)) {
+    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
+    return;
+  }
+  generateProjectReport('MOLOCO', days);
+}
+
+/**
+ * Dialog for entering date range for Moloco
+ */
+function showMolocoDateRangeDialog() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Get start date
+  const startResp = ui.prompt(
+    'Moloco Date Range Report - Start Date',
+    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (startResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const startDate = startResp.getResponseText().trim();
+  if (!isValidDate(startDate)) {
+    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Get end date
+  const endResp = ui.prompt(
+    'Moloco Date Range Report - End Date',
+    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (endResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const endDate = endResp.getResponseText().trim();
+  if (!isValidDate(endDate)) {
+    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Validate date range
+  if (startDate > endDate) {
+    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Generate report
+  generateProjectReportForDateRange('MOLOCO', startDate, endDate);
+}
+
+/**
+ * Update Moloco data to current
+ */
+function updateMolocoDataToCurrent() {
+  updateProjectDataToCurrent('MOLOCO');
+}
+
+/**
+ * Clear Moloco data
+ */
+function clearMolocoAllData() {
+  clearProjectAllData('MOLOCO');
+}
+
+// Moloco Auto Cache functions
+function startMolocoAutoCache() { startProjectAutoCache('MOLOCO'); }
+function stopMolocoAutoCache() { stopProjectAutoCache('MOLOCO'); }
+function checkMolocoAutoCacheStatus() { checkProjectAutoCacheStatus('MOLOCO'); }
+function forceMolocoCache() { forceProjectCache('MOLOCO'); }
+function clearMolocoAutoCacheTriggers() { clearProjectAutoCacheTriggers('MOLOCO'); }
+
+// Moloco Group test functions
+function testMolocoCollapseGroups() { testProjectCollapseGroups('MOLOCO'); }
+function testMolocoExpandGroups() { testProjectExpandGroups('MOLOCO'); }
+
+// Moloco Debug functions
+function debugMolocoReportGeneration() { debugProjectReportGeneration('MOLOCO'); }
+function quickMolocoAPICheck() { quickProjectAPICheck('MOLOCO'); }
+
+// =============================================================================
+// UNIVERSAL PROJECT FUNCTIONS
+// =============================================================================
+
+/**
+ * Generate report for specific project and days
+ */
+function generateProjectReport(projectName, days) {
+  setCurrentProject(projectName);
+  generateReport(days);
+}
+
+/**
+ * Generate report for specific project and date range
+ */
+function generateProjectReportForDateRange(projectName, startDate, endDate) {
+  setCurrentProject(projectName);
   generateReportForDateRange(startDate, endDate);
 }
 
 /**
- * Update all data to current - fetches from first existing week to current date
+ * Update project data to current
  */
-function updateAllDataToCurrent() {
-  const ui = SpreadsheetApp.getUi();
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    ui.alert('No existing data found. Please create a report first.');
-    return;
-  }
-  
-  try {
-    // Expand all groups first to ensure we can read all data
-    expandAllGroups(sheet);
-    
-    // Save existing comments first
-    const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
-    
-    // Find the earliest week in the sheet
-    let earliestDate = null;
-    const data = sheet.getDataRange().getValues();
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === 'WEEK') {
-        const weekRange = data[i][1];
-        const [startStr, endStr] = weekRange.split(' - ');
-        const startDate = new Date(startStr);
-        if (!earliestDate || startDate < earliestDate) {
-          earliestDate = startDate;
-        }
-      }
-    }
-    
-    if (!earliestDate) {
-      ui.alert('No week data found in the sheet.');
-      return;
-    }
-    
-    // Calculate date range from earliest date to yesterday (excluding current incomplete week)
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    // If today is Sunday (0), we include up to Saturday (yesterday)
-    // Otherwise, we include up to last Saturday
-    let endDate;
-    if (dayOfWeek === 0) {
-      // Today is Sunday, include up to yesterday (Saturday)
-      endDate = new Date(today);
-      endDate.setDate(today.getDate() - 1);
-    } else {
-      // Today is Mon-Sat, include up to last Saturday
-      const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
-      endDate = new Date(today);
-      endDate.setDate(today.getDate() - daysFromLastSaturday);
-    }
-    
-    const dateRange = {
-      from: formatDateForAPI(earliestDate),
-      to: formatDateForAPI(endDate)
-    };
-    
-    // Fetch all data for the complete range
-    const raw = fetchCampaignData(dateRange);
-    
-    if (!raw.data?.analytics?.richStats?.stats?.length) {
-      ui.alert('No data found for the date range.');
-      return;
-    }
-    
-    // Process data
-    const processed = processApiData(raw);
-    
-    if (Object.keys(processed).length === 0) {
-      ui.alert('No valid data to process.');
-      return;
-    }
-    
-    // Clear old data silently
-    clearAllDataSilent();
-    
-    // Create updated report
-    createEnhancedPivotTable(processed);
-    
-    // Restore comments
-    cache.applyCommentsToSheet();
-    
-    ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
-    
-  } catch (e) {
-    console.error('Error updating data:', e);
-    ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
-  }
+function updateProjectDataToCurrent(projectName) {
+  setCurrentProject(projectName);
+  updateAllDataToCurrent();
 }
 
 /**
- * Clear all data by deleting and recreating the sheet - only shows confirmation when called from menu
+ * Clear project data
  */
-function clearAllData() {
+function clearProjectAllData(projectName) {
   const ui = SpreadsheetApp.getUi();
   
-  // Show confirmation dialog only for manual clearing
+  // Show confirmation dialog
   const result = ui.alert(
-    'Clear All Data',
-    'This will delete all data in the Tricky sheet.\n\n' +
+    `Clear ${projectName} Data`,
+    `This will delete all data in the ${projectName} sheet.\n\n` +
     'Comments will be preserved and can be restored later.\n\n' +
     'Are you sure you want to continue?',
     ui.ButtonSet.YES_NO
@@ -255,8 +390,10 @@ function clearAllData() {
   }
   
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    setCurrentProject(projectName);
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (sheet && sheet.getLastRow() > 1) {
       expandAllGroups(sheet);
@@ -266,9 +403,120 @@ function clearAllData() {
     
     clearAllDataSilent();
     
-    ui.alert('Success', 'All data has been cleared. Comments have been preserved in cache.', ui.ButtonSet.OK);
+    ui.alert('Success', `All ${projectName} data has been cleared. Comments have been preserved in cache.`, ui.ButtonSet.OK);
   } catch (error) {
     console.error('Error during sheet recreation:', error);
-    ui.alert('Error', 'Error clearing data: ' + error.toString(), ui.ButtonSet.OK);
+    ui.alert('Error', `Error clearing ${projectName} data: ` + error.toString(), ui.ButtonSet.OK);
   }
 }
+
+/**
+ * Universal auto cache functions
+ */
+function startProjectAutoCache(projectName) {
+  // TODO: Implement project-specific auto cache
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
+}
+
+function stopProjectAutoCache(projectName) {
+  // TODO: Implement project-specific auto cache
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
+}
+
+function checkProjectAutoCacheStatus(projectName) {
+  // TODO: Implement project-specific auto cache
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
+}
+
+function forceProjectCache(projectName) {
+  // TODO: Implement project-specific auto cache
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', `${projectName} cache needs to be implemented.`, ui.ButtonSet.OK);
+}
+
+function clearProjectAutoCacheTriggers(projectName) {
+  // TODO: Implement project-specific auto cache
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', `${projectName} trigger management needs to be implemented.`, ui.ButtonSet.OK);
+}
+
+/**
+ * Universal group test functions
+ */
+function testProjectCollapseGroups(projectName) {
+  setCurrentProject(projectName);
+  testCollapseGroups();
+}
+
+function testProjectExpandGroups(projectName) {
+  setCurrentProject(projectName);
+  testExpandGroups();
+}
+
+/**
+ * Universal debug functions
+ */
+function debugProjectReportGeneration(projectName) {
+  setCurrentProject(projectName);
+  debugReportGeneration();
+}
+
+function quickProjectAPICheck(projectName) {
+  setCurrentProject(projectName);
+  quickAPICheck();
+}
+
+/**
+ * Show project settings dialog
+ */
+function showProjectSettings() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const trickyConfig = PROJECTS.TRICKY;
+  const molocoConfig = PROJECTS.MOLOCO;
+  
+  const message = 
+    '📊 TRICKY PROJECT:\n' +
+    `• Sheet: ${trickyConfig.SHEET_NAME}\n` +
+    `• API URL: ${trickyConfig.API_URL}\n` +
+    `• Target eROAS: ${trickyConfig.TARGET_EROAS}%\n` +
+    `• Token: ${trickyConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
+    `• Campaign Search: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH}\n` +
+    `• Network HID: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
+    
+    '🔥 MOLOCO PROJECT:\n' +
+    `• Sheet: ${molocoConfig.SHEET_NAME}\n` +
+    `• API URL: ${molocoConfig.API_URL}\n` +
+    `• Target eROAS: ${molocoConfig.TARGET_EROAS}%\n` +
+    `• Token: ${molocoConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
+    `• Campaign Search: NO FILTER (takes all campaigns)\n` +
+    `• Network HID: ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
+    
+    '✅ Both projects are fully configured and ready to use!\n\n' +
+    '🔄 Key differences:\n' +
+    `• Tricky: Network ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, filtered campaigns "/tricky/i"\n` +
+    `• Moloco: Network ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, ALL campaigns (no filter)\n` +
+    '• Each project has separate comment cache\n' +
+    '• Independent data sheets and settings\n\n' +
+    '🎯 Source App Display:\n' +
+    '• Tricky: Extracts app names from campaign structure\n' +
+    '• Moloco: Shows full campaign names (APD_Word_Maker_iOS_...)';
+  
+  ui.alert('Project Settings', message, ui.ButtonSet.OK);
+}
+
+// =============================================================================
+// LEGACY FUNCTIONS (for backward compatibility)
+// =============================================================================
+
+// Keep old function names working, but redirect to Tricky
+function generateReport30() { generateTrickyReport30(); }
+function generateReport60() { generateTrickyReport60(); }
+function generateReport90() { generateTrickyReport90(); }
+function saveCommentsToCache() { saveTrickyCommentsToCache(); }
+function showDaysDialog() { showTrickyDaysDialog(); }
+function showDateRangeDialog() { showTrickyDateRangeDialog(); }
+function clearAllData() { clearTrickyAllData(); }
