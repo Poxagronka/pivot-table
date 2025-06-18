@@ -171,9 +171,10 @@ class CommentCache {
  */
 function autoCacheComments() {
   try {
-    // Cache comments for both projects
+    // Cache comments for all projects
     autoCacheProjectComments('TRICKY');
     autoCacheProjectComments('MOLOCO');
+    autoCacheProjectComments('REGULAR');
     
     console.log('AutoCache: Комментарии всех проектов успешно кешированы - ' + new Date().toLocaleString());
     
@@ -257,7 +258,7 @@ function startAutoCache() {
       'Автоматическое сохранение комментариев активировано!\n\n' +
       '• Комментарии будут сохраняться каждые 60 минут\n' +
       '• Первое сохранение выполнено сейчас\n' +
-      '• Кеширование работает для Tricky и Moloco\n' +
+      '• Кеширование работает для Tricky, Moloco и Regular\n' +
       '• Все группы сворачиваются после кеширования\n' +
       '• Для отключения используйте "Остановить автокеширование"',
       ui.ButtonSet.OK
@@ -362,7 +363,7 @@ function checkAutoCacheStatus() {
         `• Активных триггеров: ${triggers.length}\n` +
         `• Последний запуск: ${lastRun}\n` +
         `• Следующий запуск: ~${nextRun}\n` +
-        `• Проекты: Tricky и Moloco\n` +
+        `• Проекты: Tricky, Moloco и Regular\n` +
         `• Группы: полностью сворачиваются после кеширования\n\n` +
         'Комментарии сохраняются автоматически.',
         ui.ButtonSet.OK
@@ -393,7 +394,7 @@ function forceCache() {
       'Кеширование выполнено',
       'Комментарии успешно сохранены в кеш.\n\n' +
       'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
-      'Проекты: Tricky и Moloco\n' +
+      'Проекты: Tricky, Moloco и Regular\n' +
       'Все группы свернуты для удобства.',
       ui.ButtonSet.OK
     );
