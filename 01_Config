@@ -134,7 +134,7 @@ const TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
-    'E-ARPU 365d', 'E-ROAS 365d', 'E-Profit 730d', 'eProfit WoW %', 'Growth Status', 'Comments'
+    'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
     {c:1,w:80},{c:2,w:300},{c:3,w:50},{c:4,w:50},{c:5,w:75},
