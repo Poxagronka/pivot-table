@@ -1,6 +1,6 @@
 /**
  * Menu Functions and UI Handlers - Multi Project Support
- * Contains all menu creation and user interface functions for Tricky and Moloco
+ * Contains all menu creation and user interface functions for Tricky, Moloco, and Regular
  */
 
 /**
@@ -71,6 +71,38 @@ function onOpen() {
       .addSubMenu(ui.createMenu('🔧 Debug')
         .addItem('Full Diagnostic', 'debugMolocoReportGeneration')
         .addItem('Quick API Check', 'quickMolocoAPICheck')
+      )
+    )
+    .addSubMenu(ui.createMenu('📈 Regular Reports')
+      .addItem('📅 Last 30 days', 'generateRegularReport30')
+      .addItem('📅 Last 60 days', 'generateRegularReport60')
+      .addItem('📅 Last 90 days', 'generateRegularReport90')
+      .addItem('📅 Custom days', 'showRegularDaysDialog')
+      .addItem('📅 Date range', 'showRegularDateRangeDialog')
+      .addSeparator()
+      .addItem('🔄 Update all data to current', 'updateRegularDataToCurrent')
+      .addSeparator()
+      .addItem('💬 Save comments to cache', 'saveRegularCommentsToCache')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('💾 Auto Cache')
+        .addItem('▶️ Start auto cache (60 min)', 'startRegularAutoCache')
+        .addItem('⏹️ Stop auto cache', 'stopRegularAutoCache')
+        .addItem('📊 Check status', 'checkRegularAutoCacheStatus')
+        .addSeparator()
+        .addItem('🔄 Force cache now', 'forceRegularCache')
+        .addSeparator()
+        .addSubMenu(ui.createMenu('🧪 Test Groups')
+          .addItem('📥 Test collapse groups', 'testRegularCollapseGroups')
+          .addItem('📤 Test expand groups', 'testRegularExpandGroups')
+        )
+        .addSeparator()
+        .addItem('🗑️ Clear all triggers', 'clearRegularAutoCacheTriggers')
+      )
+      .addItem('🗑️ Clear all data', 'clearRegularAllData')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('🔧 Debug')
+        .addItem('Full Diagnostic', 'debugRegularReportGeneration')
+        .addItem('Quick API Check', 'quickRegularAPICheck')
       )
     )
     .addSeparator()
@@ -343,6 +375,138 @@ function debugMolocoReportGeneration() { debugProjectReportGeneration('MOLOCO');
 function quickMolocoAPICheck() { quickProjectAPICheck('MOLOCO'); }
 
 // =============================================================================
+// REGULAR PROJECT FUNCTIONS
+// =============================================================================
+
+// Quick report functions for Regular
+function generateRegularReport30() { generateProjectReport('REGULAR', 30); }
+function generateRegularReport60() { generateProjectReport('REGULAR', 60); }
+function generateRegularReport90() { generateProjectReport('REGULAR', 90); }
+
+/**
+ * Save Regular comments to cache manually
+ */
+function saveRegularCommentsToCache() {
+  setCurrentProject('REGULAR');
+  const progress = new ProgressManager('Saving Regular Comments').start('Preparing sheet...');
+  try {
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      progress.end(false);
+      SpreadsheetApp.getUi().alert('No data found in the Regular sheet.');
+      return;
+    }
+    
+    progress.update('Expanding all groups...');
+    expandAllGroups(sheet);
+    
+    progress.update('Reading comments from sheet...');
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    progress.update('Comments saved successfully!');
+    progress.end();
+    SpreadsheetApp.getUi().alert('Success', 'Regular comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    progress.end(false);
+    SpreadsheetApp.getUi().alert('Error', 'Error saving Regular comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Dialog for entering number of days for Regular
+ */
+function showRegularDaysDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const daysResp = ui.prompt('Regular Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
+  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(daysResp.getResponseText(), 10);
+  if (![30, 60, 90, 120, 360].includes(days)) {
+    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
+    return;
+  }
+  generateProjectReport('REGULAR', days);
+}
+
+/**
+ * Dialog for entering date range for Regular
+ */
+function showRegularDateRangeDialog() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Get start date
+  const startResp = ui.prompt(
+    'Regular Date Range Report - Start Date',
+    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (startResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const startDate = startResp.getResponseText().trim();
+  if (!isValidDate(startDate)) {
+    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Get end date
+  const endResp = ui.prompt(
+    'Regular Date Range Report - End Date',
+    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (endResp.getSelectedButton() !== ui.Button.OK) return;
+  
+  const endDate = endResp.getResponseText().trim();
+  if (!isValidDate(endDate)) {
+    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Validate date range
+  if (startDate > endDate) {
+    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // Generate report
+  generateProjectReportForDateRange('REGULAR', startDate, endDate);
+}
+
+/**
+ * Update Regular data to current
+ */
+function updateRegularDataToCurrent() {
+  updateProjectDataToCurrent('REGULAR');
+}
+
+/**
+ * Clear Regular data
+ */
+function clearRegularAllData() {
+  clearProjectAllData('REGULAR');
+}
+
+// Regular Auto Cache functions
+function startRegularAutoCache() { startProjectAutoCache('REGULAR'); }
+function stopRegularAutoCache() { stopProjectAutoCache('REGULAR'); }
+function checkRegularAutoCacheStatus() { checkProjectAutoCacheStatus('REGULAR'); }
+function forceRegularCache() { forceProjectCache('REGULAR'); }
+function clearRegularAutoCacheTriggers() { clearProjectAutoCacheTriggers('REGULAR'); }
+
+// Regular Group test functions
+function testRegularCollapseGroups() { testProjectCollapseGroups('REGULAR'); }
+function testRegularExpandGroups() { testProjectExpandGroups('REGULAR'); }
+
+// Regular Debug functions
+function debugRegularReportGeneration() { debugProjectReportGeneration('REGULAR'); }
+function quickRegularAPICheck() { quickProjectAPICheck('REGULAR'); }
+
+// =============================================================================
 // UNIVERSAL PROJECT FUNCTIONS
 // =============================================================================
 
@@ -477,6 +641,7 @@ function showProjectSettings() {
   
   const trickyConfig = PROJECTS.TRICKY;
   const molocoConfig = PROJECTS.MOLOCO;
+  const regularConfig = PROJECTS.REGULAR;
   
   const message = 
     '📊 TRICKY PROJECT:\n' +
@@ -495,15 +660,26 @@ function showProjectSettings() {
     `• Campaign Search: NO FILTER (takes all campaigns)\n` +
     `• Network HID: ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
     
-    '✅ Both projects are fully configured and ready to use!\n\n' +
+    '📈 REGULAR PROJECT:\n' +
+    `• Sheet: ${regularConfig.SHEET_NAME}\n` +
+    `• API URL: ${regularConfig.API_URL}\n` +
+    `• Target eROAS: ${regularConfig.TARGET_EROAS}%\n` +
+    `• Token: ${regularConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
+    `• Campaign Search: NO FILTER (takes all campaigns)\n` +
+    `• Network HID: ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
+    
+    '✅ All projects are fully configured and ready to use!\n\n' +
     '🔄 Key differences:\n' +
     `• Tricky: Network ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, filtered campaigns "/tricky/i"\n` +
     `• Moloco: Network ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, ALL campaigns (no filter)\n` +
+    `• Regular: Network ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]} (same as Tricky), ALL campaigns (no filter)\n` +
     '• Each project has separate comment cache\n' +
-    '• Independent data sheets and settings\n\n' +
+    '• Independent data sheets and settings\n' +
+    '• All projects use the same bearer token\n\n' +
     '🎯 Source App Display:\n' +
     '• Tricky: Extracts app names from campaign structure\n' +
-    '• Moloco: Shows full campaign names (APD_Word_Maker_iOS_...)';
+    '• Moloco: Shows full campaign names (APD_Word_Maker_iOS_...)\n' +
+    '• Regular: Shows extracted app names (same logic as Tricky)';
   
   ui.alert('Project Settings', message, ui.ButtonSet.OK);
 }
