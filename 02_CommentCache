@@ -1,21 +1,24 @@
 /**
- * Comment Cache Management
+ * Comment Cache Management - Multi Project Support
  * Handles saving and loading comments from a hidden sheet
  * Includes automatic caching functionality with 15-minute intervals
  */
 class CommentCache {
-  constructor() {
+  constructor(projectName = null) {
+    // If no project specified, use current project
+    this.projectName = projectName || CURRENT_PROJECT;
+    this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
     this.cacheSheet = this.getOrCreateCacheSheet();
   }
 
   /**
-   * Get or create the comments cache sheet
+   * Get or create the comments cache sheet for current project
    */
   getOrCreateCacheSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    let sheet = spreadsheet.getSheetByName(CONFIG.COMMENTS_CACHE_SHEET);
+    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(this.config.COMMENTS_CACHE_SHEET);
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(CONFIG.COMMENTS_CACHE_SHEET);
+      sheet = spreadsheet.insertSheet(this.config.COMMENTS_CACHE_SHEET);
       sheet.hideSheet();
       // Headers: AppName, WeekRange, Comment, LastUpdated
       sheet.getRange(1, 1, 1, 4).setValues([['AppName', 'WeekRange', 'Comment', 'LastUpdated']]);
@@ -78,8 +81,8 @@ class CommentCache {
    * Sync comments from the main sheet to cache
    */
   syncCommentsFromSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
     
     // Expand all groups to ensure we can read all data
@@ -105,8 +108,8 @@ class CommentCache {
    * Apply cached comments back to the main sheet
    */
   applyCommentsToSheet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
     
     const comments = this.loadAllComments();
@@ -134,8 +137,8 @@ class CommentCache {
    * Used by auto-cache to avoid interfering with user's group state
    */
   syncCommentsFromSheetQuiet() {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
     
     // DON'T expand groups - assume they're already expanded by caller
@@ -168,35 +171,52 @@ class CommentCache {
  */
 function autoCacheComments() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    // Cache comments for both projects
+    autoCacheProjectComments('TRICKY');
+    autoCacheProjectComments('MOLOCO');
+    
+    console.log('AutoCache: Комментарии всех проектов успешно кешированы - ' + new Date().toLocaleString());
+    
+  } catch (error) {
+    console.error('AutoCache Error:', error);
+    // Не показываем alert так как это автоматическая функция
+  }
+}
+
+/**
+ * Auto cache comments for specific project
+ */
+function autoCacheProjectComments(projectName) {
+  try {
+    const config = getProjectConfig(projectName);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     // Проверяем есть ли данные в таблице
     if (!sheet || sheet.getLastRow() < 2) {
-      console.log('AutoCache: Нет данных для кеширования');
+      console.log(`AutoCache ${projectName}: Нет данных для кеширования`);
       return;
     }
     
-    console.log('AutoCache: Начинаем кеширование...');
+    console.log(`AutoCache ${projectName}: Начинаем кеширование...`);
     
     // Разворачиваем все группы для чтения данных (аналог "Expand all row groups")
     expandAllGroupsSimple(sheet);
     SpreadsheetApp.flush();
     
     // Синхронизируем комментарии
-    const cache = new CommentCache();
+    const cache = new CommentCache(projectName);
     cache.syncCommentsFromSheetQuiet();
     
-    console.log('AutoCache: Комментарии синхронизированы, сворачиваем группы...');
+    console.log(`AutoCache ${projectName}: Комментарии синхронизированы, сворачиваем группы...`);
     
     // Сворачиваем все группы обратно (аналог "Collapse all row groups")
     forceCollapseAllGroups(sheet);
     
-    console.log('AutoCache: Комментарии успешно кешированы - ' + new Date().toLocaleString());
+    console.log(`AutoCache ${projectName}: Комментарии успешно кешированы`);
     
   } catch (error) {
-    console.error('AutoCache Error:', error);
-    // Не показываем alert так как это автоматическая функция
+    console.error(`AutoCache ${projectName} Error:`, error);
   }
 }
 
@@ -237,6 +257,7 @@ function startAutoCache() {
       'Автоматическое сохранение комментариев активировано!\n\n' +
       '• Комментарии будут сохраняться каждые 60 минут\n' +
       '• Первое сохранение выполнено сейчас\n' +
+      '• Кеширование работает для Tricky и Moloco\n' +
       '• Все группы сворачиваются после кеширования\n' +
       '• Для отключения используйте "Остановить автокеширование"',
       ui.ButtonSet.OK
@@ -341,6 +362,7 @@ function checkAutoCacheStatus() {
         `• Активных триггеров: ${triggers.length}\n` +
         `• Последний запуск: ${lastRun}\n` +
         `• Следующий запуск: ~${nextRun}\n` +
+        `• Проекты: Tricky и Moloco\n` +
         `• Группы: полностью сворачиваются после кеширования\n\n` +
         'Комментарии сохраняются автоматически.',
         ui.ButtonSet.OK
@@ -371,6 +393,7 @@ function forceCache() {
       'Кеширование выполнено',
       'Комментарии успешно сохранены в кеш.\n\n' +
       'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
+      'Проекты: Tricky и Moloco\n' +
       'Все группы свернуты для удобства.',
       ui.ButtonSet.OK
     );
@@ -681,8 +704,9 @@ function testCollapseGroups() {
   const ui = SpreadsheetApp.getUi();
   
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (!sheet || sheet.getLastRow() < 2) {
       ui.alert('Нет данных', 'В листе нет данных для тестирования групп.');
@@ -729,8 +753,9 @@ function testExpandGroups() {
   const ui = SpreadsheetApp.getUi();
   
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const config = getCurrentConfig();
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (!sheet || sheet.getLastRow() < 2) {
       ui.alert('Нет данных', 'В листе нет данных для тестирования групп.');
@@ -781,7 +806,7 @@ function getLastTriggerRun(trigger) {
 function getNextTriggerRun() {
   try {
     const now = new Date();
-    const next = new Date(now.getTime() + 60 * 60 * 1000); // +15 минут
+    const next = new Date(now.getTime() + 60 * 60 * 1000); // +60 минут
     return next.toLocaleTimeString();
   } catch (error) {
     return 'неизвестно';
