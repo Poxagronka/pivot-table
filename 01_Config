@@ -1,45 +1,135 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
- * Contains all constants and configuration settings
+ * Multi-project support: Tricky and Moloco
  */
 
-// Main configuration object
-const CONFIG = {
-  SHEET_ID: '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE',
-  SHEET_NAME: 'Tricky',
-  API_URL: 'https://app.appodeal.com/graphql',
-  TARGET_EROAS: 160, // Target eROAS percentage
-  BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA',
-  COMMENTS_CACHE_SHEET: 'CommentsCache' // Hidden sheet for storing comments
-};
+// Main spreadsheet ID (same for both projects)
+const MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 
-// API query configuration
-const API_CONFIG = {
-  OPERATION_NAME: "RichStats",
-  FILTERS: {
-    USER: ["79950","127168","157350","150140","11628","233863","239157"],
-    ATTRIBUTION_PARTNER: ["Stack"],
-    ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
-    ATTRIBUTION_CAMPAIGN_SEARCH: "/tricky/i"
+// Project configurations
+const PROJECTS = {
+  TRICKY: {
+    SHEET_NAME: 'Tricky',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: 160,
+    BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA',
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
+    
+    // API Configuration for Tricky
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "/tricky/i"
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: [
+        { id: "cpi", day: null },
+        { id: "installs", day: null },
+        { id: "ipm", day: null },
+        { id: "spend", day: null },
+        { id: "roas", day: 1 },
+        { id: "e_arpu_forecast", day: 365 },
+        { id: "e_roas_forecast", day: 365 },
+        { id: "e_profit_forecast", day: 730 }
+      ]
+    }
   },
-  GROUP_BY: [
-    { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-    { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-    { dimension: "APP" }
-  ],
-  MEASURES: [
-    { id: "cpi", day: null },
-    { id: "installs", day: null },
-    { id: "ipm", day: null },
-    { id: "spend", day: null },
-    { id: "roas", day: 1 },
-    { id: "e_arpu_forecast", day: 365 },
-    { id: "e_roas_forecast", day: 365 },
-    { id: "e_profit_forecast", day: 730 }
-  ]
+  
+  MOLOCO: {
+    SHEET_NAME: 'Moloco',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: 160,
+    BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA',
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
+    
+    // API Configuration for Moloco (NO campaign filter - takes all campaigns)
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["445856363109679104"], // Moloco Network HID
+        ATTRIBUTION_CAMPAIGN_SEARCH: null // NO CAMPAIGN FILTER for Moloco
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" }, // Keep WEEK for consistency
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: [
+        { id: "cpi", day: null },
+        { id: "installs", day: null },
+        { id: "ipm", day: null },
+        { id: "spend", day: null },
+        { id: "roas", day: 1 },
+        { id: "e_arpu_forecast", day: 365 },
+        { id: "e_roas_forecast", day: 365 },
+        { id: "e_profit_forecast", day: 730 }
+      ]
+    }
+  }
 };
 
-// Table configuration
+// Current project (для обратной совместимости)
+let CURRENT_PROJECT = 'TRICKY';
+
+// Helper functions to get current project configuration
+function getCurrentConfig() {
+  return {
+    SHEET_ID: MAIN_SHEET_ID,
+    SHEET_NAME: PROJECTS[CURRENT_PROJECT].SHEET_NAME,
+    API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
+    TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS,
+    BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN,
+    COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET
+  };
+}
+
+function getCurrentApiConfig() {
+  return PROJECTS[CURRENT_PROJECT].API_CONFIG;
+}
+
+function getProjectConfig(projectName) {
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
+  }
+  return {
+    SHEET_ID: MAIN_SHEET_ID,
+    SHEET_NAME: PROJECTS[projectName].SHEET_NAME,
+    API_URL: PROJECTS[projectName].API_URL,
+    TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS,
+    BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN,
+    COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET
+  };
+}
+
+function getProjectApiConfig(projectName) {
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
+  }
+  return PROJECTS[projectName].API_CONFIG;
+}
+
+// Set current project
+function setCurrentProject(projectName) {
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
+  }
+  CURRENT_PROJECT = projectName;
+}
+
+// Legacy support - keep old CONFIG and API_CONFIG for backward compatibility
+const CONFIG = getCurrentConfig();
+const API_CONFIG = getCurrentApiConfig();
+
+// Table configuration (same for both projects)
 const TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -53,7 +143,7 @@ const TABLE_CONFIG = {
   ]
 };
 
-// Formatting colors
+// Formatting colors (same for both projects)
 const COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
