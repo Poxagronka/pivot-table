@@ -1,15 +1,16 @@
 /**
- * Sheet Formatting and Table Creation
- * Handles all table creation, formatting, and styling
+ * Sheet Formatting and Table Creation - Multi Project Support
+ * Handles all table creation, formatting, and styling for Tricky and Moloco
  */
 
 /**
  * Create enhanced pivot table with week-level WoW analysis
  */
 function createEnhancedPivotTable(appData) {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(CONFIG.SHEET_NAME);
+  const config = getCurrentConfig(); // Use current project config
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   else sheet.clear();
 
   const wow = calculateWoWMetrics(appData);
@@ -75,6 +76,22 @@ function createEnhancedPivotTable(appData) {
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData);
   createRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
+}
+
+/**
+ * Create enhanced pivot table for specific project
+ */
+function createProjectPivotTable(projectName, appData) {
+  // Set current project context
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    createEnhancedPivotTable(appData);
+  } finally {
+    // Restore original project context
+    setCurrentProject(originalProject);
+  }
 }
 
 /**
@@ -148,6 +165,8 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
  * Enhanced formatting function using batch operations
  */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
+  const config = getCurrentConfig(); // Use current project config for colors
+  
   // Header formatting
   sheet.getRange(1, 1, 1, numCols)
        .setBackground(COLORS.HEADER.background)
@@ -215,7 +234,9 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
  * Enhanced conditional formatting with color gradients
  */
 function applyConditionalFormatting(sheet, numRows) {
+  const config = getCurrentConfig(); // Use current project config
   const rules = [];
+  
   if (numRows > 1) {
     // Spend WoW % formatting
     const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
@@ -234,18 +255,18 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([spendRange]).build()
     );
 
-    // E-ROAS 365d formatting
+    // E-ROAS 365d formatting (using current project's target)
     const eroasRange = sheet.getRange(2, 12, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= ${CONFIG.TARGET_EROAS})`)
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= ${config.TARGET_EROAS})`)
         .setBackground(COLORS.POSITIVE.background)
         .setFontColor(COLORS.POSITIVE.fontColor)
         .setRanges([eroasRange]).build()
     );
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= 120, VALUE(SUBSTITUTE(L2,"%","")) < ${CONFIG.TARGET_EROAS})`)
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= 120, VALUE(SUBSTITUTE(L2,"%","")) < ${config.TARGET_EROAS})`)
         .setBackground(COLORS.WARNING.background)
         .setFontColor(COLORS.WARNING.fontColor)
         .setRanges([eroasRange]).build()
@@ -429,4 +450,45 @@ function createGroupingFromAppData(sheet, appData, numCols) {
       }
     }
   });
+}
+
+/**
+ * Project-specific formatting functions
+ */
+
+/**
+ * Get project-specific header colors (for future customization)
+ */
+function getProjectHeaderColors(projectName) {
+  // For now, use same colors for all projects
+  // In the future, could customize colors per project
+  const projectColors = {
+    'TRICKY': { background: '#4285f4', fontColor: 'white' },
+    'MOLOCO': { background: '#4285f4', fontColor: 'white' }
+  };
+  
+  return projectColors[projectName] || COLORS.HEADER;
+}
+
+/**
+ * Apply project-specific formatting rules
+ */
+function applyProjectSpecificFormatting(sheet, projectName, numRows) {
+  // Apply any project-specific formatting rules here
+  // For now, all projects use the same formatting
+  
+  const config = getProjectConfig(projectName);
+  
+  // Could add project-specific conditional formatting
+  switch (projectName) {
+    case 'TRICKY':
+      // Tricky-specific formatting if needed
+      break;
+    case 'MOLOCO':
+      // Moloco-specific formatting if needed
+      break;
+    default:
+      // Default formatting
+      break;
+  }
 }
