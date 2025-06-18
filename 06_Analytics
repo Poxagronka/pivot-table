@@ -1,5 +1,5 @@
 /**
- * Analytics Functions
+ * Analytics Functions - Multi Project Support
  * Contains all analytical calculations and metrics
  */
 
@@ -159,9 +159,11 @@ function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'e
  */
 function generateReport(days) {
   try {
+    const config = getCurrentConfig(); // Use current project config
+    
     // Save existing comments first
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (sheet && sheet.getLastRow() > 1) {
       expandAllGroups(sheet);
@@ -210,9 +212,11 @@ function generateReportForDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
   
   try {
+    const config = getCurrentConfig(); // Use current project config
+    
     // Save existing comments first
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
     if (sheet && sheet.getLastRow() > 1) {
       expandAllGroups(sheet);
@@ -257,5 +261,102 @@ function generateReportForDateRange(startDate, endDate) {
       '3. Try a smaller date range',
       ui.ButtonSet.OK
     );
+  }
+}
+
+/**
+ * Update all data to current - fetches from first existing week to current date
+ */
+function updateAllDataToCurrent() {
+  const ui = SpreadsheetApp.getUi();
+  const config = getCurrentConfig(); // Use current project config
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    ui.alert('No existing data found. Please create a report first.');
+    return;
+  }
+  
+  try {
+    // Expand all groups first to ensure we can read all data
+    expandAllGroups(sheet);
+    
+    // Save existing comments first
+    const cache = new CommentCache();
+    cache.syncCommentsFromSheet();
+    
+    // Find the earliest week in the sheet
+    let earliestDate = null;
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === 'WEEK') {
+        const weekRange = data[i][1];
+        const [startStr, endStr] = weekRange.split(' - ');
+        const startDate = new Date(startStr);
+        if (!earliestDate || startDate < earliestDate) {
+          earliestDate = startDate;
+        }
+      }
+    }
+    
+    if (!earliestDate) {
+      ui.alert('No week data found in the sheet.');
+      return;
+    }
+    
+    // Calculate date range from earliest date to yesterday (excluding current incomplete week)
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // If today is Sunday (0), we include up to Saturday (yesterday)
+    // Otherwise, we include up to last Saturday
+    let endDate;
+    if (dayOfWeek === 0) {
+      // Today is Sunday, include up to yesterday (Saturday)
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - 1);
+    } else {
+      // Today is Mon-Sat, include up to last Saturday
+      const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
+      endDate = new Date(today);
+      endDate.setDate(today.getDate() - daysFromLastSaturday);
+    }
+    
+    const dateRange = {
+      from: formatDateForAPI(earliestDate),
+      to: formatDateForAPI(endDate)
+    };
+    
+    // Fetch all data for the complete range
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('No data found for the date range.');
+      return;
+    }
+    
+    // Process data
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      ui.alert('No valid data to process.');
+      return;
+    }
+    
+    // Clear old data silently
+    clearAllDataSilent();
+    
+    // Create updated report
+    createEnhancedPivotTable(processed);
+    
+    // Restore comments
+    cache.applyCommentsToSheet();
+    
+    ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    console.error('Error updating data:', e);
+    ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
