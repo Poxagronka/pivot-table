@@ -1,6 +1,6 @@
 /**
- * Debug Functions для Campaign Report
- * Содержит функции для диагностики проблем с генерацией репорта
+ * Debug Functions для Campaign Report - Multi Project Support
+ * Содержит функции для диагностики проблем с генерацией репорта для Tricky и Moloco
  */
 
 /**
@@ -10,21 +10,24 @@ function debugReportGeneration() {
   const ui = SpreadsheetApp.getUi();
   
   try {
+    const config = getCurrentConfig(); // Use current project
+    const projectName = CURRENT_PROJECT;
+    
     // Создаем дебаг лист для вывода результатов
-    const debugSheet = createDebugSheet();
-    logDebug(debugSheet, '=== НАЧАЛО ДИАГНОСТИКИ ===', 'HEADER');
+    const debugSheet = createDebugSheet(projectName);
+    logDebug(debugSheet, `=== НАЧАЛО ДИАГНОСТИКИ ${projectName} ===`, 'HEADER');
     
     // 1. Проверяем конфигурацию
     logDebug(debugSheet, '1. ПРОВЕРКА КОНФИГУРАЦИИ', 'SECTION');
-    debugConfiguration(debugSheet);
+    debugConfiguration(debugSheet, projectName);
     
     // 2. Тестируем API запрос
     logDebug(debugSheet, '2. ТЕСТИРОВАНИЕ API ЗАПРОСА', 'SECTION');
-    const apiResult = debugAPIRequest(debugSheet);
+    const apiResult = debugAPIRequest(debugSheet, projectName);
     
     if (!apiResult.success) {
       logDebug(debugSheet, 'ОШИБКА: API запрос не прошел. Дальнейшая диагностика невозможна.', 'ERROR');
-      ui.alert('Дебаг завершен', 'Проверьте лист "Debug_Log" для подробностей ошибки API.', ui.ButtonSet.OK);
+      ui.alert('Дебаг завершен', `Проверьте лист "Debug_Log_${projectName}" для подробностей ошибки API.`, ui.ButtonSet.OK);
       return;
     }
     
@@ -38,11 +41,11 @@ function debugReportGeneration() {
     
     // 5. Проверяем фильтры
     logDebug(debugSheet, '5. ПРОВЕРКА ФИЛЬТРОВ', 'SECTION');
-    debugFilters(debugSheet, apiResult.data);
+    debugFilters(debugSheet, apiResult.data, projectName);
     
-    logDebug(debugSheet, '=== ДИАГНОСТИКА ЗАВЕРШЕНА ===', 'HEADER');
+    logDebug(debugSheet, `=== ДИАГНОСТИКА ${projectName} ЗАВЕРШЕНА ===`, 'HEADER');
     
-    ui.alert('Дебаг завершен', 'Проверьте лист "Debug_Log" для подробного анализа проблемы.', ui.ButtonSet.OK);
+    ui.alert('Дебаг завершен', `Проверьте лист "Debug_Log_${projectName}" для подробного анализа проблемы.`, ui.ButtonSet.OK);
     
   } catch (error) {
     console.error('Ошибка в дебаг функции:', error);
@@ -53,14 +56,16 @@ function debugReportGeneration() {
 /**
  * Создает или очищает лист для дебага
  */
-function createDebugSheet() {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  let debugSheet = spreadsheet.getSheetByName('Debug_Log');
+function createDebugSheet(projectName) {
+  const config = getCurrentConfig();
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheetName = `Debug_Log_${projectName}`;
+  let debugSheet = spreadsheet.getSheetByName(sheetName);
   
   if (debugSheet) {
     debugSheet.clear();
   } else {
-    debugSheet = spreadsheet.insertSheet('Debug_Log');
+    debugSheet = spreadsheet.insertSheet(sheetName);
   }
   
   // Настраиваем заголовки
@@ -106,24 +111,36 @@ function logDebug(sheet, message, type = 'INFO', details = '') {
 /**
  * Проверяет конфигурацию
  */
-function debugConfiguration(debugSheet) {
+function debugConfiguration(debugSheet, projectName) {
   try {
-    logDebug(debugSheet, 'Sheet ID: ' + CONFIG.SHEET_ID, 'INFO');
-    logDebug(debugSheet, 'API URL: ' + CONFIG.API_URL, 'INFO');
-    logDebug(debugSheet, 'Target eROAS: ' + CONFIG.TARGET_EROAS + '%', 'INFO');
+    const config = getCurrentConfig();
+    const apiConfig = getCurrentApiConfig();
+    
+    logDebug(debugSheet, `Проект: ${projectName}`, 'INFO');
+    logDebug(debugSheet, 'Sheet ID: ' + config.SHEET_ID, 'INFO');
+    logDebug(debugSheet, 'Sheet Name: ' + config.SHEET_NAME, 'INFO');
+    logDebug(debugSheet, 'API URL: ' + config.API_URL, 'INFO');
+    logDebug(debugSheet, 'Target eROAS: ' + config.TARGET_EROAS + '%', 'INFO');
+    logDebug(debugSheet, 'Comments Cache Sheet: ' + config.COMMENTS_CACHE_SHEET, 'INFO');
     
     // Проверяем токен
-    if (CONFIG.BEARER_TOKEN && CONFIG.BEARER_TOKEN.length > 50) {
-      logDebug(debugSheet, 'Bearer Token: Найден (длина: ' + CONFIG.BEARER_TOKEN.length + ')', 'SUCCESS');
+    if (config.BEARER_TOKEN && config.BEARER_TOKEN.length > 50) {
+      logDebug(debugSheet, 'Bearer Token: Найден (длина: ' + config.BEARER_TOKEN.length + ')', 'SUCCESS');
     } else {
       logDebug(debugSheet, 'Bearer Token: Отсутствует или слишком короткий!', 'ERROR');
     }
     
     // Проверяем API фильтры
     logDebug(debugSheet, 'API Фильтры:', 'INFO');
-    logDebug(debugSheet, '- Users: ' + API_CONFIG.FILTERS.USER.length + ' элементов', 'INFO', JSON.stringify(API_CONFIG.FILTERS.USER));
-    logDebug(debugSheet, '- Attribution Partner: ' + API_CONFIG.FILTERS.ATTRIBUTION_PARTNER.join(', '), 'INFO');
-    logDebug(debugSheet, '- Campaign Search: ' + API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH, 'INFO');
+    logDebug(debugSheet, '- Users: ' + apiConfig.FILTERS.USER.length + ' элементов', 'INFO', JSON.stringify(apiConfig.FILTERS.USER));
+    logDebug(debugSheet, '- Attribution Partner: ' + apiConfig.FILTERS.ATTRIBUTION_PARTNER.join(', '), 'INFO');
+    logDebug(debugSheet, '- Attribution Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', '), 'INFO');
+    
+    if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
+      logDebug(debugSheet, '- Campaign Search: ' + apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH, 'INFO');
+    } else {
+      logDebug(debugSheet, '- Campaign Search: НЕТ ФИЛЬТРА (берем все кампании)', 'INFO');
+    }
     
   } catch (error) {
     logDebug(debugSheet, 'Ошибка проверки конфигурации: ' + error.toString(), 'ERROR');
@@ -133,15 +150,34 @@ function debugConfiguration(debugSheet) {
 /**
  * Тестирует API запрос
  */
-function debugAPIRequest(debugSheet) {
+function debugAPIRequest(debugSheet, projectName) {
   try {
+    const config = getCurrentConfig();
+    const apiConfig = getCurrentApiConfig();
+    
     // Используем период последние 30 дней для теста
     const dateRange = getDateRange(30);
     logDebug(debugSheet, 'Период запроса: ' + dateRange.from + ' до ' + dateRange.to, 'INFO');
     
     // Создаем payload
+    const filters = [
+      { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
+      { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
+      { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
+    ];
+    
+    // Add campaign filter only if search pattern exists (for Tricky, not for Moloco)
+    if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
+      filters.push({
+        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+        values: [], 
+        include: true, 
+        searchByString: apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
+      });
+    }
+    
     const payload = {
-      operationName: API_CONFIG.OPERATION_NAME,
+      operationName: apiConfig.OPERATION_NAME,
       variables: {
         dateFilters: [{
           dimension: "INSTALL_DATE",
@@ -149,14 +185,9 @@ function debugAPIRequest(debugSheet) {
           to: dateRange.to,
           include: true
         }],
-        filters: [
-          { dimension: "USER", values: API_CONFIG.FILTERS.USER, include: true },
-          { dimension: "ATTRIBUTION_PARTNER", values: API_CONFIG.FILTERS.ATTRIBUTION_PARTNER, include: true },
-          { dimension: "ATTRIBUTION_NETWORK_HID", values: API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID, include: true },
-          { dimension: "ATTRIBUTION_CAMPAIGN_HID", values: [], include: true, searchByString: API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH }
-        ],
-        groupBy: API_CONFIG.GROUP_BY,
-        measures: API_CONFIG.MEASURES,
+        filters: filters,
+        groupBy: apiConfig.GROUP_BY,
+        measures: apiConfig.MEASURES,
         havingFilters: [],
         anonymizationMode: "OFF",
         topFilter: null,
@@ -175,7 +206,7 @@ function debugAPIRequest(debugSheet) {
       headers: {
         Accept: 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9',
-        Authorization: `Bearer ${CONFIG.BEARER_TOKEN}`,
+        Authorization: `Bearer ${config.BEARER_TOKEN}`,
         Connection: 'keep-alive',
         DNT: '1',
         Origin: 'https://app.appodeal.com',
@@ -189,7 +220,7 @@ function debugAPIRequest(debugSheet) {
     
     logDebug(debugSheet, 'Отправляем API запрос...', 'INFO');
     
-    const response = UrlFetchApp.fetch(CONFIG.API_URL, options);
+    const response = UrlFetchApp.fetch(config.API_URL, options);
     const responseCode = response.getResponseCode();
     const responseText = response.getContentText();
     
@@ -352,6 +383,14 @@ function debugDataProcessing(debugSheet, apiResponse) {
           return;
         }
         
+        // Extract campaign name based on structure
+        let campaignName = 'Unknown';
+        if (campaign.campaignName) {
+          campaignName = campaign.campaignName; // Tricky format
+        } else if (campaign.value) {
+          campaignName = campaign.value; // Moloco format
+        }
+        
         // Обрабатываем запись
         const appKey = app.id;
         if (!processedData[appKey]) {
@@ -375,7 +414,8 @@ function debugDataProcessing(debugSheet, apiResponse) {
         
         // Логируем первые несколько записей для анализа
         if (index < 3) {
-          logDebug(debugSheet, `Запись ${index}: ${app.name}, ${campaign.campaignName}, ${date}`, 'INFO');
+          const shortCampaignName = campaignName.length > 50 ? campaignName.substring(0, 50) + '...' : campaignName;
+          logDebug(debugSheet, `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}`, 'INFO');
         }
         
       } catch (error) {
@@ -417,7 +457,7 @@ function debugDataProcessing(debugSheet, apiResponse) {
 /**
  * Проверяет работу фильтров
  */
-function debugFilters(debugSheet, apiResponse) {
+function debugFilters(debugSheet, apiResponse, projectName) {
   try {
     if (!apiResponse.data?.analytics?.richStats?.stats) {
       logDebug(debugSheet, 'Нет данных для проверки фильтров', 'ERROR');
@@ -425,6 +465,7 @@ function debugFilters(debugSheet, apiResponse) {
     }
     
     const stats = apiResponse.data.analytics.richStats.stats;
+    const apiConfig = getCurrentApiConfig();
     
     // Анализируем уникальные значения
     const uniqueApps = new Set();
@@ -440,24 +481,40 @@ function debugFilters(debugSheet, apiResponse) {
         
         if (date) uniqueDates.add(date);
         if (app?.name) uniqueApps.add(app.name);
-        if (campaign?.campaignName) {
-          uniqueCampaigns.add(campaign.campaignName);
+        
+        // Extract campaign name based on structure
+        let campaignName = null;
+        if (campaign) {
+          if (campaign.campaignName) {
+            campaignName = campaign.campaignName; // Tricky format
+          } else if (campaign.value) {
+            campaignName = campaign.value; // Moloco format
+          }
+        }
+        
+        if (campaignName) {
+          uniqueCampaigns.add(campaignName);
           
-          // Проверяем соответствие паттерну поиска
-          const searchPattern = API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-          const regex = new RegExp(searchPattern.slice(1, -2), 'i'); // Убираем /.../ и флаги
-          if (regex.test(campaign.campaignName)) {
-            campaignPatterns.add(campaign.campaignName);
+          // For Moloco: check APD_ campaigns, for Tricky: check search pattern
+          if (projectName === 'MOLOCO') {
+            if (campaignName.startsWith('APD_')) {
+              campaignPatterns.add(campaignName);
+            }
+          } else if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
+            const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+            const regex = new RegExp(searchPattern.slice(1, -2), 'i'); // Убираем /.../ и флаги
+            if (regex.test(campaignName)) {
+              campaignPatterns.add(campaignName);
+            }
           }
         }
       }
     });
     
-    logDebug(debugSheet, 'Анализ уникальных значений:', 'INFO');
+    logDebug(debugSheet, `Анализ уникальных значений для ${projectName}:`, 'INFO');
     logDebug(debugSheet, '- Уникальных приложений: ' + uniqueApps.size, 'INFO');
     logDebug(debugSheet, '- Уникальных кампаний: ' + uniqueCampaigns.size, 'INFO');
     logDebug(debugSheet, '- Уникальных дат: ' + uniqueDates.size, 'INFO');
-    logDebug(debugSheet, '- Кампаний, соответствующих паттерну: ' + campaignPatterns.size, 'INFO');
     
     // Показываем примеры приложений
     const appsList = Array.from(uniqueApps).slice(0, 5);
@@ -473,15 +530,45 @@ function debugFilters(debugSheet, apiResponse) {
       logDebug(debugSheet, `Диапазон дат: ${sortedDates[0]} - ${sortedDates[sortedDates.length - 1]}`, 'INFO');
     }
     
-    // Проверяем фильтр кампаний
-    const searchPattern = API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    logDebug(debugSheet, `Паттерн поиска кампаний: ${searchPattern}`, 'INFO');
-    
-    if (campaignPatterns.size === 0) {
-      logDebug(debugSheet, 'ПРОБЛЕМА: Ни одна кампания не соответствует паттерну поиска!', 'ERROR');
-      logDebug(debugSheet, 'РЕШЕНИЕ: Проверьте правильность паттерна ATTRIBUTION_CAMPAIGN_SEARCH', 'INFO');
+    // Project-specific analysis
+    if (projectName === 'MOLOCO') {
+      logDebug(debugSheet, 'MOLOCO: Фильтр кампаний ОТКЛЮЧЕН (берем все кампании)', 'INFO');
+      logDebug(debugSheet, '- APD_ кампаний найдено: ' + campaignPatterns.size, 'INFO');
+      logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ')}`, 'INFO');
+      
+      if (campaignPatterns.size > 0) {
+        const examples = Array.from(campaignPatterns).slice(0, 3);
+        logDebug(debugSheet, 'Примеры APD_ кампаний:', 'INFO', examples.join('\n'));
+        logDebug(debugSheet, 'Source App будет = полное название кампании', 'INFO');
+        logDebug(debugSheet, '✅ MOLOCO данные корректны!', 'SUCCESS');
+      } else {
+        logDebug(debugSheet, 'ВНИМАНИЕ: Нет APD_ кампаний в данных', 'WARNING');
+        if (uniqueCampaigns.size > 0) {
+          logDebug(debugSheet, 'Но есть другие кампании - проверьте примеры выше', 'INFO');
+        } else {
+          logDebug(debugSheet, 'Проблема: кампании вообще не извлекаются!', 'ERROR');
+        }
+      }
+      
     } else {
-      logDebug(debugSheet, 'Фильтр кампаний работает корректно', 'SUCCESS');
+      // Tricky logic
+      const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+      logDebug(debugSheet, `Паттерн поиска кампаний: ${searchPattern}`, 'INFO');
+      logDebug(debugSheet, '- Кампаний, соответствующих паттерну: ' + campaignPatterns.size, 'INFO');
+      
+      if (campaignPatterns.size === 0) {
+        logDebug(debugSheet, 'ПРОБЛЕМА: Ни одна кампания не соответствует паттерну поиска!', 'ERROR');
+        logDebug(debugSheet, 'РЕШЕНИЕ: Проверьте правильность паттерна ATTRIBUTION_CAMPAIGN_SEARCH', 'INFO');
+        
+        if (uniqueCampaigns.size > 0) {
+          const examples = Array.from(uniqueCampaigns).slice(0, 10);
+          logDebug(debugSheet, 'Примеры найденных кампаний для анализа:', 'INFO', examples.join('\n'));
+        }
+      } else {
+        logDebug(debugSheet, `Фильтр кампаний работает корректно для ${projectName}`, 'SUCCESS');
+        const examples = Array.from(campaignPatterns).slice(0, 5);
+        logDebug(debugSheet, 'Примеры найденных кампаний:', 'INFO', examples.join('\n'));
+      }
     }
     
   } catch (error) {
@@ -494,23 +581,20 @@ function debugFilters(debugSheet, apiResponse) {
  */
 function quickAPICheck() {
   const ui = SpreadsheetApp.getUi();
+  const projectName = CURRENT_PROJECT;
   
   try {
     const dateRange = getDateRange(7); // Последние 7 дней
     const raw = fetchCampaignData(dateRange);
     
     if (!raw.data?.analytics?.richStats?.stats?.length) {
-      ui.alert('API Проверка', 'API не возвращает данные за последние 7 дней.\nЗапустите полную диагностику для детального анализа.', ui.ButtonSet.OK);
+      ui.alert(`${projectName} API Проверка`, `API не возвращает данные за последние 7 дней.\nЗапустите полную диагностику для детального анализа.`, ui.ButtonSet.OK);
     } else {
       const count = raw.data.analytics.richStats.stats.length;
-      ui.alert('API Проверка', `API работает: получено ${count} записей за последние 7 дней.`, ui.ButtonSet.OK);
+      ui.alert(`${projectName} API Проверка`, `API работает: получено ${count} записей за последние 7 дней.`, ui.ButtonSet.OK);
     }
     
   } catch (error) {
-    ui.alert('API Проверка', 'Ошибка API: ' + error.toString(), ui.ButtonSet.OK);
+    ui.alert(`${projectName} API Проверка`, 'Ошибка API: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
-
-/**
- * Добавляем дебаг функции в меню
- */
