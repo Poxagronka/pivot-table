@@ -6,10 +6,10 @@
 // Main configuration object
 const CONFIG = {
   SHEET_ID: '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE',
-  SHEET_NAME: 'Pivot',
+  SHEET_NAME: 'Tricky',
   API_URL: 'https://app.appodeal.com/graphql',
   TARGET_EROAS: 160, // Target eROAS percentage
-  BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6MTc1MDAxNzM4MX0.qstjfLVhoxajqhv82INuqs0fDDGWYFOCDf4gkV17Rv9HTLwG2OM_IbOqh4dh6vko1VINteY4AE9C3ZL6h15zGA',
+  BEARER_TOKEN: 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA',
   COMMENTS_CACHE_SHEET: 'CommentsCache' // Hidden sheet for storing comments
 };
 
