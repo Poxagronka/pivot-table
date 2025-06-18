@@ -1,5 +1,5 @@
 /**
- * Utility Functions
+ * Utility Functions - Multi Project Support
  * Contains helper functions for date manipulation, validation, and sheet operations
  */
 
@@ -130,20 +130,52 @@ function recreateGrouping(sheet) {
 }
 
 /**
- * Clear all data without UI prompts (for internal use)
+ * Clear all data without UI prompts (for internal use) - Multi Project Support
  */
 function clearAllDataSilent() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const tempSheetName = CONFIG.SHEET_NAME + '_temp_' + Date.now();
+    const config = getCurrentConfig(); // Use current project config
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
     const newSheet = spreadsheet.insertSheet(tempSheetName);
-    const oldSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (oldSheet) spreadsheet.deleteSheet(oldSheet);
-    newSheet.setName(CONFIG.SHEET_NAME);
+    newSheet.setName(config.SHEET_NAME);
   } catch (error) {
     console.error('Error during sheet recreation:', error);
     throw error;
   }
+}
+
+/**
+ * Clear data for specific project
+ */
+function clearProjectDataSilent(projectName) {
+  try {
+    const config = getProjectConfig(projectName);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+    const newSheet = spreadsheet.insertSheet(tempSheetName);
+    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+    newSheet.setName(config.SHEET_NAME);
+  } catch (error) {
+    console.error(`Error during ${projectName} sheet recreation:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get or create sheet for specific project
+ */
+function getOrCreateProjectSheet(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  }
+  return sheet;
 }
 
 /**
@@ -312,4 +344,66 @@ function batchOperation(items, batchSize, operation) {
     }
   }
   return results;
+}
+
+/**
+ * Project Utility Functions
+ */
+
+/**
+ * Get all configured projects
+ */
+function getConfiguredProjects() {
+  const configured = [];
+  Object.keys(PROJECTS).forEach(projectName => {
+    const project = PROJECTS[projectName];
+    if (project.BEARER_TOKEN && project.API_CONFIG.FILTERS.USER.length > 0) {
+      configured.push(projectName);
+    }
+  });
+  return configured;
+}
+
+/**
+ * Validate project configuration
+ */
+function validateProjectConfig(projectName) {
+  if (!PROJECTS[projectName]) {
+    return { valid: false, error: `Project ${projectName} does not exist` };
+  }
+  
+  const project = PROJECTS[projectName];
+  
+  if (!project.BEARER_TOKEN) {
+    return { valid: false, error: `Project ${projectName} missing BEARER_TOKEN` };
+  }
+  
+  if (!project.API_CONFIG.FILTERS.USER || project.API_CONFIG.FILTERS.USER.length === 0) {
+    return { valid: false, error: `Project ${projectName} missing USER filters` };
+  }
+  
+  if (!project.SHEET_NAME) {
+    return { valid: false, error: `Project ${projectName} missing SHEET_NAME` };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Get project status summary
+ */
+function getProjectStatus(projectName) {
+  const validation = validateProjectConfig(projectName);
+  if (!validation.valid) {
+    return { configured: false, error: validation.error };
+  }
+  
+  const project = PROJECTS[projectName];
+  return {
+    configured: true,
+    sheetName: project.SHEET_NAME,
+    hasToken: !!project.BEARER_TOKEN,
+    userCount: project.API_CONFIG.FILTERS.USER.length,
+    campaignSearch: project.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
+  };
 }
