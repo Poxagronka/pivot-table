@@ -634,7 +634,7 @@ function quickProjectAPICheck(projectName) {
 }
 
 /**
- * Show project settings dialog
+ * Show project settings dialog with updated Regular configuration
  */
 function showProjectSettings() {
   const ui = SpreadsheetApp.getUi();
@@ -649,7 +649,7 @@ function showProjectSettings() {
     `• API URL: ${trickyConfig.API_URL}\n` +
     `• Target eROAS: ${trickyConfig.TARGET_EROAS}%\n` +
     `• Token: ${trickyConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
-    `• Campaign Search: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH}\n` +
+    `• Campaign Search: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH} (INCLUDE)\n` +
     `• Network HID: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
     
     '🔥 MOLOCO PROJECT:\n' +
@@ -665,21 +665,26 @@ function showProjectSettings() {
     `• API URL: ${regularConfig.API_URL}\n` +
     `• Target eROAS: ${regularConfig.TARGET_EROAS}%\n` +
     `• Token: ${regularConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
-    `• Campaign Search: NO FILTER (takes all campaigns)\n` +
+    `• Campaign Search: ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH} (EXCLUDE)\n` +
     `• Network HID: ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
     
     '✅ All projects are fully configured and ready to use!\n\n' +
     '🔄 Key differences:\n' +
-    `• Tricky: Network ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, filtered campaigns "/tricky/i"\n` +
+    `• Tricky: Network ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, campaigns WITH "tricky"\n` +
     `• Moloco: Network ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, ALL campaigns (no filter)\n` +
-    `• Regular: Network ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]} (same as Tricky), ALL campaigns (no filter)\n` +
+    `• Regular: Network ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]} (same as Tricky), campaigns WITHOUT "tricky"\n` +
     '• Each project has separate comment cache\n' +
     '• Independent data sheets and settings\n' +
     '• All projects use the same bearer token\n\n' +
     '🎯 Source App Display:\n' +
     '• Tricky: Extracts app names from campaign structure\n' +
     '• Moloco: Shows full campaign names (APD_Word_Maker_iOS_...)\n' +
-    '• Regular: Shows extracted app names (same logic as Tricky)';
+    '• Regular: Shows full campaign names WITHOUT modification\n\n' +
+    '💬 Comment Support:\n' +
+    '• Week-level comments: Supported for all projects\n' +
+    '• Campaign-level comments: Supported for all projects\n' +
+    '• Auto-caching: Saves both types every 60 minutes\n' +
+    '• Manual caching: Available through project menus';
   
   ui.alert('Project Settings', message, ui.ButtonSet.OK);
 }
