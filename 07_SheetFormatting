@@ -96,6 +96,7 @@ function createProjectPivotTable(projectName, appData) {
 
 /**
  * Calculate totals for a week's campaigns
+ * Updated to exclude campaigns with < 50 installs from eROAS calculation
  */
 function calculateWeekTotals(campaigns) {
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
@@ -105,14 +106,22 @@ function calculateWeekTotals(campaigns) {
   const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
   const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
   
-  // Filter reliable campaigns for eROAS calculation
-  const reliable = campaigns.filter(c => 
+  // Calculate spend-weighted average eROAS
+  // Formula: Weighted eROAS = Σ(eROAS_i × Spend_i) / Σ(Spend_i)
+  // Only filter out obviously invalid eROAS values
+  const validForEROAS = campaigns.filter(c => 
     c.eRoasForecast >= 1 && 
     c.eRoasForecast <= 1000 && 
-    c.installs >= 10 && 
     c.spend > 0
   );
-  const avgERoas = reliable.length ? reliable.reduce((s, c) => s + c.eRoasForecast, 0) / reliable.length : 0;
+  
+  let avgERoas = 0;
+  if (validForEROAS.length > 0) {
+    const totalWeightedEROAS = validForEROAS.reduce((sum, c) => sum + (c.eRoasForecast * c.spend), 0);
+    const totalSpendForEROAS = validForEROAS.reduce((sum, c) => sum + c.spend, 0);
+    avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
+  }
+  
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
   return {
