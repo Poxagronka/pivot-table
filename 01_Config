@@ -48,7 +48,7 @@ const PROJECTS = {
   MOLOCO: {
     SHEET_NAME: 'Moloco',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: 160,
+    TARGET_EROAS: 140,
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
     
@@ -82,7 +82,7 @@ const PROJECTS = {
   REGULAR: {
     SHEET_NAME: 'Regular',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: 160,
+    TARGET_EROAS: 140,
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     
