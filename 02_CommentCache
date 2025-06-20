@@ -2,6 +2,7 @@
  * Comment Cache Management - Multi Project Support
  * Handles saving and loading comments from a hidden sheet
  * Includes automatic caching functionality with 15-minute intervals
+ * NOW SUPPORTS CAMPAIGN-LEVEL COMMENTS
  */
 class CommentCache {
   constructor(projectName = null) {
@@ -20,17 +21,24 @@ class CommentCache {
     if (!sheet) {
       sheet = spreadsheet.insertSheet(this.config.COMMENTS_CACHE_SHEET);
       sheet.hideSheet();
-      // Headers: AppName, WeekRange, Comment, LastUpdated
-      sheet.getRange(1, 1, 1, 4).setValues([['AppName', 'WeekRange', 'Comment', 'LastUpdated']]);
+      // Headers: AppName, WeekRange, CampaignId, SourceApp, Comment, LastUpdated
+      sheet.getRange(1, 1, 1, 6).setValues([['AppName', 'WeekRange', 'CampaignId', 'SourceApp', 'Comment', 'LastUpdated']]);
     }
     return sheet;
   }
 
   /**
-   * Generate a unique key for app-week combination
+   * Generate a unique key for comment identification
+   * Supports both WEEK-level and CAMPAIGN-level comments
    */
-  getCommentKey(appName, weekRange) {
-    return `${appName}|||${weekRange}`;
+  getCommentKey(appName, weekRange, campaignId = null, sourceApp = null) {
+    if (campaignId && sourceApp) {
+      // Campaign-level comment
+      return `${appName}|||${weekRange}|||${campaignId}|||${sourceApp}`;
+    } else {
+      // Week-level comment
+      return `${appName}|||${weekRange}|||WEEK|||WEEK`;
+    }
   }
 
   /**
@@ -40,9 +48,9 @@ class CommentCache {
     const comments = {};
     const data = this.cacheSheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
-      const [appName, weekRange, comment, lastUpdated] = data[i];
+      const [appName, weekRange, campaignId, sourceApp, comment, lastUpdated] = data[i];
       if (comment) {
-        const key = this.getCommentKey(appName, weekRange);
+        const key = this.getCommentKey(appName, weekRange, campaignId, sourceApp);
         comments[key] = comment;
       }
     }
@@ -52,7 +60,7 @@ class CommentCache {
   /**
    * Save a comment to cache
    */
-  saveComment(appName, weekRange, comment) {
+  saveComment(appName, weekRange, comment, campaignId = null, sourceApp = null) {
     if (!comment || !comment.trim()) return;
     
     const data = this.cacheSheet.getDataRange().getValues();
@@ -60,11 +68,19 @@ class CommentCache {
     
     // Update existing or add new
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === appName && data[i][1] === weekRange) {
+      const rowAppName = data[i][0];
+      const rowWeekRange = data[i][1];
+      const rowCampaignId = data[i][2];
+      const rowSourceApp = data[i][3];
+      
+      if (rowAppName === appName && 
+          rowWeekRange === weekRange && 
+          rowCampaignId === (campaignId || 'WEEK') && 
+          rowSourceApp === (sourceApp || 'WEEK')) {
         // Only update if new comment is longer (appending text)
-        const existingComment = data[i][2] || '';
+        const existingComment = data[i][4] || '';
         if (comment.length > existingComment.length) {
-          this.cacheSheet.getRange(i + 1, 3, 1, 2).setValues([[comment, new Date()]]);
+          this.cacheSheet.getRange(i + 1, 5, 1, 2).setValues([[comment, new Date()]]);
         }
         found = true;
         break;
@@ -73,7 +89,14 @@ class CommentCache {
     
     if (!found) {
       const lastRow = this.cacheSheet.getLastRow();
-      this.cacheSheet.getRange(lastRow + 1, 1, 1, 4).setValues([[appName, weekRange, comment, new Date()]]);
+      this.cacheSheet.getRange(lastRow + 1, 1, 1, 6).setValues([[
+        appName, 
+        weekRange, 
+        campaignId || 'WEEK', 
+        sourceApp || 'WEEK', 
+        comment, 
+        new Date()
+      ]]);
     }
   }
 
@@ -90,17 +113,45 @@ class CommentCache {
     
     const data = sheet.getDataRange().getValues();
     let currentApp = '';
+    let currentWeek = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
+      const campaignId = data[i][2]; // ID column
       const comment = data[i][15]; // Comments column
       
       if (level === 'APP') {
         currentApp = nameOrRange;
-      } else if (level === 'WEEK' && currentApp && comment) {
-        this.saveComment(currentApp, nameOrRange, comment);
+        currentWeek = '';
+      } else if (level === 'WEEK' && currentApp) {
+        currentWeek = nameOrRange;
+        if (comment) {
+          // Save week-level comment
+          this.saveComment(currentApp, currentWeek, comment);
+        }
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
+        // Save campaign-level comment
+        const sourceApp = nameOrRange; // Source App name
+        const campaignIdValue = campaignId && typeof campaignId === 'string' && campaignId.includes('HYPERLINK') 
+          ? this.extractCampaignIdFromHyperlink(campaignId) 
+          : campaignId;
+        
+        this.saveComment(currentApp, currentWeek, comment, campaignIdValue, sourceApp);
       }
+    }
+  }
+
+  /**
+   * Extract campaign ID from HYPERLINK formula
+   */
+  extractCampaignIdFromHyperlink(hyperlinkFormula) {
+    try {
+      // Extract from =HYPERLINK("https://app.appgrowth.com/campaigns/12345", "12345")
+      const match = hyperlinkFormula.match(/campaigns\/([^"]+)/);
+      return match ? match[1] : 'Unknown';
+    } catch (e) {
+      return 'Unknown';
     }
   }
 
@@ -115,18 +166,35 @@ class CommentCache {
     const comments = this.loadAllComments();
     const data = sheet.getDataRange().getValues();
     let currentApp = '';
+    let currentWeek = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
+      const campaignId = data[i][2]; // ID column
       
       if (level === 'APP') {
         currentApp = nameOrRange;
+        currentWeek = '';
       } else if (level === 'WEEK' && currentApp) {
-        const key = this.getCommentKey(currentApp, nameOrRange);
-        const comment = comments[key];
-        if (comment) {
-          sheet.getRange(i + 1, 16).setValue(comment); // Comments column
+        currentWeek = nameOrRange;
+        // Apply week-level comment
+        const weekKey = this.getCommentKey(currentApp, currentWeek);
+        const weekComment = comments[weekKey];
+        if (weekComment) {
+          sheet.getRange(i + 1, 16).setValue(weekComment); // Comments column
+        }
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
+        // Apply campaign-level comment
+        const sourceApp = nameOrRange; // Source App name
+        const campaignIdValue = campaignId && typeof campaignId === 'string' && campaignId.includes('HYPERLINK') 
+          ? this.extractCampaignIdFromHyperlink(campaignId) 
+          : campaignId;
+        
+        const campaignKey = this.getCommentKey(currentApp, currentWeek, campaignIdValue, sourceApp);
+        const campaignComment = comments[campaignKey];
+        if (campaignComment) {
+          sheet.getRange(i + 1, 16).setValue(campaignComment); // Comments column
         }
       }
     }
@@ -144,16 +212,31 @@ class CommentCache {
     // DON'T expand groups - assume they're already expanded by caller
     const data = sheet.getDataRange().getValues();
     let currentApp = '';
+    let currentWeek = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
+      const campaignId = data[i][2]; // ID column
       const comment = data[i][15]; // Comments column
       
       if (level === 'APP') {
         currentApp = nameOrRange;
-      } else if (level === 'WEEK' && currentApp && comment) {
-        this.saveComment(currentApp, nameOrRange, comment);
+        currentWeek = '';
+      } else if (level === 'WEEK' && currentApp) {
+        currentWeek = nameOrRange;
+        if (comment) {
+          // Save week-level comment
+          this.saveComment(currentApp, currentWeek, comment);
+        }
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
+        // Save campaign-level comment
+        const sourceApp = nameOrRange; // Source App name
+        const campaignIdValue = campaignId && typeof campaignId === 'string' && campaignId.includes('HYPERLINK') 
+          ? this.extractCampaignIdFromHyperlink(campaignId) 
+          : campaignId;
+        
+        this.saveComment(currentApp, currentWeek, comment, campaignIdValue, sourceApp);
       }
     }
   }
@@ -259,6 +342,7 @@ function startAutoCache() {
       '• Комментарии будут сохраняться каждые 60 минут\n' +
       '• Первое сохранение выполнено сейчас\n' +
       '• Кеширование работает для Tricky, Moloco и Regular\n' +
+      '• Поддерживается кеширование комментариев на уровне недель И кампаний\n' +
       '• Все группы сворачиваются после кеширования\n' +
       '• Для отключения используйте "Остановить автокеширование"',
       ui.ButtonSet.OK
@@ -364,6 +448,7 @@ function checkAutoCacheStatus() {
         `• Последний запуск: ${lastRun}\n` +
         `• Следующий запуск: ~${nextRun}\n` +
         `• Проекты: Tricky, Moloco и Regular\n` +
+        `• Поддержка: комментарии недель И кампаний\n` +
         `• Группы: полностью сворачиваются после кеширования\n\n` +
         'Комментарии сохраняются автоматически.',
         ui.ButtonSet.OK
@@ -395,6 +480,7 @@ function forceCache() {
       'Комментарии успешно сохранены в кеш.\n\n' +
       'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
       'Проекты: Tricky, Moloco и Regular\n' +
+      'Поддержка: комментарии недель И кампаний\n' +
       'Все группы свернуты для удобства.',
       ui.ButtonSet.OK
     );
