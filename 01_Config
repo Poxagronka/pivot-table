@@ -86,14 +86,14 @@ const PROJECTS = {
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     
-    // API Configuration for Regular (no campaign search filter, like Moloco)
+    // API Configuration for Regular (excludes "Tricky" campaigns)
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
         ATTRIBUTION_NETWORK_HID: ["234187180623265792"], // Same as Tricky
-        ATTRIBUTION_CAMPAIGN_SEARCH: null // NO CAMPAIGN FILTER for Regular
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/tricky/i" // EXCLUDE campaigns with "tricky"
       },
       GROUP_BY: [
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
