@@ -17,15 +17,30 @@ function fetchCampaignData(dateRange) {
     { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
   ];
   
-  // Add campaign filter only if search pattern exists (for Tricky, not for Moloco)
+  // Add campaign filter based on project type
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    filters.push({
-      dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-      values: [], 
-      include: true, 
-      searchByString: apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
-    });
+    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+    
+    if (searchPattern.startsWith('!')) {
+      // Negative filter (for Regular - exclude campaigns)
+      const excludePattern = searchPattern.substring(1); // Remove '!' prefix
+      filters.push({
+        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+        values: [], 
+        include: false, // exclude instead of include
+        searchByString: excludePattern
+      });
+    } else {
+      // Positive filter (for Tricky - include campaigns)
+      filters.push({
+        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+        values: [], 
+        include: true, 
+        searchByString: searchPattern
+      });
+    }
   }
+  // For Moloco: no campaign filter at all
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -96,15 +111,30 @@ function fetchProjectCampaignData(projectName, dateRange) {
     { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
   ];
   
-  // Add campaign filter only if search pattern exists (for Tricky, not for Moloco)
+  // Add campaign filter based on project type
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    filters.push({
-      dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-      values: [], 
-      include: true, 
-      searchByString: apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
-    });
+    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
+    
+    if (searchPattern.startsWith('!')) {
+      // Negative filter (for Regular - exclude campaigns)
+      const excludePattern = searchPattern.substring(1); // Remove '!' prefix
+      filters.push({
+        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+        values: [], 
+        include: false, // exclude instead of include
+        searchByString: excludePattern
+      });
+    } else {
+      // Positive filter (for Tricky - include campaigns)
+      filters.push({
+        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+        values: [], 
+        include: true, 
+        searchByString: searchPattern
+      });
+    }
   }
+  // For Moloco: no campaign filter at all
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -292,7 +322,7 @@ function processApiData(rawData) {
       let campaignId = 'Unknown';
       
       if (campaign) {
-        // For UaCampaign objects (Tricky)
+        // For UaCampaign objects (Tricky/Regular)
         if (campaign.campaignName) {
           campaignName = campaign.campaignName;
           campaignId = campaign.campaignId || campaign.id || 'Unknown';
@@ -387,6 +417,11 @@ function extractSourceApp(campaignName) {
       return campaignName; // Return full campaign name for Moloco
     }
     
+    // Handle Regular campaigns: DO NOT modify campaign names - return as is
+    if (CURRENT_PROJECT === 'REGULAR') {
+      return campaignName; // Return full campaign name for Regular without modification
+    }
+    
     // Handle Tricky campaigns (original logic)
     const eq = campaignName.indexOf('=');
     if (eq !== -1) {
@@ -414,9 +449,15 @@ function extractSourceApp(campaignName) {
  * Project-specific source app extraction (for future use)
  */
 function extractProjectSourceApp(projectName, campaignName) {
-  // For now, use the same logic for all projects
-  // In the future, different projects might have different parsing rules
-  return extractSourceApp(campaignName);
+  // Set project context for extraction
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    return extractSourceApp(campaignName);
+  } finally {
+    setCurrentProject(originalProject);
+  }
 }
 
 /**
