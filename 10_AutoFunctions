@@ -1,0 +1,310 @@
+/**
+ * Auto Functions - Centralized Auto Cache and Auto Update System
+ * Runs at 2AM for caching and Monday 5AM for updates
+ */
+
+// =============================================================================
+// AUTO CACHE SYSTEM - Runs at 2AM daily
+// =============================================================================
+
+/**
+ * Main auto cache function - caches all projects at 2AM
+ * Called by time-based trigger
+ */
+function autoCacheAllProjects() {
+  console.log('=== AUTO CACHE STARTED at ' + new Date().toLocaleString() + ' ===');
+  
+  try {
+    // Cache each project
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
+    
+    projects.forEach(projectName => {
+      try {
+        console.log(`Caching ${projectName}...`);
+        cacheProjectComments(projectName);
+        console.log(`${projectName} cached successfully`);
+      } catch (error) {
+        console.error(`Error caching ${projectName}:`, error);
+      }
+    });
+    
+    console.log('=== AUTO CACHE COMPLETED at ' + new Date().toLocaleString() + ' ===');
+    
+  } catch (error) {
+    console.error('AUTO CACHE FATAL ERROR:', error);
+  }
+}
+
+/**
+ * Cache comments for a specific project
+ */
+function cacheProjectComments(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No data to cache`);
+    return;
+  }
+  
+  // Expand all groups to read data
+  expandAllGroups(sheet);
+  SpreadsheetApp.flush();
+  
+  // Sync comments to cache
+  const cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheetQuiet();
+  
+  // Collapse all groups using the recursive method
+  collapseAllGroupsRecursively(sheet);
+  
+  console.log(`${projectName}: Comments cached and groups collapsed`);
+}
+
+// =============================================================================
+// AUTO UPDATE SYSTEM - Runs Monday at 5AM
+// =============================================================================
+
+/**
+ * Main auto update function - updates all projects on Monday 5AM
+ * Called by time-based trigger
+ */
+function autoUpdateAllProjects() {
+  console.log('=== AUTO UPDATE STARTED at ' + new Date().toLocaleString() + ' ===');
+  
+  try {
+    // Update each project
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
+    
+    projects.forEach(projectName => {
+      try {
+        console.log(`Updating ${projectName}...`);
+        updateProjectData(projectName);
+        console.log(`${projectName} updated successfully`);
+      } catch (error) {
+        console.error(`Error updating ${projectName}:`, error);
+      }
+    });
+    
+    console.log('=== AUTO UPDATE COMPLETED at ' + new Date().toLocaleString() + ' ===');
+    
+  } catch (error) {
+    console.error('AUTO UPDATE FATAL ERROR:', error);
+  }
+}
+
+/**
+ * Update data for a specific project
+ */
+function updateProjectData(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No existing data to update`);
+    return;
+  }
+  
+  // Save comments first
+  expandAllGroups(sheet);
+  const cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheet();
+  
+  // Find earliest date in sheet
+  let earliestDate = null;
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === 'WEEK') {
+      const weekRange = data[i][1];
+      const [startStr] = weekRange.split(' - ');
+      const startDate = new Date(startStr);
+      if (!earliestDate || startDate < earliestDate) {
+        earliestDate = startDate;
+      }
+    }
+  }
+  
+  if (!earliestDate) {
+    console.log(`${projectName}: No week data found`);
+    return;
+  }
+  
+  // Calculate date range - from earliest to last Saturday
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  let endDate;
+  
+  if (dayOfWeek === 0) {
+    // Today is Sunday, include up to yesterday (Saturday)
+    endDate = new Date(today);
+    endDate.setDate(today.getDate() - 1);
+  } else {
+    // Today is Mon-Sat, include up to last Saturday
+    const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
+    endDate = new Date(today);
+    endDate.setDate(today.getDate() - daysFromLastSaturday);
+  }
+  
+  const dateRange = {
+    from: formatDateForAPI(earliestDate),
+    to: formatDateForAPI(endDate)
+  };
+  
+  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
+  
+  // Fetch and process data
+  const raw = fetchProjectCampaignData(projectName, dateRange);
+  
+  if (!raw.data?.analytics?.richStats?.stats?.length) {
+    console.log(`${projectName}: No data returned from API`);
+    return;
+  }
+  
+  const processed = processProjectApiData(projectName, raw);
+  
+  if (Object.keys(processed).length === 0) {
+    console.log(`${projectName}: No valid data to process`);
+    return;
+  }
+  
+  // Clear and recreate with new data
+  clearProjectDataSilent(projectName);
+  
+  // Set project context and create table
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    createEnhancedPivotTable(processed);
+    cache.applyCommentsToSheet();
+  } finally {
+    setCurrentProject(originalProject);
+  }
+  
+  console.log(`${projectName}: Update completed`);
+}
+
+// =============================================================================
+// MANUAL SAVE COMMENTS FUNCTIONS
+// =============================================================================
+
+/**
+ * Save all project comments to cache
+ */
+function saveAllCommentsToCache() {
+  const ui = SpreadsheetApp.getUi();
+  const progress = new ProgressManager('Saving All Comments').start('Initializing...');
+  
+  try {
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
+    let successCount = 0;
+    
+    projects.forEach((projectName, index) => {
+      progress.update(
+        `Saving ${projectName} comments...`,
+        `Processing project ${index + 1} of ${projects.length}`
+      );
+      
+      try {
+        saveProjectCommentsManual(projectName);
+        successCount++;
+      } catch (error) {
+        console.error(`Error saving ${projectName} comments:`, error);
+      }
+    });
+    
+    progress.end();
+    
+    if (successCount === projects.length) {
+      ui.alert('Success', 'All project comments have been saved to cache.', ui.ButtonSet.OK);
+    } else {
+      ui.alert('Partial Success', `Saved comments for ${successCount} of ${projects.length} projects.`, ui.ButtonSet.OK);
+    }
+    
+  } catch (error) {
+    progress.end(false);
+    ui.alert('Error', 'Error saving comments: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Save project comments manually (with UI feedback)
+ */
+function saveProjectCommentsManual(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    throw new Error(`No data found in ${projectName} sheet`);
+  }
+  
+  expandAllGroups(sheet);
+  const cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheet();
+}
+
+// =============================================================================
+// STATUS AND MONITORING
+// =============================================================================
+
+/**
+ * Show automation status
+ */
+function showAutomationStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  
+  const cacheEnabled = props.getProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED) === 'true';
+  const updateEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
+  
+  // Get trigger info
+  const triggers = ScriptApp.getProjectTriggers();
+  const cacheTrigger = triggers.find(t => t.getHandlerFunction() === 'autoCacheAllProjects');
+  const updateTrigger = triggers.find(t => t.getHandlerFunction() === 'autoUpdateAllProjects');
+  
+  let statusMessage = '📊 AUTOMATION STATUS\n\n';
+  
+  // Cache status
+  statusMessage += '💾 AUTO CACHE:\n';
+  if (cacheEnabled && cacheTrigger) {
+    statusMessage += '✅ Enabled - Runs daily at 2:00 AM\n';
+    statusMessage += '• Caches comments from all projects\n';
+    statusMessage += '• Collapses all row groups after caching\n';
+  } else if (cacheEnabled && !cacheTrigger) {
+    statusMessage += '⚠️ Enabled but trigger missing\n';
+    statusMessage += '• Please disable and re-enable to fix\n';
+  } else {
+    statusMessage += '❌ Disabled\n';
+    statusMessage += '• Comments must be saved manually\n';
+  }
+  
+  statusMessage += '\n';
+  
+  // Update status
+  statusMessage += '🔄 AUTO UPDATE:\n';
+  if (updateEnabled && updateTrigger) {
+    statusMessage += '✅ Enabled - Runs every Monday at 5:00 AM\n';
+    statusMessage += '• Updates all project data\n';
+    statusMessage += '• Includes previous complete week\n';
+    statusMessage += '• Preserves all comments\n';
+  } else if (updateEnabled && !updateTrigger) {
+    statusMessage += '⚠️ Enabled but trigger missing\n';
+    statusMessage += '• Please disable and re-enable to fix\n';
+  } else {
+    statusMessage += '❌ Disabled\n';
+    statusMessage += '• Data must be updated manually\n';
+  }
+  
+  statusMessage += '\n';
+  
+  // Trigger count
+  statusMessage += '⏱️ ACTIVE TRIGGERS:\n';
+  statusMessage += `• Total triggers: ${triggers.length}\n`;
+  statusMessage += `• Cache triggers: ${triggers.filter(t => t.getHandlerFunction() === 'autoCacheAllProjects').length}\n`;
+  statusMessage += `• Update triggers: ${triggers.filter(t => t.getHandlerFunction() === 'autoUpdateAllProjects').length}\n`;
+  
+  ui.alert('Automation Status', statusMessage, ui.ButtonSet.OK);
+}
