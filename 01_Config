@@ -1,7 +1,7 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
  * Multi-project support: Tricky, Moloco, and Regular
- * Updated with individual target eROAS settings
+ * Updated with individual target eROAS settings and Growth Status Thresholds
  */
 
 // Main spreadsheet ID (same for all projects)
@@ -16,7 +16,12 @@ const PROPERTY_KEYS = {
   TARGET_EROAS_MOLOCO: 'TARGET_EROAS_MOLOCO',
   TARGET_EROAS_REGULAR: 'TARGET_EROAS_REGULAR',
   AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
-  AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED'
+  AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED',
+  
+  // Growth Status Thresholds
+  GROWTH_THRESHOLDS_TRICKY: 'GROWTH_THRESHOLDS_TRICKY',
+  GROWTH_THRESHOLDS_MOLOCO: 'GROWTH_THRESHOLDS_MOLOCO',
+  GROWTH_THRESHOLDS_REGULAR: 'GROWTH_THRESHOLDS_REGULAR'
 };
 
 // Default target eROAS values
@@ -26,6 +31,58 @@ const DEFAULT_TARGET_EROAS = {
   REGULAR: 140
 };
 
+// Default threshold values for Growth Status calculation
+const DEFAULT_GROWTH_THRESHOLDS = {
+  TRICKY: {
+    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 }, // More sensitive to profit decline
+    scalingDown: { maxSpendChange: -15 }, // Allow for moderate spend reduction before marking as scaling
+    moderateGrowthSpend: 3, // Lower threshold for detecting growth
+    moderateGrowthProfit: 2
+  },
+  MOLOCO: {
+    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 }, // Stricter for Moloco
+    scalingDown: { maxSpendChange: -15 },
+    moderateGrowthSpend: 3,
+    moderateGrowthProfit: 2
+  },
+  REGULAR: {
+    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 },
+    scalingDown: { maxSpendChange: -15 },
+    moderateGrowthSpend: 3,
+    moderateGrowthProfit: 2
+  }
+};
+
+/**
+ * Example scenarios and their expected statuses:
+ * 
+ * Scenario 1: Spend +0%, Profit -15%
+ * Result: 🟠 Declining Efficiency (spend stable but profit drops significantly)
+ * 
+ * Scenario 2: Spend +8%, Profit -6%  
+ * Result: 🟠 Declining Efficiency (spend increases but profit declines)
+ * 
+ * Scenario 3: Spend +20%, Profit -12%
+ * Result: 🔴 Inefficient Growth (high spend, major profit decline)
+ * 
+ * Scenario 4: Spend +2%, Profit +1%
+ * Result: 🟡 Minimal Growth (positive but small changes)
+ * 
+ * Scenario 5: Spend -8%, Profit -7%
+ * Result: 🟡 Moderate Decline (both declining moderately)
+ * 
+ * Scenario 6: Spend +15%, Profit +10%
+ * Result: 🟢 Healthy Growth (good growth in both metrics)
+ * 
+ * Scenario 7: Spend -20%, Profit -5%
+ * Result: 🔵 Scaling Down (significant spend reduction)
+ * 
+ * Scenario 8: Spend +1%, Profit -1%
+ * Result: ⚪ Stable (minimal changes in both directions)
+ */
 /**
  * Get target eROAS for a project from script properties or default
  */
@@ -45,12 +102,51 @@ function setTargetEROAS(projectName, value) {
   props.setProperty(key, value.toString());
 }
 
+/**
+ * Get growth thresholds for a project from script properties or default
+ */
+function getGrowthThresholds(projectName) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `GROWTH_THRESHOLDS_${projectName}`;
+  const value = props.getProperty(key);
+  
+  if (value) {
+    try {
+      return JSON.parse(value);
+    } catch (e) {
+      console.error(`Error parsing growth thresholds for ${projectName}:`, e);
+      return DEFAULT_GROWTH_THRESHOLDS[projectName];
+    }
+  }
+  
+  return DEFAULT_GROWTH_THRESHOLDS[projectName];
+}
+
+/**
+ * Set growth thresholds for a project
+ */
+function setGrowthThresholds(projectName, thresholds) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `GROWTH_THRESHOLDS_${projectName}`;
+  props.setProperty(key, JSON.stringify(thresholds));
+}
+
+/**
+ * Reset growth thresholds to default for a project
+ */
+function resetGrowthThresholds(projectName) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `GROWTH_THRESHOLDS_${projectName}`;
+  props.deleteProperty(key);
+}
+
 // Project configurations
 const PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
     API_URL: 'https://app.appodeal.com/graphql',
     get TARGET_EROAS() { return getTargetEROAS('TRICKY'); }, // Dynamic from properties
+    get GROWTH_THRESHOLDS() { return getGrowthThresholds('TRICKY'); }, // Dynamic thresholds
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
     
@@ -85,6 +181,7 @@ const PROJECTS = {
     SHEET_NAME: 'Moloco',
     API_URL: 'https://app.appodeal.com/graphql',
     get TARGET_EROAS() { return getTargetEROAS('MOLOCO'); }, // Dynamic from properties
+    get GROWTH_THRESHOLDS() { return getGrowthThresholds('MOLOCO'); }, // Dynamic thresholds
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
     
@@ -119,6 +216,7 @@ const PROJECTS = {
     SHEET_NAME: 'Regular',
     API_URL: 'https://app.appodeal.com/graphql',
     get TARGET_EROAS() { return getTargetEROAS('REGULAR'); }, // Dynamic from properties
+    get GROWTH_THRESHOLDS() { return getGrowthThresholds('REGULAR'); }, // Dynamic thresholds
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     
@@ -160,6 +258,7 @@ function getCurrentConfig() {
     SHEET_NAME: PROJECTS[CURRENT_PROJECT].SHEET_NAME,
     API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
     TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS,
+    GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS,
     BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET
   };
@@ -178,6 +277,7 @@ function getProjectConfig(projectName) {
     SHEET_NAME: PROJECTS[projectName].SHEET_NAME,
     API_URL: PROJECTS[projectName].API_URL,
     TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS,
+    GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS,
     BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET
   };
