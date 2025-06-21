@@ -1,7 +1,7 @@
 /**
  * Comment Cache Management - Multi Project Support
  * Handles saving and loading comments from a hidden sheet
- * Includes automatic caching functionality with 15-minute intervals
+ * Includes automatic caching functionality at 2AM daily
  * NOW SUPPORTS CAMPAIGN-LEVEL COMMENTS
  */
 class CommentCache {
@@ -243,659 +243,66 @@ class CommentCache {
 }
 
 /**
- * AUTO CACHE SYSTEM
- * Автоматическое кеширование комментариев каждые 15 минут
- */
-
-/**
- * Автоматическое кеширование комментариев (без UI)
- * Запускается триггером каждые 60 минут
- * После кеширования сворачивает все группы
- */
-function autoCacheComments() {
-  try {
-    // Cache comments for all projects
-    autoCacheProjectComments('TRICKY');
-    autoCacheProjectComments('MOLOCO');
-    autoCacheProjectComments('REGULAR');
-    
-    console.log('AutoCache: Комментарии всех проектов успешно кешированы - ' + new Date().toLocaleString());
-    
-  } catch (error) {
-    console.error('AutoCache Error:', error);
-    // Не показываем alert так как это автоматическая функция
-  }
-}
-
-/**
- * Auto cache comments for specific project
- */
-function autoCacheProjectComments(projectName) {
-  try {
-    const config = getProjectConfig(projectName);
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    // Проверяем есть ли данные в таблице
-    if (!sheet || sheet.getLastRow() < 2) {
-      console.log(`AutoCache ${projectName}: Нет данных для кеширования`);
-      return;
-    }
-    
-    console.log(`AutoCache ${projectName}: Начинаем кеширование...`);
-    
-    // Разворачиваем все группы для чтения данных (аналог "Expand all row groups")
-    expandAllGroupsSimple(sheet);
-    SpreadsheetApp.flush();
-    
-    // Синхронизируем комментарии
-    const cache = new CommentCache(projectName);
-    cache.syncCommentsFromSheetQuiet();
-    
-    console.log(`AutoCache ${projectName}: Комментарии синхронизированы, сворачиваем группы...`);
-    
-    // Сворачиваем все группы обратно (аналог "Collapse all row groups")
-    forceCollapseAllGroups(sheet);
-    
-    console.log(`AutoCache ${projectName}: Комментарии успешно кешированы`);
-    
-  } catch (error) {
-    console.error(`AutoCache ${projectName} Error:`, error);
-  }
-}
-
-/**
- * Запустить автоматическое кеширование комментариев
- * Создает триггер на выполнение каждые 15 минут
- */
-function startAutoCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Проверяем, не установлен ли уже триггер
-    const existingTriggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (existingTriggers.length > 0) {
-      ui.alert(
-        'Автокеширование уже активно', 
-        'Автоматическое кеширование комментариев уже запущено.\n\n' +
-        'Комментарии сохраняются каждые 60 минут автоматически.',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-    
-    // Создаем новый триггер
-    ScriptApp.newTrigger('autoCacheComments')
-      .timeBased()
-      .everyHours(1)
-      .create();
-    
-    // Сразу выполняем первое кеширование
-    autoCacheComments();
-    
-    ui.alert(
-      'Автокеширование запущено', 
-      'Автоматическое сохранение комментариев активировано!\n\n' +
-      '• Комментарии будут сохраняться каждые 60 минут\n' +
-      '• Первое сохранение выполнено сейчас\n' +
-      '• Кеширование работает для Tricky, Moloco и Regular\n' +
-      '• Поддерживается кеширование комментариев на уровне недель И кампаний\n' +
-      '• Все группы сворачиваются после кеширования\n' +
-      '• Для отключения используйте "Остановить автокеширование"',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Ошибка запуска автокеширования:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось запустить автокеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Остановить автоматическое кеширование комментариев
- * Удаляет все триггеры автокеширования
- */
-function stopAutoCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Находим и удаляем все триггеры автокеширования
-    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (triggers.length === 0) {
-      ui.alert(
-        'Автокеширование не активно', 
-        'Автоматическое кеширование комментариев не запущено.',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-    
-    // Подтверждение остановки
-    const response = ui.alert(
-      'Остановить автокеширование?',
-      'Вы уверены, что хотите остановить автоматическое сохранение комментариев?\n\n' +
-      'После остановки комментарии нужно будет сохранять вручную.',
-      ui.ButtonSet.YES_NO
-    );
-    
-    if (response !== ui.Button.YES) {
-      return;
-    }
-    
-    // Удаляем все триггеры
-    triggers.forEach(trigger => {
-      ScriptApp.deleteTrigger(trigger);
-    });
-    
-    ui.alert(
-      'Автокеширование остановлено', 
-      `Автоматическое сохранение комментариев отключено.\n\n` +
-      `Удалено триггеров: ${triggers.length}\n\n` +
-      'Теперь комментарии нужно сохранять вручную через меню.',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Ошибка остановки автокеширования:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось остановить автокеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Проверить статус автокеширования
- * Показывает информацию о состоянии триггеров
- */
-function checkAutoCacheStatus() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    const triggers = ScriptApp.getProjectTriggers().filter(trigger => 
-      trigger.getHandlerFunction() === 'autoCacheComments'
-    );
-    
-    if (triggers.length === 0) {
-      ui.alert(
-        'Статус автокеширования',
-        '❌ Автоматическое кеширование ОТКЛЮЧЕНО\n\n' +
-        'Комментарии нужно сохранять вручную через меню.\n\n' +
-        'Для включения используйте "Запустить автокеширование".',
-        ui.ButtonSet.OK
-      );
-    } else {
-      const trigger = triggers[0];
-      const lastRun = getLastTriggerRun(trigger);
-      const nextRun = getNextTriggerRun();
-      
-      ui.alert(
-        'Статус автокеширования',
-        '✅ Автоматическое кеширование АКТИВНО\n\n' +
-        `• Интервал: каждые 60 минут\n` +
-        `• Активных триггеров: ${triggers.length}\n` +
-        `• Последний запуск: ${lastRun}\n` +
-        `• Следующий запуск: ~${nextRun}\n` +
-        `• Проекты: Tricky, Moloco и Regular\n` +
-        `• Поддержка: комментарии недель И кампаний\n` +
-        `• Группы: полностью сворачиваются после кеширования\n\n` +
-        'Комментарии сохраняются автоматически.',
-        ui.ButtonSet.OK
-      );
-    }
-    
-  } catch (error) {
-    console.error('Ошибка проверки статуса:', error);
-    ui.alert(
-      'Ошибка', 
-      'Не удалось проверить статус автокеширования:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Принудительно выполнить кеширование сейчас
- * Ручной запуск функции автокеширования
- */
-function forceCache() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Используем ту же логику что и автокеширование
-    autoCacheComments();
-    ui.alert(
-      'Кеширование выполнено',
-      'Комментарии успешно сохранены в кеш.\n\n' +
-      'Время выполнения: ' + new Date().toLocaleString() + '\n\n' +
-      'Проекты: Tricky, Moloco и Regular\n' +
-      'Поддержка: комментарии недель И кампаний\n' +
-      'Все группы свернуты для удобства.',
-      ui.ButtonSet.OK
-    );
-  } catch (error) {
-    ui.alert(
-      'Ошибка кеширования',
-      'Не удалось выполнить кеширование:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Очистить все триггеры автокеширования (служебная функция)
- * Используется для полной очистки в случае проблем
- */
-function clearAllAutoCacheTriggers() {
-  const ui = SpreadsheetApp.getUi();
-  
-  const response = ui.alert(
-    'ВНИМАНИЕ: Очистка всех триггеров',
-    'Эта функция удалит ВСЕ триггеры автокеширования.\n\n' +
-    'Используйте только в случае проблем с триггерами.\n\n' +
-    'Продолжить?',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (response !== ui.Button.YES) {
-    return;
-  }
-  
-  try {
-    const allTriggers = ScriptApp.getProjectTriggers();
-    let deletedCount = 0;
-    
-    allTriggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'autoCacheComments') {
-        ScriptApp.deleteTrigger(trigger);
-        deletedCount++;
-      }
-    });
-    
-    ui.alert(
-      'Триггеры очищены',
-      `Удалено триггеров автокеширования: ${deletedCount}\n\n` +
-      'Теперь можно заново запустить автокеширование.',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    ui.alert(
-      'Ошибка',
-      'Не удалось очистить триггеры:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
  * GROUP MANAGEMENT
- * Правильное управление группами - только APP и WEEK уровни
+ * Enhanced group management for reliable collapsing
  */
 
 /**
- * Свернуть все группы строк (только WEEK и APP)
+ * Collapse all groups recursively - most reliable method
  */
-function collapseAllGroups(sheet) {
-  try {
-    console.log('Сворачиваем все группы (WEEK -> APP)...');
+function collapseAllGroupsRecursively(sheet) {
+  const maxRows = sheet.getMaxRows();
+  let hasCollapsed = true;
+  let iterations = 0;
+  const maxIterations = 10;
+  
+  console.log('Starting recursive collapse...');
+  
+  // Keep collapsing until no more groups can be collapsed
+  while (hasCollapsed && iterations < maxIterations) {
+    hasCollapsed = false;
+    iterations++;
     
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow <= 1) {
-      console.log('Нет данных для сворачивания');
-      return;
+    try {
+      // Try to collapse the entire sheet
+      sheet.getRange(1, 1, maxRows, 1).collapseGroups();
+      hasCollapsed = true;
+      SpreadsheetApp.flush();
+      Utilities.sleep(100); // Small delay between iterations
+      console.log(`Iteration ${iterations}: Groups collapsed`);
+    } catch (e) {
+      // No more groups to collapse
+      console.log(`Iteration ${iterations}: No more groups to collapse`);
     }
-    
-    // Сначала полностью разворачиваем все группы
-    console.log('1. Разворачиваем все группы...');
-    expandAllGroupsCompletely(sheet);
-    
-    // Теперь сворачиваем в правильном порядке: WEEK -> APP
-    console.log('2. Сворачиваем группы WEEK (внутренние)...');
-    collapseGroupsByType(sheet, 'WEEK');
-    
-    console.log('3. Сворачиваем группы APP (внешние)...');
-    collapseGroupsByType(sheet, 'APP');
-    
-    console.log('Сворачивание завершено');
-    
-  } catch (error) {
-    console.error('Error in collapseAllGroups:', error);
   }
+  
+  console.log(`Recursive collapse completed after ${iterations} iterations`);
 }
 
 /**
- * Свернуть группы определенного типа
+ * Expand all groups in the sheet - used before caching
  */
-function collapseGroupsByType(sheet, groupType) {
+function expandAllGroups(sheet) {
   try {
-    const data = sheet.getDataRange().getValues();
-    let collapsedCount = 0;
-    
-    // Идем снизу вверх по данным, ищем строки нужного типа
-    for (let i = data.length - 1; i >= 1; i--) {
-      if (data[i][0] === groupType) {
-        try {
-          // Пробуем свернуть группу на этой строке
-          const range = sheet.getRange(i + 1, 1, 1, 1);
-          range.collapseGroups();
-          collapsedCount++;
-          
-          // Логируем прогресс каждые 5 групп
-          if (collapsedCount % 5 === 0) {
-            console.log(`  ${groupType}: свернуто ${collapsedCount} групп`);
-            SpreadsheetApp.flush();
-          }
-          
-        } catch (e) {
-          // Игнорируем ошибки - возможно эта строка не имеет группы
-        }
-      }
-    }
-    
-    SpreadsheetApp.flush();
-    console.log(`  ${groupType}: итого свернуто ${collapsedCount} групп`);
-    
-  } catch (error) {
-    console.error(`Error collapsing ${groupType} groups:`, error);
-  }
-}
-
-/**
- * Полностью развернуть все группы
- */
-function expandAllGroupsCompletely(sheet) {
-  try {
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow <= 1) {
-      return;
-    }
-    
-    // Делаем несколько итераций разворачивания
-    let attempt = 0;
+    const maxRows = sheet.getMaxRows();
+    let expanded = true;
+    let attempts = 0;
     const maxAttempts = 10;
     
-    while (attempt < maxAttempts) {
-      attempt++;
+    while (expanded && attempts < maxAttempts) {
+      attempts++;
       try {
-        const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
-        range.expandGroups();
+        sheet.getRange(1, 1, maxRows, 1).expandGroups();
         SpreadsheetApp.flush();
-        
-        // Небольшая пауза между итерациями
-        Utilities.sleep(20);
-        
+        Utilities.sleep(50);
       } catch (e) {
-        // Если ошибка - значит больше нет групп для разворачивания
-        console.log(`  Разворачивание завершено на итерации ${attempt}`);
-        break;
+        // No more groups to expand
+        expanded = false;
       }
     }
     
-  } catch (error) {
-    console.error('Error in expandAllGroupsCompletely:', error);
-  }
-}
-
-/**
- * Альтернативный метод - простое двухэтапное сворачивание
- */
-function collapseAllGroupsSimple(sheet) {
-  try {
-    console.log('Простое двухэтапное сворачивание...');
-    
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow <= 1) {
-      console.log('Нет данных');
-      return;
-    }
-    
-    // Полностью разворачиваем
-    expandAllGroupsCompletely(sheet);
-    
-    // Этап 1: Сворачиваем один раз (должны свернуться внутренние группы WEEK)
-    console.log('Этап 1: Сворачиваем внутренние группы...');
-    try {
-      const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
-      range.collapseGroups();
-      SpreadsheetApp.flush();
-      console.log('Этап 1 выполнен');
-    } catch (e) {
-      console.log('Этап 1: ' + e.toString());
-    }
-    
-    // Небольшая пауза
-    Utilities.sleep(200);
-    
-    // Этап 2: Сворачиваем еще раз (должны свернуться внешние группы APP)
-    console.log('Этап 2: Сворачиваем внешние группы...');
-    try {
-      const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
-      range.collapseGroups();
-      SpreadsheetApp.flush();
-      console.log('Этап 2 выполнен');
-    } catch (e) {
-      console.log('Этап 2: ' + e.toString());
-    }
-    
-    console.log('Простое двухэтапное сворачивание завершено');
-    
-  } catch (error) {
-    console.error('Simple collapse failed:', error);
-  }
-}
-
-/**
- * Принудительно свернуть все группы (комбинированные методы)
- */
-function forceCollapseAllGroups(sheet) {
-  try {
-    console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ВСЕХ ГРУПП ===');
-    
-    // Метод 1: Точное сворачивание по типам групп
-    console.log('Метод 1: Сворачивание по типам (WEEK -> APP)...');
-    collapseAllGroups(sheet);
-    
-    // Небольшая пауза между методами
-    Utilities.sleep(300);
-    
-    // Метод 2: Простое двухэтапное сворачивание для подстраховки
-    console.log('Метод 2: Простое двухэтапное сворачивание...');
-    collapseAllGroupsSimple(sheet);
-    
-    // Финальная проверка
-    console.log('Финальная проверка...');
-    try {
-      expandAllGroupsCompletely(sheet);
-      Utilities.sleep(100);
-      
-      // Пробуем свернуть что осталось
-      const range = sheet.getRange(1, 1, sheet.getLastRow(), 1);
-      range.collapseGroups();
-      console.log('Финальная проверка: дополнительное сворачивание выполнено');
-    } catch (e) {
-      console.log('Финальная проверка: ' + e.toString());
-    }
-    
-    console.log('=== ПРИНУДИТЕЛЬНОЕ СВОРАЧИВАНИЕ ЗАВЕРШЕНО ===');
-    
-  } catch (error) {
-    console.error('Force collapse failed:', error);
-  }
-}
-
-/**
- * Развернуть все группы (простая версия)
- */
-function expandAllGroupsSimple(sheet) {
-  try {
-    console.log('Разворачиваем все группы строк...');
-    
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow <= 1) {
-      console.log('Нет данных для разворачивания');
-      return;
-    }
-    
-    // Многократно вызываем expandGroups пока не получим ошибку
-    let attempt = 0;
-    const maxAttempts = 15;
-    
-    while (attempt < maxAttempts) {
-      attempt++;
-      try {
-        const range = sheet.getRange(1, 1, lastRow, sheet.getLastColumn());
-        range.expandGroups();
-        
-        console.log(`Попытка разворачивания ${attempt}: группы развернуты`);
-        SpreadsheetApp.flush();
-        
-        if (attempt < maxAttempts) {
-          Utilities.sleep(30);
-        }
-        
-      } catch (error) {
-        console.log(`Попытка разворачивания ${attempt}: ${error.toString()}`);
-        // Если ошибка - значит больше нет групп для разворачивания
-        break;
-      }
-    }
-    
-    console.log(`Разворачивание завершено за ${attempt} попыток`);
-    
-  } catch (error) {
-    console.error('Error in expandAllGroupsSimple:', error);
-  }
-}
-
-/**
- * Тестовая функция для проверки сворачивания групп
- * Можно запускать из меню для отладки
- */
-function testCollapseGroups() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      ui.alert('Нет данных', 'В листе нет данных для тестирования групп.');
-      return;
-    }
-    
-    console.log('=== ТЕСТ СВОРАЧИВАНИЯ ГРУПП ===');
-    
-    // Сначала разворачиваем все группы
-    console.log('1. Разворачиваем все группы...');
-    expandAllGroupsSimple(sheet);
-    SpreadsheetApp.flush();
-    
-    // Даем время на обновление
-    Utilities.sleep(1000);
-    
-    // Теперь сворачиваем
-    console.log('2. Сворачиваем группы...');
-    forceCollapseAllGroups(sheet);
-    
-    ui.alert(
-      'Тест завершен',
-      'Тест сворачивания групп выполнен.\n\n' +
-      'Проверьте консоль (F12 → Console) для подробностей.\n\n' +
-      'Теперь используется простой метод, аналогичный\n' +
-      'встроенной функции "Collapse all row groups".',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Test collapse error:', error);
-    ui.alert(
-      'Ошибка теста',
-      'Ошибка при тестировании сворачивания групп:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Тестовая функция для проверки разворачивания групп
- */
-function testExpandGroups() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      ui.alert('Нет данных', 'В листе нет данных для тестирования групп.');
-      return;
-    }
-    
-    console.log('=== ТЕСТ РАЗВОРАЧИВАНИЯ ГРУПП ===');
-    
-    // Разворачиваем все группы
-    console.log('Разворачиваем все группы...');
-    expandAllGroupsSimple(sheet);
-    
-    ui.alert(
-      'Тест завершен',
-      'Тест разворачивания групп выполнен.\n\n' +
-      'Проверьте консоль (F12 → Console) для подробностей.\n\n' +
-      'Теперь используется простой метод, аналогичный\n' +
-      'встроенной функции "Expand all row groups".',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    console.error('Test expand error:', error);
-    ui.alert(
-      'Ошибка теста',
-      'Ошибка при тестировании разворачивания групп:\n\n' + error.toString(),
-      ui.ButtonSet.OK
-    );
-  }
-}
-
-/**
- * Получить время последнего запуска триггера (примерное)
- */
-function getLastTriggerRun(trigger) {
-  try {
-    // Google Apps Script не предоставляет точное время последнего запуска
-    // Показываем примерную информацию
-    return 'неизвестно (проверьте логи выполнения)';
-  } catch (error) {
-    return 'ошибка получения данных';
-  }
-}
-
-/**
- * Получить примерное время следующего запуска
- */
-function getNextTriggerRun() {
-  try {
-    const now = new Date();
-    const next = new Date(now.getTime() + 60 * 60 * 1000); // +60 минут
-    return next.toLocaleTimeString();
-  } catch (error) {
-    return 'неизвестно';
+    console.log(`Groups expanded after ${attempts} attempts`);
+  } catch (e) {
+    console.log('Error expanding groups:', e);
   }
 }
