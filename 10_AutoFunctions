@@ -231,6 +231,7 @@ function saveAllCommentsToCache() {
 
 /**
  * Save project comments manually (with UI feedback)
+ * FIXED: Now collapses groups after saving
  */
 function saveProjectCommentsManual(projectName) {
   const config = getProjectConfig(projectName);
@@ -241,9 +242,15 @@ function saveProjectCommentsManual(projectName) {
     throw new Error(`No data found in ${projectName} sheet`);
   }
   
+  // Expand groups to read all data
   expandAllGroups(sheet);
+  
+  // Save comments to cache
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
+  
+  // IMPORTANT: Collapse groups back after saving comments
+  collapseAllGroupsRecursively(sheet);
 }
 
 // =============================================================================
