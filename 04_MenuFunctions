@@ -1,5 +1,5 @@
 /**
- * Menu Functions - Smart UX Version
+ * Menu Functions - Smart UX Version with Growth Threshold Settings
  */
 
 const MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular'];
@@ -100,6 +100,7 @@ function smartSettingsHub() {
   
   const action = showChoice('⚙️ Settings & Tools', [
     '🎯 Target eROAS Settings',
+    '📊 Growth Status Thresholds',
     '💬 Comments Management',
     '🗑️ Clear Data',
     '🔍 API Health Check',
@@ -111,11 +112,12 @@ function smartSettingsHub() {
   
   switch(action) {
     case 1: targetSettingsWizard(); break;
-    case 2: commentsWizard(); break;
-    case 3: clearDataWizard(); break;
-    case 4: apiCheckWizard(); break;
-    case 5: debugWizard(); break;
-    case 6: showAutomationStatus(); break;
+    case 2: growthThresholdsWizard(); break;
+    case 3: commentsWizard(); break;
+    case 4: clearDataWizard(); break;
+    case 5: apiCheckWizard(); break;
+    case 6: debugWizard(); break;
+    case 7: showAutomationStatus(); break;
   }
 }
 
@@ -171,6 +173,187 @@ function targetSettingsWizard() {
       ui.alert('✅ Reset', 'All targets reset to defaults', ui.ButtonSet.OK);
     }
   }
+}
+
+// Growth Thresholds Wizard
+function growthThresholdsWizard() {
+  const choice = showChoice('📊 Growth Status Thresholds', [
+    'View Current Settings',
+    'Update Single Project',
+    'Update All Projects',
+    'Reset to Defaults',
+    'View Growth Criteria Explanation'
+  ]);
+  
+  if (!choice) return;
+  
+  const ui = SpreadsheetApp.getUi();
+  
+  if (choice === 1) {
+    viewCurrentThresholds();
+    
+  } else if (choice === 2) {
+    const project = showChoice('Select Project:', MENU_PROJECTS);
+    if (project) {
+      updateSingleProjectThresholds(MENU_PROJECTS[project-1].toUpperCase());
+    }
+    
+  } else if (choice === 3) {
+    updateAllProjectsThresholds();
+    
+  } else if (choice === 4) {
+    resetAllThresholdsToDefaults();
+    
+  } else if (choice === 5) {
+    showGrowthCriteriaExplanation();
+  }
+}
+
+// View current thresholds for all projects
+function viewCurrentThresholds() {
+  const ui = SpreadsheetApp.getUi();
+  let message = '📊 CURRENT GROWTH THRESHOLDS\n\n';
+  
+  MENU_PROJECTS.forEach(project => {
+    const projectName = project.toUpperCase();
+    const thresholds = getGrowthThresholds(projectName);
+    
+    message += `${project}:\n`;
+    message += `🟢 Healthy Growth: Spend >${thresholds.healthyGrowth.minSpendChange}%, Profit >${thresholds.healthyGrowth.minProfitChange}%\n`;
+    message += `🔴 Inefficient Growth: Spend >${thresholds.inefficientGrowth.minSpendChange}%, Profit <${thresholds.inefficientGrowth.maxProfitChange}%\n`;
+    message += `🔵 Scaling Down: Spend <${thresholds.scalingDown.maxSpendChange}%\n`;
+    message += `🟡 Moderate Growth: Spend >${thresholds.moderateGrowthSpend}%, Profit >${thresholds.moderateGrowthProfit}%\n\n`;
+  });
+  
+  ui.alert('Growth Thresholds', message, ui.ButtonSet.OK);
+}
+
+// Update thresholds for single project
+function updateSingleProjectThresholds(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  const current = getGrowthThresholds(projectName);
+  
+  // Show current values and get new ones
+  let message = `${projectName} Current Thresholds:\n\n`;
+  message += `🟢 Healthy Growth: Spend >${current.healthyGrowth.minSpendChange}%, Profit >${current.healthyGrowth.minProfitChange}%\n`;
+  message += `🔴 Inefficient Growth: Spend >${current.inefficientGrowth.minSpendChange}%, Profit <${current.inefficientGrowth.maxProfitChange}%\n`;
+  message += `🔵 Scaling Down: Spend <${current.scalingDown.maxSpendChange}%\n`;
+  message += `🟡 Moderate Growth: Spend >${current.moderateGrowthSpend}%, Profit >${current.moderateGrowthProfit}%\n\n`;
+  message += 'Would you like to update these values?';
+  
+  if (ui.alert('Current Settings', message, ui.ButtonSet.YES_NO) !== ui.Button.YES) {
+    return;
+  }
+  
+  // Get new values
+  const newThresholds = { ...current };
+  
+  // Healthy Growth thresholds
+  const healthySpend = promptNumber(`Healthy Growth - Min Spend Change % (current: ${current.healthyGrowth.minSpendChange}):`, [10, 15, 20]);
+  if (healthySpend !== null) newThresholds.healthyGrowth.minSpendChange = healthySpend;
+  
+  const healthyProfit = promptNumber(`Healthy Growth - Min Profit Change % (current: ${current.healthyGrowth.minProfitChange}):`, [5, 8, 10]);
+  if (healthyProfit !== null) newThresholds.healthyGrowth.minProfitChange = healthyProfit;
+  
+  // Inefficient Growth thresholds
+  const inefficientSpend = promptNumber(`Inefficient Growth - Min Spend Change % (current: ${current.inefficientGrowth.minSpendChange}):`, [10, 15, 20]);
+  if (inefficientSpend !== null) newThresholds.inefficientGrowth.minSpendChange = inefficientSpend;
+  
+  const inefficientProfit = promptNumber(`Inefficient Growth - Max Profit Change % (current: ${current.inefficientGrowth.maxProfitChange}):`, [-5, -8, -10]);
+  if (inefficientProfit !== null) newThresholds.inefficientGrowth.maxProfitChange = inefficientProfit;
+  
+  // Scaling Down threshold
+  const scalingDown = promptNumber(`Scaling Down - Max Spend Change % (current: ${current.scalingDown.maxSpendChange}):`, [-10, -15, -20]);
+  if (scalingDown !== null) newThresholds.scalingDown.maxSpendChange = scalingDown;
+  
+  // Moderate Growth thresholds
+  const moderateSpend = promptNumber(`Moderate Growth - Min Spend Change % (current: ${current.moderateGrowthSpend}):`, [0, 2, 5]);
+  if (moderateSpend !== null) newThresholds.moderateGrowthSpend = moderateSpend;
+  
+  const moderateProfit = promptNumber(`Moderate Growth - Min Profit Change % (current: ${current.moderateGrowthProfit}):`, [0, 2, 3]);
+  if (moderateProfit !== null) newThresholds.moderateGrowthProfit = moderateProfit;
+  
+  // Save new thresholds
+  setGrowthThresholds(projectName, newThresholds);
+  ui.alert('✅ Updated', `${projectName} growth thresholds have been updated!`, ui.ButtonSet.OK);
+}
+
+// Update thresholds for all projects
+function updateAllProjectsThresholds() {
+  const ui = SpreadsheetApp.getUi();
+  
+  if (ui.alert('Update All Projects', 
+               'This will allow you to set the same thresholds for all projects.\n\nContinue?', 
+               ui.ButtonSet.YES_NO) !== ui.Button.YES) {
+    return;
+  }
+  
+  // Get common values
+  const healthySpend = promptNumber('Healthy Growth - Min Spend Change %:', [10, 15, 20]);
+  if (healthySpend === null) return;
+  
+  const healthyProfit = promptNumber('Healthy Growth - Min Profit Change %:', [5, 8, 10]);
+  if (healthyProfit === null) return;
+  
+  const inefficientSpend = promptNumber('Inefficient Growth - Min Spend Change %:', [10, 15, 20]);
+  if (inefficientSpend === null) return;
+  
+  const inefficientProfit = promptNumber('Inefficient Growth - Max Profit Change %:', [-5, -8, -10]);
+  if (inefficientProfit === null) return;
+  
+  const scalingDown = promptNumber('Scaling Down - Max Spend Change %:', [-10, -15, -20]);
+  if (scalingDown === null) return;
+  
+  const moderateSpend = promptNumber('Moderate Growth - Min Spend Change %:', [0, 2, 5]);
+  if (moderateSpend === null) return;
+  
+  const moderateProfit = promptNumber('Moderate Growth - Min Profit Change %:', [0, 2, 3]);
+  if (moderateProfit === null) return;
+  
+  // Apply to all projects
+  const newThresholds = {
+    healthyGrowth: { minSpendChange: healthySpend, minProfitChange: healthyProfit },
+    inefficientGrowth: { minSpendChange: inefficientSpend, maxProfitChange: inefficientProfit },
+    scalingDown: { maxSpendChange: scalingDown },
+    moderateGrowthSpend: moderateSpend,
+    moderateGrowthProfit: moderateProfit
+  };
+  
+  MENU_PROJECTS.forEach(project => {
+    setGrowthThresholds(project.toUpperCase(), newThresholds);
+  });
+  
+  ui.alert('✅ Updated', 'All projects have been updated with the new thresholds!', ui.ButtonSet.OK);
+}
+
+// Reset all thresholds to defaults
+function resetAllThresholdsToDefaults() {
+  const ui = SpreadsheetApp.getUi();
+  
+  if (ui.alert('Reset to Defaults?', 
+               'This will reset all growth thresholds to their default values.\n\nContinue?', 
+               ui.ButtonSet.YES_NO) !== ui.Button.YES) {
+    return;
+  }
+  
+  MENU_PROJECTS.forEach(project => {
+    resetGrowthThresholds(project.toUpperCase());
+  });
+  
+  ui.alert('✅ Reset', 'All growth thresholds have been reset to defaults!', ui.ButtonSet.OK);
+}
+
+// Show growth criteria explanation
+function showGrowthCriteriaExplanation() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const choice = showChoice('Select Project for Explanation:', MENU_PROJECTS);
+  if (!choice) return;
+  
+  const projectName = MENU_PROJECTS[choice-1].toUpperCase();
+  const explanation = getProjectGrowthStatusExplanation(projectName);
+  
+  ui.alert(`Growth Criteria - ${MENU_PROJECTS[choice-1]}`, explanation, ui.ButtonSet.OK);
 }
 
 // Helper UI Functions
