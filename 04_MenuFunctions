@@ -1,115 +1,3 @@
-/**
- * Menu Functions and UI Handlers - Multi Project Support
- * Contains all menu creation and user interface functions for Tricky, Moloco, and Regular
- */
-
-/**
- * Create custom menu in Google Sheets interface
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Campaign Report')
-    .addSubMenu(ui.createMenu('📊 Tricky Reports')
-      .addItem('📅 Last 30 days', 'generateTrickyReport30')
-      .addItem('📅 Last 60 days', 'generateTrickyReport60')
-      .addItem('📅 Last 90 days', 'generateTrickyReport90')
-      .addItem('📅 Custom days', 'showTrickyDaysDialog')
-      .addItem('📅 Date range', 'showTrickyDateRangeDialog')
-      .addSeparator()
-      .addItem('🔄 Update all data to current', 'updateTrickyDataToCurrent')
-      .addSeparator()
-      .addItem('💬 Save comments to cache', 'saveTrickyCommentsToCache')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('💾 Auto Cache')
-        .addItem('▶️ Start auto cache (60 min)', 'startTrickyAutoCache')
-        .addItem('⏹️ Stop auto cache', 'stopTrickyAutoCache')
-        .addItem('📊 Check status', 'checkTrickyAutoCacheStatus')
-        .addSeparator()
-        .addItem('🔄 Force cache now', 'forceTrickyCache')
-        .addSeparator()
-        .addSubMenu(ui.createMenu('🧪 Test Groups')
-          .addItem('📥 Test collapse groups', 'testTrickyCollapseGroups')
-          .addItem('📤 Test expand groups', 'testTrickyExpandGroups')
-        )
-        .addSeparator()
-        .addItem('🗑️ Clear all triggers', 'clearTrickyAutoCacheTriggers')
-      )
-      .addItem('🗑️ Clear all data', 'clearTrickyAllData')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('🔧 Debug')
-        .addItem('Full Diagnostic', 'debugTrickyReportGeneration')
-        .addItem('Quick API Check', 'quickTrickyAPICheck')
-      )
-    )
-    .addSubMenu(ui.createMenu('🔥 Moloco Reports')
-      .addItem('📅 Last 30 days', 'generateMolocoReport30')
-      .addItem('📅 Last 60 days', 'generateMolocoReport60')
-      .addItem('📅 Last 90 days', 'generateMolocoReport90')
-      .addItem('📅 Custom days', 'showMolocoDaysDialog')
-      .addItem('📅 Date range', 'showMolocoDateRangeDialog')
-      .addSeparator()
-      .addItem('🔄 Update all data to current', 'updateMolocoDataToCurrent')
-      .addSeparator()
-      .addItem('💬 Save comments to cache', 'saveMolocoCommentsToCache')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('💾 Auto Cache')
-        .addItem('▶️ Start auto cache (60 min)', 'startMolocoAutoCache')
-        .addItem('⏹️ Stop auto cache', 'stopMolocoAutoCache')
-        .addItem('📊 Check status', 'checkMolocoAutoCacheStatus')
-        .addSeparator()
-        .addItem('🔄 Force cache now', 'forceMolocoCache')
-        .addSeparator()
-        .addSubMenu(ui.createMenu('🧪 Test Groups')
-          .addItem('📥 Test collapse groups', 'testMolocoCollapseGroups')
-          .addItem('📤 Test expand groups', 'testMolocoExpandGroups')
-        )
-        .addSeparator()
-        .addItem('🗑️ Clear all triggers', 'clearMolocoAutoCacheTriggers')
-      )
-      .addItem('🗑️ Clear all data', 'clearMolocoAllData')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('🔧 Debug')
-        .addItem('Full Diagnostic', 'debugMolocoReportGeneration')
-        .addItem('Quick API Check', 'quickMolocoAPICheck')
-      )
-    )
-    .addSubMenu(ui.createMenu('📈 Regular Reports')
-      .addItem('📅 Last 30 days', 'generateRegularReport30')
-      .addItem('📅 Last 60 days', 'generateRegularReport60')
-      .addItem('📅 Last 90 days', 'generateRegularReport90')
-      .addItem('📅 Custom days', 'showRegularDaysDialog')
-      .addItem('📅 Date range', 'showRegularDateRangeDialog')
-      .addSeparator()
-      .addItem('🔄 Update all data to current', 'updateRegularDataToCurrent')
-      .addSeparator()
-      .addItem('💬 Save comments to cache', 'saveRegularCommentsToCache')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('💾 Auto Cache')
-        .addItem('▶️ Start auto cache (60 min)', 'startRegularAutoCache')
-        .addItem('⏹️ Stop auto cache', 'stopRegularAutoCache')
-        .addItem('📊 Check status', 'checkRegularAutoCacheStatus')
-        .addSeparator()
-        .addItem('🔄 Force cache now', 'forceRegularCache')
-        .addSeparator()
-        .addSubMenu(ui.createMenu('🧪 Test Groups')
-          .addItem('📥 Test collapse groups', 'testRegularCollapseGroups')
-          .addItem('📤 Test expand groups', 'testRegularExpandGroups')
-        )
-        .addSeparator()
-        .addItem('🗑️ Clear all triggers', 'clearRegularAutoCacheTriggers')
-      )
-      .addItem('🗑️ Clear all data', 'clearRegularAllData')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('🔧 Debug')
-        .addItem('Full Diagnostic', 'debugRegularReportGeneration')
-        .addItem('Quick API Check', 'quickRegularAPICheck')
-      )
-    )
-    .addSeparator()
-    .addItem('⚙️ Project Settings', 'showProjectSettings')
-    .addToUi();
-}
-
 // =============================================================================
 // TRICKY PROJECT FUNCTIONS
 // =============================================================================
@@ -126,24 +14,7 @@ function saveTrickyCommentsToCache() {
   setCurrentProject('TRICKY');
   const progress = new ProgressManager('Saving Tricky Comments').start('Preparing sheet...');
   try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      progress.end(false);
-      SpreadsheetApp.getUi().alert('No data found in the Tricky sheet.');
-      return;
-    }
-    
-    progress.update('Expanding all groups...');
-    expandAllGroups(sheet);
-    
-    progress.update('Reading comments from sheet...');
-    const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
-    
-    progress.update('Comments saved successfully!');
+    saveProjectCommentsManual('TRICKY');
     progress.end();
     SpreadsheetApp.getUi().alert('Success', 'Tricky comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {
@@ -213,35 +84,6 @@ function showTrickyDateRangeDialog() {
   generateProjectReportForDateRange('TRICKY', startDate, endDate);
 }
 
-/**
- * Update Tricky data to current
- */
-function updateTrickyDataToCurrent() {
-  updateProjectDataToCurrent('TRICKY');
-}
-
-/**
- * Clear Tricky data
- */
-function clearTrickyAllData() {
-  clearProjectAllData('TRICKY');
-}
-
-// Tricky Auto Cache functions
-function startTrickyAutoCache() { startProjectAutoCache('TRICKY'); }
-function stopTrickyAutoCache() { stopProjectAutoCache('TRICKY'); }
-function checkTrickyAutoCacheStatus() { checkProjectAutoCacheStatus('TRICKY'); }
-function forceTrickyCache() { forceProjectCache('TRICKY'); }
-function clearTrickyAutoCacheTriggers() { clearProjectAutoCacheTriggers('TRICKY'); }
-
-// Tricky Group test functions
-function testTrickyCollapseGroups() { testProjectCollapseGroups('TRICKY'); }
-function testTrickyExpandGroups() { testProjectExpandGroups('TRICKY'); }
-
-// Tricky Debug functions
-function debugTrickyReportGeneration() { debugProjectReportGeneration('TRICKY'); }
-function quickTrickyAPICheck() { quickProjectAPICheck('TRICKY'); }
-
 // =============================================================================
 // MOLOCO PROJECT FUNCTIONS
 // =============================================================================
@@ -258,24 +100,7 @@ function saveMolocoCommentsToCache() {
   setCurrentProject('MOLOCO');
   const progress = new ProgressManager('Saving Moloco Comments').start('Preparing sheet...');
   try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      progress.end(false);
-      SpreadsheetApp.getUi().alert('No data found in the Moloco sheet.');
-      return;
-    }
-    
-    progress.update('Expanding all groups...');
-    expandAllGroups(sheet);
-    
-    progress.update('Reading comments from sheet...');
-    const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
-    
-    progress.update('Comments saved successfully!');
+    saveProjectCommentsManual('MOLOCO');
     progress.end();
     SpreadsheetApp.getUi().alert('Success', 'Moloco comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {
@@ -345,35 +170,6 @@ function showMolocoDateRangeDialog() {
   generateProjectReportForDateRange('MOLOCO', startDate, endDate);
 }
 
-/**
- * Update Moloco data to current
- */
-function updateMolocoDataToCurrent() {
-  updateProjectDataToCurrent('MOLOCO');
-}
-
-/**
- * Clear Moloco data
- */
-function clearMolocoAllData() {
-  clearProjectAllData('MOLOCO');
-}
-
-// Moloco Auto Cache functions
-function startMolocoAutoCache() { startProjectAutoCache('MOLOCO'); }
-function stopMolocoAutoCache() { stopProjectAutoCache('MOLOCO'); }
-function checkMolocoAutoCacheStatus() { checkProjectAutoCacheStatus('MOLOCO'); }
-function forceMolocoCache() { forceProjectCache('MOLOCO'); }
-function clearMolocoAutoCacheTriggers() { clearProjectAutoCacheTriggers('MOLOCO'); }
-
-// Moloco Group test functions
-function testMolocoCollapseGroups() { testProjectCollapseGroups('MOLOCO'); }
-function testMolocoExpandGroups() { testProjectExpandGroups('MOLOCO'); }
-
-// Moloco Debug functions
-function debugMolocoReportGeneration() { debugProjectReportGeneration('MOLOCO'); }
-function quickMolocoAPICheck() { quickProjectAPICheck('MOLOCO'); }
-
 // =============================================================================
 // REGULAR PROJECT FUNCTIONS
 // =============================================================================
@@ -390,24 +186,7 @@ function saveRegularCommentsToCache() {
   setCurrentProject('REGULAR');
   const progress = new ProgressManager('Saving Regular Comments').start('Preparing sheet...');
   try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      progress.end(false);
-      SpreadsheetApp.getUi().alert('No data found in the Regular sheet.');
-      return;
-    }
-    
-    progress.update('Expanding all groups...');
-    expandAllGroups(sheet);
-    
-    progress.update('Reading comments from sheet...');
-    const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
-    
-    progress.update('Comments saved successfully!');
+    saveProjectCommentsManual('REGULAR');
     progress.end();
     SpreadsheetApp.getUi().alert('Success', 'Regular comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {
@@ -477,35 +256,6 @@ function showRegularDateRangeDialog() {
   generateProjectReportForDateRange('REGULAR', startDate, endDate);
 }
 
-/**
- * Update Regular data to current
- */
-function updateRegularDataToCurrent() {
-  updateProjectDataToCurrent('REGULAR');
-}
-
-/**
- * Clear Regular data
- */
-function clearRegularAllData() {
-  clearProjectAllData('REGULAR');
-}
-
-// Regular Auto Cache functions
-function startRegularAutoCache() { startProjectAutoCache('REGULAR'); }
-function stopRegularAutoCache() { stopProjectAutoCache('REGULAR'); }
-function checkRegularAutoCacheStatus() { checkProjectAutoCacheStatus('REGULAR'); }
-function forceRegularCache() { forceProjectCache('REGULAR'); }
-function clearRegularAutoCacheTriggers() { clearProjectAutoCacheTriggers('REGULAR'); }
-
-// Regular Group test functions
-function testRegularCollapseGroups() { testProjectCollapseGroups('REGULAR'); }
-function testRegularExpandGroups() { testProjectExpandGroups('REGULAR'); }
-
-// Regular Debug functions
-function debugRegularReportGeneration() { debugProjectReportGeneration('REGULAR'); }
-function quickRegularAPICheck() { quickProjectAPICheck('REGULAR'); }
-
 // =============================================================================
 // UNIVERSAL PROJECT FUNCTIONS
 // =============================================================================
@@ -527,166 +277,15 @@ function generateProjectReportForDateRange(projectName, startDate, endDate) {
 }
 
 /**
- * Update project data to current
+ * Debug project report generation
  */
-function updateProjectDataToCurrent(projectName) {
-  setCurrentProject(projectName);
-  updateAllDataToCurrent();
-}
+function debugTrickyReportGeneration() { debugProjectReportGeneration('TRICKY'); }
+function debugMolocoReportGeneration() { debugProjectReportGeneration('MOLOCO'); }
+function debugRegularReportGeneration() { debugProjectReportGeneration('REGULAR'); }
 
-/**
- * Clear project data
- */
-function clearProjectAllData(projectName) {
-  const ui = SpreadsheetApp.getUi();
-  
-  // Show confirmation dialog
-  const result = ui.alert(
-    `Clear ${projectName} Data`,
-    `This will delete all data in the ${projectName} sheet.\n\n` +
-    'Comments will be preserved and can be restored later.\n\n' +
-    'Are you sure you want to continue?',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (result !== ui.Button.YES) {
-    return;
-  }
-  
-  try {
-    setCurrentProject(projectName);
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (sheet && sheet.getLastRow() > 1) {
-      expandAllGroups(sheet);
-      const cache = new CommentCache();
-      cache.syncCommentsFromSheet();
-    }
-    
-    clearAllDataSilent();
-    
-    ui.alert('Success', `All ${projectName} data has been cleared. Comments have been preserved in cache.`, ui.ButtonSet.OK);
-  } catch (error) {
-    console.error('Error during sheet recreation:', error);
-    ui.alert('Error', `Error clearing ${projectName} data: ` + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-/**
- * Universal auto cache functions
- */
-function startProjectAutoCache(projectName) {
-  // TODO: Implement project-specific auto cache
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
-}
-
-function stopProjectAutoCache(projectName) {
-  // TODO: Implement project-specific auto cache
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
-}
-
-function checkProjectAutoCacheStatus(projectName) {
-  // TODO: Implement project-specific auto cache
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', `${projectName} auto cache needs to be implemented.`, ui.ButtonSet.OK);
-}
-
-function forceProjectCache(projectName) {
-  // TODO: Implement project-specific auto cache
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', `${projectName} cache needs to be implemented.`, ui.ButtonSet.OK);
-}
-
-function clearProjectAutoCacheTriggers(projectName) {
-  // TODO: Implement project-specific auto cache
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', `${projectName} trigger management needs to be implemented.`, ui.ButtonSet.OK);
-}
-
-/**
- * Universal group test functions
- */
-function testProjectCollapseGroups(projectName) {
-  setCurrentProject(projectName);
-  testCollapseGroups();
-}
-
-function testProjectExpandGroups(projectName) {
-  setCurrentProject(projectName);
-  testExpandGroups();
-}
-
-/**
- * Universal debug functions
- */
 function debugProjectReportGeneration(projectName) {
   setCurrentProject(projectName);
   debugReportGeneration();
-}
-
-function quickProjectAPICheck(projectName) {
-  setCurrentProject(projectName);
-  quickAPICheck();
-}
-
-/**
- * Show project settings dialog with updated Regular configuration
- */
-function showProjectSettings() {
-  const ui = SpreadsheetApp.getUi();
-  
-  const trickyConfig = PROJECTS.TRICKY;
-  const molocoConfig = PROJECTS.MOLOCO;
-  const regularConfig = PROJECTS.REGULAR;
-  
-  const message = 
-    '📊 TRICKY PROJECT:\n' +
-    `• Sheet: ${trickyConfig.SHEET_NAME}\n` +
-    `• API URL: ${trickyConfig.API_URL}\n` +
-    `• Target eROAS: ${trickyConfig.TARGET_EROAS}%\n` +
-    `• Token: ${trickyConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
-    `• Campaign Search: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH} (INCLUDE)\n` +
-    `• Network HID: ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
-    
-    '🔥 MOLOCO PROJECT:\n' +
-    `• Sheet: ${molocoConfig.SHEET_NAME}\n` +
-    `• API URL: ${molocoConfig.API_URL}\n` +
-    `• Target eROAS: ${molocoConfig.TARGET_EROAS}%\n` +
-    `• Token: ${molocoConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
-    `• Campaign Search: NO FILTER (takes all campaigns)\n` +
-    `• Network HID: ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
-    
-    '📈 REGULAR PROJECT:\n' +
-    `• Sheet: ${regularConfig.SHEET_NAME}\n` +
-    `• API URL: ${regularConfig.API_URL}\n` +
-    `• Target eROAS: ${regularConfig.TARGET_EROAS}%\n` +
-    `• Token: ${regularConfig.BEARER_TOKEN ? 'Configured ✓' : 'Missing ✗'}\n` +
-    `• Campaign Search: ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH} (EXCLUDE)\n` +
-    `• Network HID: ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}\n\n` +
-    
-    '✅ All projects are fully configured and ready to use!\n\n' +
-    '🔄 Key differences:\n' +
-    `• Tricky: Network ${trickyConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, campaigns WITH "tricky"\n` +
-    `• Moloco: Network ${molocoConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]}, ALL campaigns (no filter)\n` +
-    `• Regular: Network ${regularConfig.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID[0]} (same as Tricky), campaigns WITHOUT "tricky"\n` +
-    '• Each project has separate comment cache\n' +
-    '• Independent data sheets and settings\n' +
-    '• All projects use the same bearer token\n\n' +
-    '🎯 Source App Display:\n' +
-    '• Tricky: Extracts app names from campaign structure\n' +
-    '• Moloco: Shows full campaign names (APD_Word_Maker_iOS_...)\n' +
-    '• Regular: Shows full campaign names WITHOUT modification\n\n' +
-    '💬 Comment Support:\n' +
-    '• Week-level comments: Supported for all projects\n' +
-    '• Campaign-level comments: Supported for all projects\n' +
-    '• Auto-caching: Saves both types every 60 minutes\n' +
-    '• Manual caching: Available through project menus';
-  
-  ui.alert('Project Settings', message, ui.ButtonSet.OK);
 }
 
 // =============================================================================
@@ -700,4 +299,147 @@ function generateReport90() { generateTrickyReport90(); }
 function saveCommentsToCache() { saveTrickyCommentsToCache(); }
 function showDaysDialog() { showTrickyDaysDialog(); }
 function showDateRangeDialog() { showTrickyDateRangeDialog(); }
-function clearAllData() { clearTrickyAllData(); }
+function clearAllData() { clearProjectAllData('TRICKY'); }// =============================================================================
+// AUTO UPDATE SETTINGS
+// =============================================================================
+
+/**
+ * Show auto update settings dialog
+ */
+function showAutoUpdateSettings() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  const isEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
+  
+  const result = ui.alert(
+    '🔄 Auto Update Settings',
+    `Auto-update is currently: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\n` +
+    'When enabled, all project data will be automatically updated every Monday at 5:00 AM.\n\n' +
+    'This will fetch new data including the previous complete week.\n\n' +
+    `Would you like to ${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`,
+    ui.ButtonSet.YES_NO_CANCEL
+  );
+  
+  if (result === ui.Button.YES) {
+    if (isEnabled) {
+      // Disable auto-update
+      disableAutoUpdate();
+    } else {
+      // Enable auto-update
+      enableAutoUpdate();
+    }
+  }
+}
+
+/**
+ * Enable auto update with Monday 5AM trigger
+ */
+function enableAutoUpdate() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Remove any existing triggers
+    ScriptApp.getProjectTriggers()
+      .filter(trigger => trigger.getHandlerFunction() === 'autoUpdateAllProjects')
+      .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    
+    // Create new trigger for Monday 5AM
+    ScriptApp.newTrigger('autoUpdateAllProjects')
+      .timeBased()
+      .onWeekDay(ScriptApp.WeekDay.MONDAY)
+      .atHour(5)
+      .create();
+    
+    // Save enabled state
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED, 'true');
+    
+    ui.alert(
+      'Auto Update Enabled',
+      '✅ Auto-update has been enabled!\n\n' +
+      '• Data will be updated every Monday at 5:00 AM\n' +
+      '• All projects will include the previous week\'s data\n' +
+      '• Comments will be preserved during updates',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to enable auto-update: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Show complete automation status
+ */
+function showAutomationStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const statusMessage = getCompleteAutomationStatus();
+  ui.alert('Automation Status', statusMessage, ui.ButtonSet.OK);
+}/**
+ * Menu Functions and UI Handlers - Multi Project Support
+ * Updated with new menu structure: Settings, Auto-cache, Debug
+ */
+
+/**
+ * Create custom menu in Google Sheets interface
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Campaign Report')
+    .addSubMenu(ui.createMenu('📊 Tricky Reports')
+      .addItem('📅 Last 30 days', 'generateTrickyReport30')
+      .addItem('📅 Last 60 days', 'generateTrickyReport60')
+      .addItem('📅 Last 90 days', 'generateTrickyReport90')
+      .addItem('📅 Custom days', 'showTrickyDaysDialog')
+      .addItem('📅 Date range', 'showTrickyDateRangeDialog')
+      .addSeparator()
+      .addItem('⚙️ Target eROAS Settings', 'showTrickyTargetSettings')
+    )
+    .addSubMenu(ui.createMenu('🔥 Moloco Reports')
+      .addItem('📅 Last 30 days', 'generateMolocoReport30')
+      .addItem('📅 Last 60 days', 'generateMolocoReport60')
+      .addItem('📅 Last 90 days', 'generateMolocoReport90')
+      .addItem('📅 Custom days', 'showMolocoDaysDialog')
+      .addItem('📅 Date range', 'showMolocoDateRangeDialog')
+      .addSeparator()
+      .addItem('⚙️ Target eROAS Settings', 'showMolocoTargetSettings')
+    )
+    .addSubMenu(ui.createMenu('📈 Regular Reports')
+      .addItem('📅 Last 30 days', 'generateRegularReport30')
+      .addItem('📅 Last 60 days', 'generateRegularReport60')
+      .addItem('📅 Last 90 days', 'generateRegularReport90')
+      .addItem('📅 Custom days', 'showRegularDaysDialog')
+      .addItem('📅 Date range', 'showRegularDateRangeDialog')
+      .addSeparator()
+      .addItem('⚙️ Target eROAS Settings', 'showRegularTargetSettings')
+    )
+    .addSeparator()
+    .addSubMenu(ui.createMenu('⚙️ Settings')
+      .addItem('🎯 Project Overview', 'showProjectSettings')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('💾 Comment Cache')
+        .addItem('💬 Save Tricky Comments', 'saveTrickyCommentsToCache')
+        .addItem('💬 Save Moloco Comments', 'saveMolocoCommentsToCache')
+        .addItem('💬 Save Regular Comments', 'saveRegularCommentsToCache')
+        .addSeparator()
+        .addItem('💬 Save All Comments', 'saveAllCommentsToCache')
+      )
+      .addSeparator()
+      .addSubMenu(ui.createMenu('🔄 Auto Updates')
+        .addItem('⏰ Auto Cache Settings', 'showAutoCacheSettings')
+        .addItem('📅 Auto Update Settings', 'showAutoUpdateSettings')
+        .addSeparator()
+        .addItem('📊 View Status', 'showAutomationStatus')
+      )
+      .addSeparator()
+      .addItem('🗑️ Clear Data', 'showClearDataDialog')
+    )
+    .addSubMenu(ui.createMenu('🔧 Debug')
+      .addItem('🐛 Debug Tricky', 'debugTrickyReportGeneration')
+      .addItem('🐛 Debug Moloco', 'debugMolocoReportGeneration')
+      .addItem('🐛 Debug Regular', 'debugRegularReportGeneration')
+      .addSeparator()
+      .addItem('🔍 Quick API Check', 'showQuickAPICheckDialog')
+    )
+    .addToUi();
+}
