@@ -1,6 +1,6 @@
 /**
  * Settings Functions - All dialog and settings management
- * Handles target eROAS, auto-cache, auto-update, and other settings
+ * Handles target eROAS, growth thresholds, auto-cache, auto-update, and other settings
  */
 
 // =============================================================================
@@ -243,21 +243,28 @@ function showProjectSettings() {
   const molocoTarget = getTargetEROAS('MOLOCO');
   const regularTarget = getTargetEROAS('REGULAR');
   
+  const trickyThresholds = getGrowthThresholds('TRICKY');
+  const molocoThresholds = getGrowthThresholds('MOLOCO');
+  const regularThresholds = getGrowthThresholds('REGULAR');
+  
   const message = 
     '🎯 PROJECT CONFIGURATION\n\n' +
     
     '📊 TRICKY:\n' +
     `• Target eROAS: ${trickyTarget}%\n` +
+    `• Growth Thresholds: Healthy(${trickyThresholds.healthyGrowth.minSpendChange}%/${trickyThresholds.healthyGrowth.minProfitChange}%), Scaling(${trickyThresholds.scalingDown.maxSpendChange}%)\n` +
     `• Network HID: 234187180623265792\n` +
     `• Campaign Filter: /tricky/i (INCLUDE)\n\n` +
     
     '🔥 MOLOCO:\n' +
     `• Target eROAS: ${molocoTarget}%\n` +
+    `• Growth Thresholds: Healthy(${molocoThresholds.healthyGrowth.minSpendChange}%/${molocoThresholds.healthyGrowth.minProfitChange}%), Scaling(${molocoThresholds.scalingDown.maxSpendChange}%)\n` +
     `• Network HID: 445856363109679104\n` +
     `• Campaign Filter: NO FILTER (all campaigns)\n\n` +
     
     '📈 REGULAR:\n' +
     `• Target eROAS: ${regularTarget}%\n` +
+    `• Growth Thresholds: Healthy(${regularThresholds.healthyGrowth.minSpendChange}%/${regularThresholds.healthyGrowth.minProfitChange}%), Scaling(${regularThresholds.scalingDown.maxSpendChange}%)\n` +
     `• Network HID: 234187180623265792\n` +
     `• Campaign Filter: !/tricky/i (EXCLUDE)\n\n` +
     
@@ -269,9 +276,118 @@ function showProjectSettings() {
     '• Week-level comments: ✅ Supported\n' +
     '• Campaign-level comments: ✅ Supported\n' +
     '• Comment preservation: ✅ Active\n' +
-    '• Group management: ✅ Auto-collapse';
+    '• Group management: ✅ Auto-collapse\n' +
+    '• Project-specific thresholds: ✅ Active';
   
   ui.alert('Project Settings', message, ui.ButtonSet.OK);
+}
+
+// =============================================================================
+// GROWTH THRESHOLD SETTINGS
+// =============================================================================
+
+/**
+ * Show detailed growth threshold settings for a project
+ */
+function showGrowthThresholdDetails(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  const thresholds = getGrowthThresholds(projectName);
+  
+  const message = 
+    `📊 ${projectName} GROWTH THRESHOLDS\n\n` +
+    
+    '🟢 HEALTHY GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.healthyGrowth.minSpendChange}%\n` +
+    `• Min Profit Change: ${thresholds.healthyGrowth.minProfitChange}%\n\n` +
+    
+    '🔴 INEFFICIENT GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.inefficientGrowth.minSpendChange}%\n` +
+    `• Max Profit Change: ${thresholds.inefficientGrowth.maxProfitChange}%\n\n` +
+    
+    '🔵 SCALING DOWN:\n' +
+    `• Max Spend Change: ${thresholds.scalingDown.maxSpendChange}%\n\n` +
+    
+    '🟡 MODERATE GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.moderateGrowthSpend}%\n` +
+    `• Min Profit Change: ${thresholds.moderateGrowthProfit}%\n\n` +
+    
+    '⚪ STABLE:\n' +
+    '• All other scenarios';
+  
+  ui.alert(`${projectName} Growth Thresholds`, message, ui.ButtonSet.OK);
+}
+
+/**
+ * Quick threshold adjustment dialog
+ */
+function quickAdjustThresholds(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  const current = getGrowthThresholds(projectName);
+  
+  const result = ui.alert(
+    `Quick Adjust - ${projectName}`,
+    'Which threshold would you like to adjust?\n\n' +
+    `Current Healthy Growth: Spend >${current.healthyGrowth.minSpendChange}%, Profit >${current.healthyGrowth.minProfitChange}%\n` +
+    `Current Scaling Down: Spend <${current.scalingDown.maxSpendChange}%\n\n` +
+    'YES = Adjust Healthy Growth\n' +
+    'NO = Adjust Scaling Down\n' +
+    'CANCEL = Exit',
+    ui.ButtonSet.YES_NO_CANCEL
+  );
+  
+  if (result === ui.Button.CANCEL) return;
+  
+  const newThresholds = { ...current };
+  
+  if (result === ui.Button.YES) {
+    // Adjust Healthy Growth
+    const spendResponse = ui.prompt(
+      'Healthy Growth - Spend Threshold',
+      `Enter minimum spend change % for Healthy Growth (current: ${current.healthyGrowth.minSpendChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (spendResponse.getSelectedButton() === ui.Button.OK) {
+      const spendValue = parseInt(spendResponse.getResponseText());
+      if (!isNaN(spendValue) && spendValue >= 0 && spendValue <= 100) {
+        newThresholds.healthyGrowth.minSpendChange = spendValue;
+      }
+    }
+    
+    const profitResponse = ui.prompt(
+      'Healthy Growth - Profit Threshold',
+      `Enter minimum profit change % for Healthy Growth (current: ${current.healthyGrowth.minProfitChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (profitResponse.getSelectedButton() === ui.Button.OK) {
+      const profitValue = parseInt(profitResponse.getResponseText());
+      if (!isNaN(profitValue) && profitValue >= -50 && profitValue <= 100) {
+        newThresholds.healthyGrowth.minProfitChange = profitValue;
+        // Update inefficient growth to match spend threshold
+        newThresholds.inefficientGrowth.minSpendChange = newThresholds.healthyGrowth.minSpendChange;
+      }
+    }
+    
+  } else {
+    // Adjust Scaling Down
+    const scalingResponse = ui.prompt(
+      'Scaling Down Threshold',
+      `Enter maximum spend change % for Scaling Down (current: ${current.scalingDown.maxSpendChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (scalingResponse.getSelectedButton() === ui.Button.OK) {
+      const scalingValue = parseInt(scalingResponse.getResponseText());
+      if (!isNaN(scalingValue) && scalingValue >= -100 && scalingValue <= 0) {
+        newThresholds.scalingDown.maxSpendChange = scalingValue;
+      }
+    }
+  }
+  
+  // Save updated thresholds
+  setGrowthThresholds(projectName, newThresholds);
+  ui.alert('✅ Updated', `${projectName} thresholds have been updated!`, ui.ButtonSet.OK);
 }
 
 // =============================================================================
@@ -530,4 +646,103 @@ function getCompleteAutomationStatus() {
   statusMessage += `• Update triggers: ${triggers.filter(t => t.getHandlerFunction() === 'autoUpdateAllProjects').length}\n`;
   
   return statusMessage;
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS FOR SETTINGS
+// =============================================================================
+
+/**
+ * Clear specific project data with UI confirmation
+ */
+function clearProjectAllData(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    `Clear ${projectName} Data`,
+    `This will clear all data from the ${projectName} project.\n\n` +
+    'Comments will be preserved and can be restored.\n\n' +
+    'Are you sure?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) return;
+  
+  try {
+    // Save comments first
+    const config = getProjectConfig(projectName);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache(projectName);
+      cache.syncCommentsFromSheet();
+    }
+    
+    // Clear the data
+    clearProjectDataSilent(projectName);
+    
+    ui.alert('Success', `${projectName} data has been cleared. Comments have been preserved.`, ui.ButtonSet.OK);
+    
+  } catch (error) {
+    ui.alert('Error', `Error clearing ${projectName} data: ` + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Test API with custom date range
+ */
+function testAPIWithDateRange(startDate, endDate) {
+  const ui = SpreadsheetApp.getUi();
+  
+  const choice = showChoice('Select Project for API Test:', ['TRICKY', 'MOLOCO', 'REGULAR']);
+  if (!choice) return;
+  
+  const projectName = ['TRICKY', 'MOLOCO', 'REGULAR'][choice-1];
+  
+  try {
+    setCurrentProject(projectName);
+    const dateRange = { from: startDate, to: endDate };
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert(
+        `${projectName} API Test`,
+        `❌ No data returned for period ${startDate} to ${endDate}.\n\n` +
+        'The API connection works but no campaigns match the filters.',
+        ui.ButtonSet.OK
+      );
+    } else {
+      const count = raw.data.analytics.richStats.stats.length;
+      ui.alert(
+        `${projectName} API Test`,
+        `✅ API test successful!\n\n` +
+        `• Records found: ${count}\n` +
+        `• Period: ${startDate} to ${endDate}\n` +
+        `• Project: ${projectName}`,
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (error) {
+    ui.alert(
+      `${projectName} API Test`,
+      `❌ API Error:\n\n${error.toString()}`,
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Helper function to show choice dialog (if not already defined)
+ */
+function showChoice(title, options) {
+  const ui = SpreadsheetApp.getUi();
+  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
+  const result = ui.prompt(title, `${numbered}\n\nEnter number:`, ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return null;
+  
+  const choice = parseInt(result.getResponseText());
+  return (choice >= 1 && choice <= options.length) ? choice : null;
 }
