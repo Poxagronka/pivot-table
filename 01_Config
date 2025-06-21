@@ -1,6 +1,7 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
  * Multi-project support: Tricky, Moloco, and Regular
+ * Updated with individual target eROAS settings
  */
 
 // Main spreadsheet ID (same for all projects)
@@ -9,12 +10,47 @@ const MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 // Shared Bearer Token for all projects
 const SHARED_BEARER_TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA';
 
+// Settings storage property keys
+const PROPERTY_KEYS = {
+  TARGET_EROAS_TRICKY: 'TARGET_EROAS_TRICKY',
+  TARGET_EROAS_MOLOCO: 'TARGET_EROAS_MOLOCO',
+  TARGET_EROAS_REGULAR: 'TARGET_EROAS_REGULAR',
+  AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
+  AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED'
+};
+
+// Default target eROAS values
+const DEFAULT_TARGET_EROAS = {
+  TRICKY: 160,
+  MOLOCO: 140,
+  REGULAR: 140
+};
+
+/**
+ * Get target eROAS for a project from script properties or default
+ */
+function getTargetEROAS(projectName) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `TARGET_EROAS_${projectName}`;
+  const value = props.getProperty(key);
+  return value ? parseInt(value) : DEFAULT_TARGET_EROAS[projectName];
+}
+
+/**
+ * Set target eROAS for a project
+ */
+function setTargetEROAS(projectName, value) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `TARGET_EROAS_${projectName}`;
+  props.setProperty(key, value.toString());
+}
+
 // Project configurations
 const PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: 160,
+    get TARGET_EROAS() { return getTargetEROAS('TRICKY'); }, // Dynamic from properties
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
     
@@ -48,7 +84,7 @@ const PROJECTS = {
   MOLOCO: {
     SHEET_NAME: 'Moloco',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: 140,
+    get TARGET_EROAS() { return getTargetEROAS('MOLOCO'); }, // Dynamic from properties
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
     
@@ -82,7 +118,7 @@ const PROJECTS = {
   REGULAR: {
     SHEET_NAME: 'Regular',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: 140,
+    get TARGET_EROAS() { return getTargetEROAS('REGULAR'); }, // Dynamic from properties
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     
