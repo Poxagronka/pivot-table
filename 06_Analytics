@@ -1,6 +1,7 @@
 /**
  * Analytics Functions - Multi Project Support
  * Contains all analytical calculations and metrics
+ * Updated with project-specific Growth Status thresholds
  */
 
 /**
@@ -115,43 +116,125 @@ function calculateWoWMetrics(appData) {
 }
 
 /**
- * Calculate growth status based on spend and profit changes
+ * Calculate growth status based on spend and profit changes using project-specific thresholds
+ * FIXED: Better handling of profit decline scenarios
  */
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
   const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
   
-  // Transition from negative to positive profit
+  // Get project-specific thresholds
+  const thresholds = getGrowthThresholds(CURRENT_PROJECT);
+  
+  // Transition from negative to positive profit (always healthy regardless of thresholds)
   if (prevProfit < 0 && currProfit > 0) {
     return '🟢 Healthy Growth';
   }
   
-  // Transition from positive to negative profit
+  // Transition from positive to negative profit (always inefficient regardless of thresholds)
   if (prevProfit > 0 && currProfit < 0) {
     return '🔴 Inefficient Growth';
   }
   
-  // High spend increase with good profit growth
-  if (spendPct > 10 && profitPct > 5) {
-    return '🟢 Healthy Growth';
-  }
-  
-  // High spend increase with profit decline
-  if (spendPct > 10 && profitPct < -5) {
+  // PRIORITY 1: Check for significant profit decline (regardless of spend change)
+  // If profit drops significantly, it's always concerning
+  if (profitPct < thresholds.inefficientGrowth.maxProfitChange) {
     return '🔴 Inefficient Growth';
   }
   
-  // Moderate positive growth
-  if (spendPct > 0 && profitPct > 0) {
-    return '🟡 Moderate Growth';
+  // PRIORITY 2: Check for healthy growth pattern
+  // High spend increase with good profit growth
+  if (spendPct > thresholds.healthyGrowth.minSpendChange && 
+      profitPct > thresholds.healthyGrowth.minProfitChange) {
+    return '🟢 Healthy Growth';
   }
   
-  // Significant spend reduction
-  if (spendPct < -10) {
+  // PRIORITY 3: Check for scaling down (significant spend reduction)
+  if (spendPct < thresholds.scalingDown.maxSpendChange) {
     return '🔵 Scaling Down';
   }
   
+  // PRIORITY 4: Check for moderate positive growth
+  if (spendPct > thresholds.moderateGrowthSpend && 
+      profitPct > thresholds.moderateGrowthProfit) {
+    return '🟡 Moderate Growth';
+  }
+  
+  // PRIORITY 5: Check for concerning patterns even with moderate changes
+  
+  // Case: Spend increases moderately but profit declines
+  if (spendPct > 5 && profitPct < -2) {
+    return '🟠 Declining Efficiency';
+  }
+  
+  // Case: Spend stays same/increases slightly but profit drops significantly
+  if (spendPct >= -2 && profitPct < -10) {
+    return '🟠 Declining Efficiency';
+  }
+  
+  // Case: Both spend and profit are declining moderately
+  if (spendPct < -5 && profitPct < -5 && spendPct > thresholds.scalingDown.maxSpendChange) {
+    return '🟡 Moderate Decline';
+  }
+  
+  // Case: Positive but minimal growth
+  if (spendPct > 0 && profitPct > 0 && 
+      (spendPct <= thresholds.moderateGrowthSpend || profitPct <= thresholds.moderateGrowthProfit)) {
+    return '🟡 Minimal Growth';
+  }
+  
+  // Everything else is stable
   return '⚪ Stable';
+}
+
+/**
+ * Get updated growth status explanation for current project
+ */
+function getGrowthStatusExplanation() {
+  const thresholds = getGrowthThresholds(CURRENT_PROJECT);
+  
+  return `Growth Status Criteria for ${CURRENT_PROJECT}:
+
+🟢 Healthy Growth:
+• Spend increase > ${thresholds.healthyGrowth.minSpendChange}% AND profit increase > ${thresholds.healthyGrowth.minProfitChange}%
+• OR transition from negative to positive profit
+
+🔴 Inefficient Growth:
+• Profit decrease < ${thresholds.inefficientGrowth.maxProfitChange}% (regardless of spend)
+• OR transition from positive to negative profit
+
+🟠 Declining Efficiency:
+• Spend increase >5% but profit decrease <-2%
+• OR spend stable (>-2%) but profit drops <-10%
+
+🔵 Scaling Down:
+• Spend decrease < ${thresholds.scalingDown.maxSpendChange}%
+
+🟡 Moderate Growth:
+• Spend increase > ${thresholds.moderateGrowthSpend}% AND profit increase > ${thresholds.moderateGrowthProfit}%
+
+🟡 Minimal Growth:
+• Small positive changes in both spend and profit
+
+🟡 Moderate Decline:
+• Both spend and profit declining moderately (>-5% but not scaling down)
+
+⚪ Stable:
+• Small changes in both directions, no clear trend`;
+}
+
+/**
+ * Get growth status explanation for specific project
+ */
+function getProjectGrowthStatusExplanation(projectName) {
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    return getGrowthStatusExplanation();
+  } finally {
+    setCurrentProject(originalProject);
+  }
 }
 
 /**
