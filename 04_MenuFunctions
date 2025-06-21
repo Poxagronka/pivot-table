@@ -1,445 +1,400 @@
-// =============================================================================
-// TRICKY PROJECT FUNCTIONS
-// =============================================================================
-
-// Quick report functions for Tricky
-function generateTrickyReport30() { generateProjectReport('TRICKY', 30); }
-function generateTrickyReport60() { generateProjectReport('TRICKY', 60); }
-function generateTrickyReport90() { generateProjectReport('TRICKY', 90); }
-
 /**
- * Save Tricky comments to cache manually
+ * Menu Functions - Smart UX Version
  */
-function saveTrickyCommentsToCache() {
-  setCurrentProject('TRICKY');
-  const progress = new ProgressManager('Saving Tricky Comments').start('Preparing sheet...');
+
+const MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular'];
+const MENU_DAYS = [30, 60, 90];
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  const menu = ui.createMenu('📊 Campaign Report');
+  const props = PropertiesService.getScriptProperties();
+  
+  // Most used actions at top
+  menu.addItem('📈 Generate Report...', 'smartReportWizard')
+      .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
+      .addSeparator()
+      // Smart toggles with current state
+      .addItem(props.getProperty('AUTO_CACHE_ENABLED') === 'true' ? 
+               '✅ Auto-Cache ON → Turn OFF' : 
+               '❌ Auto-Cache OFF → Turn ON', 'toggleAutoCache')
+      .addItem(props.getProperty('AUTO_UPDATE_ENABLED') === 'true' ? 
+               '✅ Auto-Update ON → Turn OFF' : 
+               '❌ Auto-Update OFF → Turn ON', 'toggleAutoUpdate')
+      .addSeparator()
+      .addItem('⚙️ Settings & Tools...', 'smartSettingsHub')
+      .addToUi();
+}
+
+// Smart Report Wizard - guides user through options
+function smartReportWizard() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Step 1: Choose scope
+  const scope = showChoice('📈 Generate Report - Step 1/3', [
+    'All Projects Together',
+    'Single Project',
+    'Custom Selection'
+  ]);
+  
+  if (!scope) return;
+  
+  // Step 2: Choose time period
+  const period = showChoice('📅 Select Period - Step 2/3', [
+    'Last 30 days',
+    'Last 60 days', 
+    'Last 90 days',
+    'Custom days (120, 360, etc)',
+    'Date range (from/to)'
+  ]);
+  
+  if (!period) return;
+  
+  // Step 3: Execute based on selections
+  if (scope === 1) { // All Projects
+    const days = period <= 3 ? MENU_DAYS[period-1] : 
+                 period === 4 ? promptNumber('Enter days:', [120, 360]) : null;
+    
+    if (period === 5) { // Date range
+      const dates = promptDateRange();
+      if (dates) runAllProjectsDateRange(dates.start, dates.end);
+    } else if (days) {
+      quickGenerateAllForDays(days);
+    }
+    
+  } else if (scope === 2) { // Single Project
+    const project = showChoice('Select Project - Step 3/3', MENU_PROJECTS);
+    if (!project) return;
+    
+    const projectName = MENU_PROJECTS[project-1].toUpperCase();
+    
+    if (period <= 3) {
+      generateProjectReport(projectName, MENU_DAYS[period-1]);
+    } else if (period === 4) {
+      const days = promptNumber('Enter days:', [120, 360]);
+      if (days) generateProjectReport(projectName, days);
+    } else {
+      const dates = promptDateRange();
+      if (dates) generateProjectReportForDateRange(projectName, dates.start, dates.end);
+    }
+    
+  } else { // Custom Selection
+    const selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
+    if (!selected || selected.length === 0) return;
+    
+    const days = period <= 3 ? MENU_DAYS[period-1] : 
+                 period === 4 ? promptNumber('Enter days:', [120, 360]) : null;
+    
+    if (days) {
+      runSelectedProjects(selected, days);
+    } else if (period === 5) {
+      const dates = promptDateRange();
+      if (dates) runSelectedProjectsDateRange(selected, dates.start, dates.end);
+    }
+  }
+}
+
+// Smart Settings Hub
+function smartSettingsHub() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const action = showChoice('⚙️ Settings & Tools', [
+    '🎯 Target eROAS Settings',
+    '💬 Comments Management',
+    '🗑️ Clear Data',
+    '🔍 API Health Check',
+    '🐛 Debug Tools',
+    '📊 View System Status'
+  ]);
+  
+  if (!action) return;
+  
+  switch(action) {
+    case 1: targetSettingsWizard(); break;
+    case 2: commentsWizard(); break;
+    case 3: clearDataWizard(); break;
+    case 4: apiCheckWizard(); break;
+    case 5: debugWizard(); break;
+    case 6: showAutomationStatus(); break;
+  }
+}
+
+// Target Settings Wizard
+function targetSettingsWizard() {
+  const choice = showChoice('🎯 Target eROAS Settings', [
+    'View Current Settings',
+    'Update Single Project',
+    'Update All Projects',
+    'Reset to Defaults'
+  ]);
+  
+  if (!choice) return;
+  
+  const ui = SpreadsheetApp.getUi();
+  
+  if (choice === 1) {
+    ui.alert('Current Target eROAS', 
+      MENU_PROJECTS.map(p => `${p}: ${getTargetEROAS(p.toUpperCase())}%`).join('\n'),
+      ui.ButtonSet.OK);
+      
+  } else if (choice === 2) {
+    const project = showChoice('Select Project:', MENU_PROJECTS);
+    if (project) {
+      const p = MENU_PROJECTS[project-1];
+      const current = getTargetEROAS(p.toUpperCase());
+      const value = promptNumber(`${p} Target eROAS (current: ${current}%):`, [140, 160, 180]);
+      if (value && value >= 100 && value <= 500) {
+        setTargetEROAS(p.toUpperCase(), value);
+        ui.alert('✅ Updated', `${p} target set to ${value}%`, ui.ButtonSet.OK);
+      }
+    }
+    
+  } else if (choice === 3) {
+    const values = {};
+    for (const p of MENU_PROJECTS) {
+      const current = getTargetEROAS(p.toUpperCase());
+      const value = promptNumber(`${p} (current: ${current}%):`, [current]);
+      if (value && value >= 100 && value <= 500) values[p] = value;
+    }
+    if (Object.keys(values).length > 0) {
+      Object.entries(values).forEach(([p, v]) => setTargetEROAS(p.toUpperCase(), v));
+      ui.alert('✅ Updated', 'All targets have been saved', ui.ButtonSet.OK);
+    }
+    
+  } else if (choice === 4) {
+    if (ui.alert('Reset to Defaults?', 
+                 'Tricky: 160%\nMoloco: 140%\nRegular: 140%', 
+                 ui.ButtonSet.YES_NO) === ui.Button.YES) {
+      setTargetEROAS('TRICKY', 160);
+      setTargetEROAS('MOLOCO', 140);
+      setTargetEROAS('REGULAR', 140);
+      ui.alert('✅ Reset', 'All targets reset to defaults', ui.ButtonSet.OK);
+    }
+  }
+}
+
+// Helper UI Functions
+function showChoice(title, options) {
+  const ui = SpreadsheetApp.getUi();
+  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
+  const result = ui.prompt(title, `${numbered}\n\nEnter number:`, ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return null;
+  
+  const choice = parseInt(result.getResponseText());
+  return (choice >= 1 && choice <= options.length) ? choice : null;
+}
+
+function showMultiChoice(title, options) {
+  const ui = SpreadsheetApp.getUi();
+  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
+  const result = ui.prompt(title, 
+    `${numbered}\n\nEnter numbers separated by commas (e.g., 1,3):`, 
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return null;
+  
+  return result.getResponseText()
+    .split(',')
+    .map(n => parseInt(n.trim()))
+    .filter(n => n >= 1 && n <= options.length)
+    .map(n => options[n-1]);
+}
+
+function promptNumber(prompt, suggestions = []) {
+  const ui = SpreadsheetApp.getUi();
+  const hint = suggestions.length > 0 ? ` (e.g., ${suggestions.join(', ')})` : '';
+  const result = ui.prompt('Input Required', prompt + hint, ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return null;
+  
+  const num = parseInt(result.getResponseText());
+  return isNaN(num) ? null : num;
+}
+
+function promptDateRange() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const start = ui.prompt('Start Date', 
+    'Enter date (YYYY-MM-DD):\n\nExample: 2024-01-01', 
+    ui.ButtonSet.OK_CANCEL);
+  if (start.getSelectedButton() !== ui.Button.OK) return null;
+  
+  const end = ui.prompt('End Date', 
+    'Enter date (YYYY-MM-DD):\n\nExample: 2024-12-31', 
+    ui.ButtonSet.OK_CANCEL);
+  if (end.getSelectedButton() !== ui.Button.OK) return null;
+  
+  if (!isValidDate(start.getResponseText()) || !isValidDate(end.getResponseText())) {
+    ui.alert('❌ Invalid date format');
+    return null;
+  }
+  
+  return { start: start.getResponseText(), end: end.getResponseText() };
+}
+
+// Quick Actions
+function quickGenerateAllForDays(days) {
+  const ui = SpreadsheetApp.getUi();
+  const progress = new ProgressManager(`All Reports - ${days} days`).start('Starting...');
+  let success = 0;
+  
   try {
-    saveProjectCommentsManual('TRICKY');
+    MENU_PROJECTS.forEach((p, i) => {
+      progress.update(`${p}...`, `${i + 1}/${MENU_PROJECTS.length}`);
+      try { 
+        generateProjectReport(p.toUpperCase(), days); 
+        success++; 
+      } catch(e) { 
+        console.error(e); 
+      }
+    });
     progress.end();
-    SpreadsheetApp.getUi().alert('Success', 'Tricky comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {
+    ui.alert('✅ Complete', `Generated ${success}/${MENU_PROJECTS.length} reports`, ui.ButtonSet.OK);
+  } catch(e) {
     progress.end(false);
-    SpreadsheetApp.getUi().alert('Error', 'Error saving Tricky comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
   }
 }
 
-/**
- * Dialog for entering number of days for Tricky
- */
-function showTrickyDaysDialog() {
-  const ui = SpreadsheetApp.getUi();
-  const daysResp = ui.prompt('Tricky Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
-  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
-  const days = parseInt(daysResp.getResponseText(), 10);
-  if (![30, 60, 90, 120, 360].includes(days)) {
-    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
-    return;
-  }
-  generateProjectReport('TRICKY', days);
-}
-
-/**
- * Dialog for entering date range for Tricky
- */
-function showTrickyDateRangeDialog() {
-  const ui = SpreadsheetApp.getUi();
+// Wizard functions
+function commentsWizard() {
+  const choice = showChoice('💬 Comments Management', [
+    'Save All Comments Now',
+    'Save Single Project',
+    'View Auto-Cache Status',
+    'Configure Auto-Cache'
+  ]);
   
-  // Get start date
-  const startResp = ui.prompt(
-    'Tricky Date Range Report - Start Date',
-    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
-    ui.ButtonSet.OK_CANCEL
-  );
+  if (!choice) return;
   
-  if (startResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const startDate = startResp.getResponseText().trim();
-  if (!isValidDate(startDate)) {
-    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Get end date
-  const endResp = ui.prompt(
-    'Tricky Date Range Report - End Date',
-    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (endResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const endDate = endResp.getResponseText().trim();
-  if (!isValidDate(endDate)) {
-    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Validate date range
-  if (startDate > endDate) {
-    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Generate report
-  generateProjectReportForDateRange('TRICKY', startDate, endDate);
-}
-
-// =============================================================================
-// MOLOCO PROJECT FUNCTIONS
-// =============================================================================
-
-// Quick report functions for Moloco
-function generateMolocoReport30() { generateProjectReport('MOLOCO', 30); }
-function generateMolocoReport60() { generateProjectReport('MOLOCO', 60); }
-function generateMolocoReport90() { generateProjectReport('MOLOCO', 90); }
-
-/**
- * Save Moloco comments to cache manually
- */
-function saveMolocoCommentsToCache() {
-  setCurrentProject('MOLOCO');
-  const progress = new ProgressManager('Saving Moloco Comments').start('Preparing sheet...');
-  try {
-    saveProjectCommentsManual('MOLOCO');
-    progress.end();
-    SpreadsheetApp.getUi().alert('Success', 'Moloco comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {
-    progress.end(false);
-    SpreadsheetApp.getUi().alert('Error', 'Error saving Moloco comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  switch(choice) {
+    case 1: saveAllCommentsToCache(); break;
+    case 2: 
+      const p = showChoice('Select Project:', MENU_PROJECTS);
+      if (p) this[`save${MENU_PROJECTS[p-1]}CommentsToCache`]();
+      break;
+    case 3: showAutomationStatus(); break;
+    case 4: showAutoCacheSettings(); break;
   }
 }
 
-/**
- * Dialog for entering number of days for Moloco
- */
-function showMolocoDaysDialog() {
-  const ui = SpreadsheetApp.getUi();
-  const daysResp = ui.prompt('Moloco Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
-  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
-  const days = parseInt(daysResp.getResponseText(), 10);
-  if (![30, 60, 90, 120, 360].includes(days)) {
-    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
-    return;
-  }
-  generateProjectReport('MOLOCO', days);
-}
-
-/**
- * Dialog for entering date range for Moloco
- */
-function showMolocoDateRangeDialog() {
-  const ui = SpreadsheetApp.getUi();
+function clearDataWizard() {
+  const choice = showChoice('🗑️ Clear Data', [
+    'Clear All Projects',
+    'Clear Single Project', 
+    'View What Will Be Cleared'
+  ]);
   
-  // Get start date
-  const startResp = ui.prompt(
-    'Moloco Date Range Report - Start Date',
-    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
-    ui.ButtonSet.OK_CANCEL
-  );
+  if (!choice) return;
   
-  if (startResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const startDate = startResp.getResponseText().trim();
-  if (!isValidDate(startDate)) {
-    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Get end date
-  const endResp = ui.prompt(
-    'Moloco Date Range Report - End Date',
-    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (endResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const endDate = endResp.getResponseText().trim();
-  if (!isValidDate(endDate)) {
-    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Validate date range
-  if (startDate > endDate) {
-    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Generate report
-  generateProjectReportForDateRange('MOLOCO', startDate, endDate);
-}
-
-// =============================================================================
-// REGULAR PROJECT FUNCTIONS
-// =============================================================================
-
-// Quick report functions for Regular
-function generateRegularReport30() { generateProjectReport('REGULAR', 30); }
-function generateRegularReport60() { generateProjectReport('REGULAR', 60); }
-function generateRegularReport90() { generateProjectReport('REGULAR', 90); }
-
-/**
- * Save Regular comments to cache manually
- */
-function saveRegularCommentsToCache() {
-  setCurrentProject('REGULAR');
-  const progress = new ProgressManager('Saving Regular Comments').start('Preparing sheet...');
-  try {
-    saveProjectCommentsManual('REGULAR');
-    progress.end();
-    SpreadsheetApp.getUi().alert('Success', 'Regular comments have been saved to cache.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {
-    progress.end(false);
-    SpreadsheetApp.getUi().alert('Error', 'Error saving Regular comments: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  if (choice === 1) {
+    clearAllProjectsData();
+  } else if (choice === 2) {
+    const p = showChoice('Select Project:', MENU_PROJECTS);
+    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
+  } else {
+    SpreadsheetApp.getUi().alert('Info', 
+      'Clear Data will:\n\n' +
+      '✓ Remove all report data\n' +
+      '✓ Preserve saved comments\n' +
+      '✓ Keep your settings\n\n' +
+      'Comments can be restored after clearing.',
+      SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
-/**
- * Dialog for entering number of days for Regular
- */
-function showRegularDaysDialog() {
-  const ui = SpreadsheetApp.getUi();
-  const daysResp = ui.prompt('Regular Custom Report', 'Input number of days (30, 60, 90, 120, 360):', ui.ButtonSet.OK_CANCEL);
-  if (daysResp.getSelectedButton() !== ui.Button.OK) return;
-  const days = parseInt(daysResp.getResponseText(), 10);
-  if (![30, 60, 90, 120, 360].includes(days)) {
-    ui.alert('Invalid value. Please enter one of: 30, 60, 90, 120, or 360');
-    return;
+function apiCheckWizard() {
+  const choice = showChoice('🔍 API Health Check', [
+    'Quick Check All Projects',
+    'Check Single Project',
+    'Test with Custom Date Range'
+  ]);
+  
+  if (!choice) return;
+  
+  if (choice === 1) {
+    checkAllProjectsAPI();
+  } else if (choice === 2) {
+    const p = showChoice('Select Project:', MENU_PROJECTS);
+    if (p) checkProjectAPI(MENU_PROJECTS[p-1].toUpperCase());
+  } else {
+    const dates = promptDateRange();
+    if (dates) testAPIWithDateRange(dates.start, dates.end);
   }
-  generateProjectReport('REGULAR', days);
 }
 
-/**
- * Dialog for entering date range for Regular
- */
-function showRegularDateRangeDialog() {
-  const ui = SpreadsheetApp.getUi();
-  
-  // Get start date
-  const startResp = ui.prompt(
-    'Regular Date Range Report - Start Date',
-    'Enter start date (YYYY-MM-DD format):\n\nExample: 2025-01-01',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (startResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const startDate = startResp.getResponseText().trim();
-  if (!isValidDate(startDate)) {
-    ui.alert('Error', 'Invalid start date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-01', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Get end date
-  const endResp = ui.prompt(
-    'Regular Date Range Report - End Date',
-    'Enter end date (YYYY-MM-DD format):\n\nExample: 2025-01-31',
-    ui.ButtonSet.OK_CANCEL
-  );
-  
-  if (endResp.getSelectedButton() !== ui.Button.OK) return;
-  
-  const endDate = endResp.getResponseText().trim();
-  if (!isValidDate(endDate)) {
-    ui.alert('Error', 'Invalid end date format. Please use YYYY-MM-DD format.\n\nExample: 2025-01-31', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Validate date range
-  if (startDate > endDate) {
-    ui.alert('Error', 'Start date must be before end date.', ui.ButtonSet.OK);
-    return;
-  }
-  
-  // Generate report
-  generateProjectReportForDateRange('REGULAR', startDate, endDate);
+function debugWizard() {
+  const p = showChoice('🐛 Debug Tools', MENU_PROJECTS);
+  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
 }
 
-// =============================================================================
-// UNIVERSAL PROJECT FUNCTIONS
-// =============================================================================
+// Run functions
+function runSelectedProjects(projects, days) {
+  projects.forEach(p => generateProjectReport(p.toUpperCase(), days));
+  SpreadsheetApp.getUi().alert('✅ Complete', `Generated ${projects.length} reports`, SpreadsheetApp.getUi().ButtonSet.OK);
+}
 
-/**
- * Generate report for specific project and days
- */
+function runAllProjectsDateRange(start, end) {
+  MENU_PROJECTS.forEach(p => generateProjectReportForDateRange(p.toUpperCase(), start, end));
+  SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function runSelectedProjectsDateRange(projects, start, end) {
+  projects.forEach(p => generateProjectReportForDateRange(p.toUpperCase(), start, end));
+  SpreadsheetApp.getUi().alert('✅ Complete', `Generated ${projects.length} reports`, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// Toggle functions
+function toggleAutoCache() {
+  const props = PropertiesService.getScriptProperties();
+  const isOn = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
+  isOn ? disableAutoCache() : enableAutoCache();
+}
+
+function toggleAutoUpdate() {
+  const props = PropertiesService.getScriptProperties();
+  const isOn = props.getProperty('AUTO_UPDATE_ENABLED') === 'true';
+  isOn ? disableAutoUpdate() : enableAutoUpdate();
+}
+
+// Core functions
 function generateProjectReport(projectName, days) {
   setCurrentProject(projectName);
   generateReport(days);
 }
 
-/**
- * Generate report for specific project and date range
- */
 function generateProjectReportForDateRange(projectName, startDate, endDate) {
   setCurrentProject(projectName);
   generateReportForDateRange(startDate, endDate);
 }
-
-/**
- * Debug project report generation
- */
-function debugTrickyReportGeneration() { debugProjectReportGeneration('TRICKY'); }
-function debugMolocoReportGeneration() { debugProjectReportGeneration('MOLOCO'); }
-function debugRegularReportGeneration() { debugProjectReportGeneration('REGULAR'); }
 
 function debugProjectReportGeneration(projectName) {
   setCurrentProject(projectName);
   debugReportGeneration();
 }
 
-// =============================================================================
-// LEGACY FUNCTIONS (for backward compatibility)
-// =============================================================================
+// Dynamic compatibility functions
+MENU_PROJECTS.forEach(p => {
+  MENU_DAYS.forEach(d => {
+    this[`generate${p}Report${d}`] = () => generateProjectReport(p.toUpperCase(), d);
+  });
+  this[`save${p}CommentsToCache`] = () => {
+    setCurrentProject(p.toUpperCase());
+    saveProjectCommentsManual(p.toUpperCase());
+    SpreadsheetApp.getUi().alert('✅ Success', `${p} comments saved`, SpreadsheetApp.getUi().ButtonSet.OK);
+  };
+  this[`show${p}DaysDialog`] = () => smartReportWizard();
+  this[`show${p}DateRangeDialog`] = () => smartReportWizard();
+  this[`debug${p}ReportGeneration`] = () => debugProjectReportGeneration(p.toUpperCase());
+  this[`show${p}TargetSettings`] = () => targetSettingsWizard();
+});
 
-// Keep old function names working, but redirect to Tricky
-function generateReport30() { generateTrickyReport30(); }
-function generateReport60() { generateTrickyReport60(); }
-function generateReport90() { generateTrickyReport90(); }
+// Legacy support
+function generateReport30() { generateProjectReport('TRICKY', 30); }
+function generateReport60() { generateProjectReport('TRICKY', 60); }
+function generateReport90() { generateProjectReport('TRICKY', 90); }
 function saveCommentsToCache() { saveTrickyCommentsToCache(); }
-function showDaysDialog() { showTrickyDaysDialog(); }
-function showDateRangeDialog() { showTrickyDateRangeDialog(); }
-function clearAllData() { clearProjectAllData('TRICKY'); }// =============================================================================
-// AUTO UPDATE SETTINGS
-// =============================================================================
-
-/**
- * Show auto update settings dialog
- */
-function showAutoUpdateSettings() {
-  const ui = SpreadsheetApp.getUi();
-  const props = PropertiesService.getScriptProperties();
-  const isEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
-  
-  const result = ui.alert(
-    '🔄 Auto Update Settings',
-    `Auto-update is currently: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\n` +
-    'When enabled, all project data will be automatically updated every Monday at 5:00 AM.\n\n' +
-    'This will fetch new data including the previous complete week.\n\n' +
-    `Would you like to ${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`,
-    ui.ButtonSet.YES_NO_CANCEL
-  );
-  
-  if (result === ui.Button.YES) {
-    if (isEnabled) {
-      // Disable auto-update
-      disableAutoUpdate();
-    } else {
-      // Enable auto-update
-      enableAutoUpdate();
-    }
-  }
-}
-
-/**
- * Enable auto update with Monday 5AM trigger
- */
-function enableAutoUpdate() {
-  const ui = SpreadsheetApp.getUi();
-  
-  try {
-    // Remove any existing triggers
-    ScriptApp.getProjectTriggers()
-      .filter(trigger => trigger.getHandlerFunction() === 'autoUpdateAllProjects')
-      .forEach(trigger => ScriptApp.deleteTrigger(trigger));
-    
-    // Create new trigger for Monday 5AM
-    ScriptApp.newTrigger('autoUpdateAllProjects')
-      .timeBased()
-      .onWeekDay(ScriptApp.WeekDay.MONDAY)
-      .atHour(5)
-      .create();
-    
-    // Save enabled state
-    const props = PropertiesService.getScriptProperties();
-    props.setProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED, 'true');
-    
-    ui.alert(
-      'Auto Update Enabled',
-      '✅ Auto-update has been enabled!\n\n' +
-      '• Data will be updated every Monday at 5:00 AM\n' +
-      '• All projects will include the previous week\'s data\n' +
-      '• Comments will be preserved during updates',
-      ui.ButtonSet.OK
-    );
-    
-  } catch (error) {
-    ui.alert('Error', 'Failed to enable auto-update: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-/**
- * Show complete automation status
- */
-function showAutomationStatus() {
-  const ui = SpreadsheetApp.getUi();
-  const statusMessage = getCompleteAutomationStatus();
-  ui.alert('Automation Status', statusMessage, ui.ButtonSet.OK);
-}/**
- * Menu Functions and UI Handlers - Multi Project Support
- * Updated with new menu structure: Settings, Auto-cache, Debug
- */
-
-/**
- * Create custom menu in Google Sheets interface
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Campaign Report')
-    .addSubMenu(ui.createMenu('📊 Tricky Reports')
-      .addItem('📅 Last 30 days', 'generateTrickyReport30')
-      .addItem('📅 Last 60 days', 'generateTrickyReport60')
-      .addItem('📅 Last 90 days', 'generateTrickyReport90')
-      .addItem('📅 Custom days', 'showTrickyDaysDialog')
-      .addItem('📅 Date range', 'showTrickyDateRangeDialog')
-      .addSeparator()
-      .addItem('⚙️ Target eROAS Settings', 'showTrickyTargetSettings')
-    )
-    .addSubMenu(ui.createMenu('🔥 Moloco Reports')
-      .addItem('📅 Last 30 days', 'generateMolocoReport30')
-      .addItem('📅 Last 60 days', 'generateMolocoReport60')
-      .addItem('📅 Last 90 days', 'generateMolocoReport90')
-      .addItem('📅 Custom days', 'showMolocoDaysDialog')
-      .addItem('📅 Date range', 'showMolocoDateRangeDialog')
-      .addSeparator()
-      .addItem('⚙️ Target eROAS Settings', 'showMolocoTargetSettings')
-    )
-    .addSubMenu(ui.createMenu('📈 Regular Reports')
-      .addItem('📅 Last 30 days', 'generateRegularReport30')
-      .addItem('📅 Last 60 days', 'generateRegularReport60')
-      .addItem('📅 Last 90 days', 'generateRegularReport90')
-      .addItem('📅 Custom days', 'showRegularDaysDialog')
-      .addItem('📅 Date range', 'showRegularDateRangeDialog')
-      .addSeparator()
-      .addItem('⚙️ Target eROAS Settings', 'showRegularTargetSettings')
-    )
-    .addSeparator()
-    .addSubMenu(ui.createMenu('⚙️ Settings')
-      .addItem('🎯 Project Overview', 'showProjectSettings')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('💾 Comment Cache')
-        .addItem('💬 Save Tricky Comments', 'saveTrickyCommentsToCache')
-        .addItem('💬 Save Moloco Comments', 'saveMolocoCommentsToCache')
-        .addItem('💬 Save Regular Comments', 'saveRegularCommentsToCache')
-        .addSeparator()
-        .addItem('💬 Save All Comments', 'saveAllCommentsToCache')
-      )
-      .addSeparator()
-      .addSubMenu(ui.createMenu('🔄 Auto Updates')
-        .addItem('⏰ Auto Cache Settings', 'showAutoCacheSettings')
-        .addItem('📅 Auto Update Settings', 'showAutoUpdateSettings')
-        .addSeparator()
-        .addItem('📊 View Status', 'showAutomationStatus')
-      )
-      .addSeparator()
-      .addItem('🗑️ Clear Data', 'showClearDataDialog')
-    )
-    .addSubMenu(ui.createMenu('🔧 Debug')
-      .addItem('🐛 Debug Tricky', 'debugTrickyReportGeneration')
-      .addItem('🐛 Debug Moloco', 'debugMolocoReportGeneration')
-      .addItem('🐛 Debug Regular', 'debugRegularReportGeneration')
-      .addSeparator()
-      .addItem('🔍 Quick API Check', 'showQuickAPICheckDialog')
-    )
-    .addToUi();
-}
+function showDaysDialog() { smartReportWizard(); }
+function showDateRangeDialog() { smartReportWizard(); }
+function clearAllData() { clearProjectAllData('TRICKY'); }
