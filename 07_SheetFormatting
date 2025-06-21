@@ -240,7 +240,7 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
 }
 
 /**
- * Enhanced conditional formatting with color gradients
+ * Enhanced conditional formatting with color gradients and new growth statuses
  */
 function applyConditionalFormatting(sheet, numRows) {
   const config = getCurrentConfig(); // Use current project config
@@ -305,13 +305,17 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    // Growth Status formatting
+    // Growth Status formatting with new statuses
     const growthRange = sheet.getRange(2, 15, numRows - 1, 1);
     const statusColors = {
       '🟢 Healthy Growth': COLORS.POSITIVE,
       '🔴 Inefficient Growth': { background: '#f5c6cb', fontColor: '#721c24' },
+      '🟠 Declining Efficiency': { background: '#ff9800', fontColor: 'white' },
       '🟡 Moderate Growth': COLORS.WARNING,
-      '🔵 Scaling Down': COLORS.INFO
+      '🟡 Minimal Growth': { background: '#fff8e1', fontColor: '#f57f17' },
+      '🟡 Moderate Decline': { background: '#ffe0b2', fontColor: '#ef6c00' },
+      '🔵 Scaling Down': COLORS.INFO,
+      '⚪ Stable': { background: '#f5f5f5', fontColor: '#616161' }
     };
 
     Object.entries(statusColors).forEach(([status, colors]) => {
