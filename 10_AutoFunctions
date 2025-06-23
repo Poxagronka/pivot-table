@@ -1,6 +1,6 @@
 /**
  * Auto Functions - Centralized Auto Cache and Auto Update System
- * Runs at 2AM for caching and Monday 5AM for updates
+ * Runs at 2AM for caching and Tuesday 5AM for updates
  */
 
 // =============================================================================
@@ -63,11 +63,11 @@ function cacheProjectComments(projectName) {
 }
 
 // =============================================================================
-// AUTO UPDATE SYSTEM - Runs Monday at 5AM
+// AUTO UPDATE SYSTEM - Runs Tuesday at 5AM
 // =============================================================================
 
 /**
- * Main auto update function - updates all projects on Monday 5AM
+ * Main auto update function - updates all projects on Tuesday 5AM
  * Called by time-based trigger
  */
 function autoUpdateAllProjects() {
