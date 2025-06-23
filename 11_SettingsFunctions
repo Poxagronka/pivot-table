@@ -521,7 +521,7 @@ function showAutoUpdateSettings() {
 }
 
 /**
- * Enable auto update with Monday 5AM trigger
+ * Enable auto update with Tuesday 5AM trigger
  */
 function enableAutoUpdate() {
   const ui = SpreadsheetApp.getUi();
@@ -532,10 +532,10 @@ function enableAutoUpdate() {
       .filter(trigger => trigger.getHandlerFunction() === 'autoUpdateAllProjects')
       .forEach(trigger => ScriptApp.deleteTrigger(trigger));
     
-    // Create new trigger for Monday 5AM
+    // Create new trigger for Tuesday 5AM
     ScriptApp.newTrigger('autoUpdateAllProjects')
       .timeBased()
-      .onWeekDay(ScriptApp.WeekDay.MONDAY)
+      .onWeekDay(ScriptApp.WeekDay.TUESDAY)
       .atHour(5)
       .create();
     
@@ -625,7 +625,7 @@ function getCompleteAutomationStatus() {
   // Update status
   statusMessage += '🔄 AUTO UPDATE:\n';
   if (updateEnabled && updateTrigger) {
-    statusMessage += '✅ Enabled - Runs every Monday at 5:00 AM\n';
+    statusMessage += '✅ Enabled - Runs every Tuesday at 5:00 AM\n';
     statusMessage += '• Updates all project data\n';
     statusMessage += '• Includes previous complete week\n';
     statusMessage += '• Preserves all comments\n';
