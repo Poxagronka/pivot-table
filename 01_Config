@@ -29,11 +29,11 @@ var DEFAULT_TARGET_EROAS = {
   REGULAR: 140
 };
 
-// ПОЛНАЯ система порогов для всех сценариев
+// ИСПРАВЛЕННАЯ система порогов - единая структура для всех сценариев
 var DEFAULT_GROWTH_THRESHOLDS_BASE = {
   // 🟢 Позитивные сценарии
   healthyGrowth: { 
-    minSpendChange: 10,    // +10% спенд для здорового роста
+    minSpendChange: 10,    // +10% спенд для здорового роста 
     minProfitChange: 5     // +5% профит для здорового роста
   },
   
@@ -72,13 +72,9 @@ var DEFAULT_GROWTH_THRESHOLDS_BASE = {
     }
   },
   
-  // 🟡 Умеренные сценарии
-  moderateGrowth: {
-    minSpendChange: 3,     // Минимальный рост спенда
-    minProfitChange: 2,    // Минимальный рост профита
-    maxSpendChange: 9,     // Максимум до здорового роста
-    maxProfitChange: 4     // Максимум до здорового роста
-  },
+  // 🟡 Умеренные сценарии - ИСПРАВЛЕНЫ для совместимости
+  moderateGrowthSpend: 3,     // Минимальный рост спенда для умеренного роста
+  moderateGrowthProfit: 2,    // Минимальный рост профита для умеренного роста
   
   minimalGrowth: {
     maxSpendChange: 2,     // Максимальный рост спенда для минимального роста
@@ -87,34 +83,17 @@ var DEFAULT_GROWTH_THRESHOLDS_BASE = {
   
   // Сценарии умеренного спада
   moderateDecline: {
-    // Базовые пороги для определения "умеренного" спада
-    maxSpendDecline: -3,   // До -3% считается умеренным
-    maxProfitDecline: -3,  // До -3% считается умеренным
-    
-    // Пороги для определения типа спада
-    spendOptimization: {
-      // Спенд падает быстрее профита (хорошо)
-      spendRatio: 1.5      // Спенд должен падать в 1.5 раза быстрее
-    },
-    
-    efficiencyDrop: {
-      // Профит падает быстрее спенда (плохо) 
-      profitRatio: 1.5     // Профит падает в 1.5 раза быстрее
-    },
-    
-    proportional: {
-      // Оба падают примерно одинаково
-      maxRatioDiff: 1.3    // Разница не более чем в 1.3 раза
-    }
+    maxSpendDecline: -3,   // До -3% считается умеренным спадом спенда
+    maxProfitDecline: -3,  // До -3% считается умеренным спадом профита
+    spendOptimizationRatio: 1.5,  // Спенд должен падать в 1.5 раза быстрее для оптимизации
+    efficiencyDropRatio: 1.5,     // Профит падает в 1.5 раза быстрее - падение эффективности
+    proportionalRatio: 1.3        // Разница не более чем в 1.3 раза для пропорционального спада
   },
   
   // ⚪ Стабильные сценарии
   stable: {
     maxAbsoluteChange: 2   // Изменения до ±2% считаются стабильностью
-  },
-  
-  // Дополнительные настройки
-  proportionalDeclineRatio: 1.5 // Для определения пропорциональности спада
+  }
 };
 
 var DEFAULT_GROWTH_THRESHOLDS = {
@@ -123,7 +102,7 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
-// UX-friendly threshold descriptions for settings UI - РАСШИРЕННЫЕ
+// UX-friendly threshold descriptions for settings UI - ОБНОВЛЕННЫЕ
 var THRESHOLD_DESCRIPTIONS = {
   healthyGrowth: {
     title: "🟢 Healthy Growth",
@@ -274,7 +253,7 @@ function getThresholdExplanation(thresholdType, projectName) {
 }
 
 /**
- * Get comprehensive status overview for a project - ОБНОВЛЕННЫЙ
+ * Get comprehensive status overview for a project - ИСПРАВЛЕННЫЙ
  */
 function getProjectStatusOverview(projectName) {
   var thresholds = getGrowthThresholds(projectName);
@@ -300,9 +279,9 @@ function getProjectStatusOverview(projectName) {
     '  - Problematic: Profit <' + thresholds.scalingDown.problematic.maxProfitDecline + '%\n\n' +
     
     '🟡 УМЕРЕННЫЕ СЦЕНАРИИ:\n' +
-    '• Moderate Growth: Spend ' + thresholds.moderateGrowth.minSpendChange + '%-' + thresholds.moderateGrowth.maxSpendChange + '%, Profit ' + thresholds.moderateGrowth.minProfitChange + '%-' + thresholds.moderateGrowth.maxProfitChange + '%\n' +
+    '• Moderate Growth: Spend >' + thresholds.moderateGrowthSpend + '%, Profit >' + thresholds.moderateGrowthProfit + '%\n' +
     '• Minimal Growth: Spend ≤' + thresholds.minimalGrowth.maxSpendChange + '%, Profit ≤' + thresholds.minimalGrowth.maxProfitChange + '%\n' +
-    '• Moderate Decline: Различные паттерны умеренного спада\n\n' +
+    '• Moderate Decline: Различные паттерны умеренного спада до ' + thresholds.moderateDecline.maxSpendDecline + '%/' + thresholds.moderateDecline.maxProfitDecline + '%\n\n' +
     
     '⚪ СТАБИЛЬНОСТЬ:\n' +
     '• Stable: Изменения ≤±' + thresholds.stable.maxAbsoluteChange + '%';
@@ -494,7 +473,7 @@ var TABLE_CONFIG = {
     { c: 12, w: 75 }, // eROAS 365d
     { c: 13, w: 75 }, // eProfit 730d
     { c: 14, w: 85 }, // eProfit 730d WoW %
-    { c: 15, w: 220 }, // Growth Status
+    { c: 15, w: 160 }, // Growth Status
     { c: 16, w: 250 }  // Comments - УВЕЛИЧЕНО для text wrap
   ]
 };
