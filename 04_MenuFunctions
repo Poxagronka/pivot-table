@@ -1,14 +1,15 @@
 /**
- * Menu Functions - Smart UX Version with Growth Threshold Settings
+ * Menu Functions - Complete UX with Comprehensive Threshold Management
+ * Fixed for Google Apps Script compatibility
  */
 
-const MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular'];
-const MENU_DAYS = [30, 60, 90];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular'];
+var MENU_DAYS = [30, 60, 90];
 
 function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  const menu = ui.createMenu('📊 Campaign Report');
-  const props = PropertiesService.getScriptProperties();
+  var ui = SpreadsheetApp.getUi();
+  var menu = ui.createMenu('📊 Campaign Report');
+  var props = PropertiesService.getScriptProperties();
   
   // Most used actions at top
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
@@ -28,10 +29,10 @@ function onOpen() {
 
 // Smart Report Wizard - guides user through options
 function smartReportWizard() {
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
   // Step 1: Choose scope
-  const scope = showChoice('📈 Generate Report - Step 1/3', [
+  var scope = showChoice('📈 Generate Report - Step 1/3', [
     'All Projects Together',
     'Single Project',
     'Custom Selection'
@@ -40,7 +41,7 @@ function smartReportWizard() {
   if (!scope) return;
   
   // Step 2: Choose time period
-  const period = showChoice('📅 Select Period - Step 2/3', [
+  var period = showChoice('📅 Select Period - Step 2/3', [
     'Last 30 days',
     'Last 60 days', 
     'Last 90 days',
@@ -52,43 +53,43 @@ function smartReportWizard() {
   
   // Step 3: Execute based on selections
   if (scope === 1) { // All Projects
-    const days = period <= 3 ? MENU_DAYS[period-1] : 
+    var days = period <= 3 ? MENU_DAYS[period-1] : 
                  period === 4 ? promptNumber('Enter days:', [120, 360]) : null;
     
     if (period === 5) { // Date range
-      const dates = promptDateRange();
+      var dates = promptDateRange();
       if (dates) runAllProjectsDateRange(dates.start, dates.end);
     } else if (days) {
       quickGenerateAllForDays(days);
     }
     
   } else if (scope === 2) { // Single Project
-    const project = showChoice('Select Project - Step 3/3', MENU_PROJECTS);
+    var project = showChoice('Select Project - Step 3/3', MENU_PROJECTS);
     if (!project) return;
     
-    const projectName = MENU_PROJECTS[project-1].toUpperCase();
+    var projectName = MENU_PROJECTS[project-1].toUpperCase();
     
     if (period <= 3) {
       generateProjectReport(projectName, MENU_DAYS[period-1]);
     } else if (period === 4) {
-      const days = promptNumber('Enter days:', [120, 360]);
+      var days = promptNumber('Enter days:', [120, 360]);
       if (days) generateProjectReport(projectName, days);
     } else {
-      const dates = promptDateRange();
+      var dates = promptDateRange();
       if (dates) generateProjectReportForDateRange(projectName, dates.start, dates.end);
     }
     
   } else { // Custom Selection
-    const selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
+    var selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
     if (!selected || selected.length === 0) return;
     
-    const days = period <= 3 ? MENU_DAYS[period-1] : 
+    var days = period <= 3 ? MENU_DAYS[period-1] : 
                  period === 4 ? promptNumber('Enter days:', [120, 360]) : null;
     
     if (days) {
       runSelectedProjects(selected, days);
     } else if (period === 5) {
-      const dates = promptDateRange();
+      var dates = promptDateRange();
       if (dates) runSelectedProjectsDateRange(selected, dates.start, dates.end);
     }
   }
@@ -96,11 +97,12 @@ function smartReportWizard() {
 
 // Smart Settings Hub
 function smartSettingsHub() {
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
-  const action = showChoice('⚙️ Settings & Tools', [
+  var action = showChoice('⚙️ Settings & Tools', [
     '🎯 Target eROAS Settings',
     '📊 Growth Status Thresholds',
+    '📋 View Project Overview',
     '💬 Comments Management',
     '🗑️ Clear Data',
     '🔍 API Health Check',
@@ -113,17 +115,18 @@ function smartSettingsHub() {
   switch(action) {
     case 1: targetSettingsWizard(); break;
     case 2: growthThresholdsWizard(); break;
-    case 3: commentsWizard(); break;
-    case 4: clearDataWizard(); break;
-    case 5: apiCheckWizard(); break;
-    case 6: debugWizard(); break;
-    case 7: showAutomationStatus(); break;
+    case 3: projectOverviewWizard(); break;
+    case 4: commentsWizard(); break;
+    case 5: clearDataWizard(); break;
+    case 6: apiCheckWizard(); break;
+    case 7: debugWizard(); break;
+    case 8: showAutomationStatus(); break;
   }
 }
 
 // Target Settings Wizard
 function targetSettingsWizard() {
-  const choice = showChoice('🎯 Target eROAS Settings', [
+  var choice = showChoice('🎯 Target eROAS Settings', [
     'View Current Settings',
     'Update Single Project',
     'Update All Projects',
@@ -132,34 +135,42 @@ function targetSettingsWizard() {
   
   if (!choice) return;
   
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
   if (choice === 1) {
-    ui.alert('Current Target eROAS', 
-      MENU_PROJECTS.map(p => `${p}: ${getTargetEROAS(p.toUpperCase())}%`).join('\n'),
-      ui.ButtonSet.OK);
+    var message = 'Current Target eROAS:\n';
+    for (var i = 0; i < MENU_PROJECTS.length; i++) {
+      var p = MENU_PROJECTS[i];
+      message += p + ': ' + getTargetEROAS(p.toUpperCase()) + '%\n';
+    }
+    ui.alert('Current Target eROAS', message, ui.ButtonSet.OK);
       
   } else if (choice === 2) {
-    const project = showChoice('Select Project:', MENU_PROJECTS);
+    var project = showChoice('Select Project:', MENU_PROJECTS);
     if (project) {
-      const p = MENU_PROJECTS[project-1];
-      const current = getTargetEROAS(p.toUpperCase());
-      const value = promptNumber(`${p} Target eROAS (current: ${current}%):`, [140, 160, 180]);
+      var p = MENU_PROJECTS[project-1];
+      var current = getTargetEROAS(p.toUpperCase());
+      var value = promptNumber(p + ' Target eROAS (current: ' + current + '%):' , [140, 160, 180]);
       if (value && value >= 100 && value <= 500) {
         setTargetEROAS(p.toUpperCase(), value);
-        ui.alert('✅ Updated', `${p} target set to ${value}%`, ui.ButtonSet.OK);
+        ui.alert('✅ Updated', p + ' target set to ' + value + '%', ui.ButtonSet.OK);
       }
     }
     
   } else if (choice === 3) {
-    const values = {};
-    for (const p of MENU_PROJECTS) {
-      const current = getTargetEROAS(p.toUpperCase());
-      const value = promptNumber(`${p} (current: ${current}%):`, [current]);
+    var values = {};
+    for (var i = 0; i < MENU_PROJECTS.length; i++) {
+      var p = MENU_PROJECTS[i];
+      var current = getTargetEROAS(p.toUpperCase());
+      var value = promptNumber(p + ' (current: ' + current + '%):' , [current]);
       if (value && value >= 100 && value <= 500) values[p] = value;
     }
-    if (Object.keys(values).length > 0) {
-      Object.entries(values).forEach(([p, v]) => setTargetEROAS(p.toUpperCase(), v));
+    var keys = Object.keys(values);
+    if (keys.length > 0) {
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        setTargetEROAS(key.toUpperCase(), values[key]);
+      }
       ui.alert('✅ Updated', 'All targets have been saved', ui.ButtonSet.OK);
     }
     
@@ -175,112 +186,253 @@ function targetSettingsWizard() {
   }
 }
 
-// Growth Thresholds Wizard
-function growthThresholdsWizard() {
-  const choice = showChoice('📊 Growth Status Thresholds', [
-    'View Current Settings',
-    'Update Single Project',
-    'Update All Projects',
-    'Reset to Defaults',
-    'View Growth Criteria Explanation'
+// Project Overview Wizard
+function projectOverviewWizard() {
+  var choice = showChoice('📋 Project Overview', [
+    'View All Projects Summary',
+    'View Single Project Details',
+    'Compare Growth Thresholds',
+    'Export Settings'
   ]);
   
   if (!choice) return;
   
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
   if (choice === 1) {
-    viewCurrentThresholds();
-    
+    showAllProjectsOverview();
   } else if (choice === 2) {
-    const project = showChoice('Select Project:', MENU_PROJECTS);
+    var project = showChoice('Select Project:', MENU_PROJECTS);
     if (project) {
-      updateSingleProjectThresholds(MENU_PROJECTS[project-1].toUpperCase());
+      var projectName = MENU_PROJECTS[project-1].toUpperCase();
+      var overview = getProjectStatusOverview(projectName);
+      ui.alert(MENU_PROJECTS[project-1] + ' Overview', overview, ui.ButtonSet.OK);
     }
-    
   } else if (choice === 3) {
-    updateAllProjectsThresholds();
-    
+    showThresholdsComparison();
   } else if (choice === 4) {
-    resetAllThresholdsToDefaults();
-    
-  } else if (choice === 5) {
-    showGrowthCriteriaExplanation();
+    exportAllSettings();
   }
 }
 
-// View current thresholds for all projects
-function viewCurrentThresholds() {
-  const ui = SpreadsheetApp.getUi();
-  let message = '📊 CURRENT GROWTH THRESHOLDS\n\n';
+// Growth Thresholds Wizard with Enhanced UX
+function growthThresholdsWizard() {
+  var choice = showChoice('📊 Growth Status Thresholds', [
+    'Quick View Current Settings',
+    'Update Single Project',
+    'Update All Projects (Same Values)',
+    'Advanced Settings Editor',
+    'Reset to Defaults',
+    'View Growth Criteria Guide',
+    'Test Threshold Scenarios'
+  ]);
   
-  MENU_PROJECTS.forEach(project => {
-    const projectName = project.toUpperCase();
-    const thresholds = getGrowthThresholds(projectName);
+  if (!choice) return;
+  
+  switch(choice) {
+    case 1: viewCurrentThresholds(); break;
+    case 2: updateSingleProjectThresholds(); break;
+    case 3: updateAllProjectsThresholds(); break;
+    case 4: advancedThresholdEditor(); break;
+    case 5: resetAllThresholdsToDefaults(); break;
+    case 6: showGrowthCriteriaGuide(); break;
+    case 7: testThresholdScenarios(); break;
+  }
+}
+
+// Enhanced threshold editing functions
+function updateSingleProjectThresholds() {
+  var ui = SpreadsheetApp.getUi();
+  var project = showChoice('Select Project:', MENU_PROJECTS);
+  if (!project) return;
+  
+  var projectName = MENU_PROJECTS[project-1].toUpperCase();
+  var current = getGrowthThresholds(projectName);
+  
+  // Show current settings with clear explanations
+  var currentInfo = getProjectStatusOverview(projectName);
+  ui.alert('Current Settings', currentInfo, ui.ButtonSet.OK);
+  
+  // Choose threshold category to edit
+  var category = showChoice('Edit ' + MENU_PROJECTS[project-1] + ' Thresholds', [
+    '🟢 Healthy Growth Settings',
+    '🔴 Inefficient Growth Settings', 
+    '🔵 Scaling Down Settings',
+    '🟡 Moderate Growth Settings',
+    '🟠 Declining Efficiency Settings',
+    'Cancel'
+  ]);
+  
+  if (!category || category === 6) return;
+  
+  var newThresholds = JSON.parse(JSON.stringify(current)); // Deep copy
+  
+  switch(category) {
+    case 1: // Healthy Growth
+      editHealthyGrowthThresholds(projectName, newThresholds);
+      break;
+    case 2: // Inefficient Growth
+      editInefficientGrowthThresholds(projectName, newThresholds);
+      break;
+    case 3: // Scaling Down
+      editScalingDownThresholds(projectName, newThresholds);
+      break;
+    case 4: // Moderate Growth
+      editModerateGrowthThresholds(projectName, newThresholds);
+      break;
+    case 5: // Declining Efficiency
+      editDecliningEfficiencyThresholds(projectName, newThresholds);
+      break;
+  }
+  
+  setGrowthThresholds(projectName, newThresholds);
+  ui.alert('✅ Updated', MENU_PROJECTS[project-1] + ' thresholds have been updated!', ui.ButtonSet.OK);
+}
+
+function editHealthyGrowthThresholds(projectName, thresholds) {
+  var ui = SpreadsheetApp.getUi();
+  var current = thresholds.healthyGrowth;
+  
+  ui.alert('🟢 Healthy Growth Settings', 
+    getThresholdExplanation('healthyGrowth', projectName), 
+    ui.ButtonSet.OK);
+  
+  var spendInput = ui.prompt('Healthy Growth - Spend Threshold',
+    'Current: ' + current.minSpendChange + '%\n\nEnter minimum spend increase % for healthy growth:',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (spendInput.getSelectedButton() === ui.Button.OK) {
+    var spendValue = parseInt(spendInput.getResponseText());
+    if (!isNaN(spendValue) && spendValue >= 0 && spendValue <= 100) {
+      thresholds.healthyGrowth.minSpendChange = spendValue;
+      thresholds.inefficientGrowth.minSpendChange = spendValue; // Keep in sync
+    }
+  }
+  
+  var profitInput = ui.prompt('Healthy Growth - Profit Threshold',
+    'Current: ' + current.minProfitChange + '%\n\nEnter minimum profit increase % for healthy growth:',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (profitInput.getSelectedButton() === ui.Button.OK) {
+    var profitValue = parseInt(profitInput.getResponseText());
+    if (!isNaN(profitValue) && profitValue >= -50 && profitValue <= 100) {
+      thresholds.healthyGrowth.minProfitChange = profitValue;
+    }
+  }
+}
+
+function editInefficientGrowthThresholds(projectName, thresholds) {
+  var ui = SpreadsheetApp.getUi();
+  var current = thresholds.inefficientGrowth;
+  
+  ui.alert('🔴 Inefficient Growth Settings', 
+    getThresholdExplanation('inefficientGrowth', projectName), 
+    ui.ButtonSet.OK);
+  
+  var profitInput = ui.prompt('Inefficient Growth - Profit Threshold',
+    'Current: ' + current.maxProfitChange + '%\n\nEnter maximum profit decline % before marking as inefficient:\n(Use negative numbers, e.g., -10 for 10% decline)',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (profitInput.getSelectedButton() === ui.Button.OK) {
+    var profitValue = parseInt(profitInput.getResponseText());
+    if (!isNaN(profitValue) && profitValue <= 0 && profitValue >= -100) {
+      thresholds.inefficientGrowth.maxProfitChange = profitValue;
+    }
+  }
+}
+
+function editScalingDownThresholds(projectName, thresholds) {
+  var ui = SpreadsheetApp.getUi();
+  var current = thresholds.scalingDown;
+  
+  ui.alert('🔵 Scaling Down Settings', 
+    getThresholdExplanation('scalingDown', projectName), 
+    ui.ButtonSet.OK);
+  
+  var spendInput = ui.prompt('Scaling Down - Spend Threshold',
+    'Current: ' + current.maxSpendChange + '%\n\nEnter maximum spend decline % before marking as scaling down:\n(Use negative numbers, e.g., -20 for 20% decline)',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (spendInput.getSelectedButton() === ui.Button.OK) {
+    var spendValue = parseInt(spendInput.getResponseText());
+    if (!isNaN(spendValue) && spendValue <= 0 && spendValue >= -100) {
+      thresholds.scalingDown.maxSpendChange = spendValue;
+    }
+  }
+}
+
+function editModerateGrowthThresholds(projectName, thresholds) {
+  var ui = SpreadsheetApp.getUi();
+  
+  ui.alert('🟡 Moderate Growth Settings', 
+    'These thresholds determine the minimum changes needed for moderate growth status.\nLower than healthy growth but still positive.', 
+    ui.ButtonSet.OK);
+  
+  var spendInput = ui.prompt('Moderate Growth - Spend Threshold',
+    'Current: ' + thresholds.moderateGrowthSpend + '%\n\nEnter minimum spend increase % for moderate growth:',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (spendInput.getSelectedButton() === ui.Button.OK) {
+    var spendValue = parseInt(spendInput.getResponseText());
+    if (!isNaN(spendValue) && spendValue >= 0 && spendValue <= 50) {
+      thresholds.moderateGrowthSpend = spendValue;
+    }
+  }
+  
+  var profitInput = ui.prompt('Moderate Growth - Profit Threshold',
+    'Current: ' + thresholds.moderateGrowthProfit + '%\n\nEnter minimum profit increase % for moderate growth:',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (profitInput.getSelectedButton() === ui.Button.OK) {
+    var profitValue = parseInt(profitInput.getResponseText());
+    if (!isNaN(profitValue) && profitValue >= 0 && profitValue <= 50) {
+      thresholds.moderateGrowthProfit = profitValue;
+    }
+  }
+}
+
+function editDecliningEfficiencyThresholds(projectName, thresholds) {
+  var ui = SpreadsheetApp.getUi();
+  var current = thresholds.decliningEfficiency;
+  
+  ui.alert('🟠 Declining Efficiency Settings', 
+    'These detect when profit drops while spend remains stable or grows.\nKey indicator of performance deterioration.', 
+    ui.ButtonSet.OK);
+  
+  var profitInput = ui.prompt('Declining Efficiency - Profit Threshold',
+    'Current: ' + current.maxProfitDecline + '%\n\nEnter profit decline % that triggers efficiency warning:\n(Use negative numbers, e.g., -8 for 8% decline)',
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (profitInput.getSelectedButton() === ui.Button.OK) {
+    var profitValue = parseInt(profitInput.getResponseText());
+    if (!isNaN(profitValue) && profitValue <= 0 && profitValue >= -50) {
+      thresholds.decliningEfficiency.maxProfitDecline = profitValue;
+    }
+  }
+}
+
+// Utility functions
+function viewCurrentThresholds() {
+  var ui = SpreadsheetApp.getUi();
+  var message = '📊 CURRENT GROWTH THRESHOLDS\n\n';
+  
+  for (var i = 0; i < MENU_PROJECTS.length; i++) {
+    var project = MENU_PROJECTS[i];
+    var projectName = project.toUpperCase();
+    var thresholds = getGrowthThresholds(projectName);
     
-    message += `${project}:\n`;
-    message += `🟢 Healthy Growth: Spend >${thresholds.healthyGrowth.minSpendChange}%, Profit >${thresholds.healthyGrowth.minProfitChange}%\n`;
-    message += `🔴 Inefficient Growth: Spend >${thresholds.inefficientGrowth.minSpendChange}%, Profit <${thresholds.inefficientGrowth.maxProfitChange}%\n`;
-    message += `🔵 Scaling Down: Spend <${thresholds.scalingDown.maxSpendChange}%\n`;
-    message += `🟡 Moderate Growth: Spend >${thresholds.moderateGrowthSpend}%, Profit >${thresholds.moderateGrowthProfit}%\n\n`;
-  });
+    message += project + ':\n';
+    message += '🟢 Healthy: Spend >' + thresholds.healthyGrowth.minSpendChange + '%, Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n';
+    message += '🔴 Inefficient: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '%\n';
+    message += '🔵 Scaling: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n';
+    message += '🟡 Moderate: Spend >' + thresholds.moderateGrowthSpend + '%, Profit >' + thresholds.moderateGrowthProfit + '%\n\n';
+  }
   
   ui.alert('Growth Thresholds', message, ui.ButtonSet.OK);
 }
 
-// Update thresholds for single project
-function updateSingleProjectThresholds(projectName) {
-  const ui = SpreadsheetApp.getUi();
-  const current = getGrowthThresholds(projectName);
-  
-  // Show current values and get new ones
-  let message = `${projectName} Current Thresholds:\n\n`;
-  message += `🟢 Healthy Growth: Spend >${current.healthyGrowth.minSpendChange}%, Profit >${current.healthyGrowth.minProfitChange}%\n`;
-  message += `🔴 Inefficient Growth: Spend >${current.inefficientGrowth.minSpendChange}%, Profit <${current.inefficientGrowth.maxProfitChange}%\n`;
-  message += `🔵 Scaling Down: Spend <${current.scalingDown.maxSpendChange}%\n`;
-  message += `🟡 Moderate Growth: Spend >${current.moderateGrowthSpend}%, Profit >${current.moderateGrowthProfit}%\n\n`;
-  message += 'Would you like to update these values?';
-  
-  if (ui.alert('Current Settings', message, ui.ButtonSet.YES_NO) !== ui.Button.YES) {
-    return;
-  }
-  
-  // Get new values
-  const newThresholds = { ...current };
-  
-  // Healthy Growth thresholds
-  const healthySpend = promptNumber(`Healthy Growth - Min Spend Change % (current: ${current.healthyGrowth.minSpendChange}):`, [10, 15, 20]);
-  if (healthySpend !== null) newThresholds.healthyGrowth.minSpendChange = healthySpend;
-  
-  const healthyProfit = promptNumber(`Healthy Growth - Min Profit Change % (current: ${current.healthyGrowth.minProfitChange}):`, [5, 8, 10]);
-  if (healthyProfit !== null) newThresholds.healthyGrowth.minProfitChange = healthyProfit;
-  
-  // Inefficient Growth thresholds
-  const inefficientSpend = promptNumber(`Inefficient Growth - Min Spend Change % (current: ${current.inefficientGrowth.minSpendChange}):`, [10, 15, 20]);
-  if (inefficientSpend !== null) newThresholds.inefficientGrowth.minSpendChange = inefficientSpend;
-  
-  const inefficientProfit = promptNumber(`Inefficient Growth - Max Profit Change % (current: ${current.inefficientGrowth.maxProfitChange}):`, [-5, -8, -10]);
-  if (inefficientProfit !== null) newThresholds.inefficientGrowth.maxProfitChange = inefficientProfit;
-  
-  // Scaling Down threshold
-  const scalingDown = promptNumber(`Scaling Down - Max Spend Change % (current: ${current.scalingDown.maxSpendChange}):`, [-10, -15, -20]);
-  if (scalingDown !== null) newThresholds.scalingDown.maxSpendChange = scalingDown;
-  
-  // Moderate Growth thresholds
-  const moderateSpend = promptNumber(`Moderate Growth - Min Spend Change % (current: ${current.moderateGrowthSpend}):`, [0, 2, 5]);
-  if (moderateSpend !== null) newThresholds.moderateGrowthSpend = moderateSpend;
-  
-  const moderateProfit = promptNumber(`Moderate Growth - Min Profit Change % (current: ${current.moderateGrowthProfit}):`, [0, 2, 3]);
-  if (moderateProfit !== null) newThresholds.moderateGrowthProfit = moderateProfit;
-  
-  // Save new thresholds
-  setGrowthThresholds(projectName, newThresholds);
-  ui.alert('✅ Updated', `${projectName} growth thresholds have been updated!`, ui.ButtonSet.OK);
-}
-
-// Update thresholds for all projects
 function updateAllProjectsThresholds() {
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
   if (ui.alert('Update All Projects', 
                'This will allow you to set the same thresholds for all projects.\n\nContinue?', 
@@ -289,46 +441,48 @@ function updateAllProjectsThresholds() {
   }
   
   // Get common values
-  const healthySpend = promptNumber('Healthy Growth - Min Spend Change %:', [10, 15, 20]);
+  var healthySpend = promptNumber('Healthy Growth - Min Spend Change %:', [10, 15, 20]);
   if (healthySpend === null) return;
   
-  const healthyProfit = promptNumber('Healthy Growth - Min Profit Change %:', [5, 8, 10]);
+  var healthyProfit = promptNumber('Healthy Growth - Min Profit Change %:', [5, 8, 10]);
   if (healthyProfit === null) return;
   
-  const inefficientSpend = promptNumber('Inefficient Growth - Min Spend Change %:', [10, 15, 20]);
+  var inefficientSpend = promptNumber('Inefficient Growth - Min Spend Change %:', [10, 15, 20]);
   if (inefficientSpend === null) return;
   
-  const inefficientProfit = promptNumber('Inefficient Growth - Max Profit Change %:', [-5, -8, -10]);
+  var inefficientProfit = promptNumber('Inefficient Growth - Max Profit Change %:', [-5, -8, -10]);
   if (inefficientProfit === null) return;
   
-  const scalingDown = promptNumber('Scaling Down - Max Spend Change %:', [-10, -15, -20]);
+  var scalingDown = promptNumber('Scaling Down - Max Spend Change %:', [-10, -15, -20]);
   if (scalingDown === null) return;
   
-  const moderateSpend = promptNumber('Moderate Growth - Min Spend Change %:', [0, 2, 5]);
+  var moderateSpend = promptNumber('Moderate Growth - Min Spend Change %:', [0, 2, 5]);
   if (moderateSpend === null) return;
   
-  const moderateProfit = promptNumber('Moderate Growth - Min Profit Change %:', [0, 2, 3]);
+  var moderateProfit = promptNumber('Moderate Growth - Min Profit Change %:', [0, 2, 3]);
   if (moderateProfit === null) return;
   
   // Apply to all projects
-  const newThresholds = {
+  var newThresholds = {
     healthyGrowth: { minSpendChange: healthySpend, minProfitChange: healthyProfit },
     inefficientGrowth: { minSpendChange: inefficientSpend, maxProfitChange: inefficientProfit },
     scalingDown: { maxSpendChange: scalingDown },
     moderateGrowthSpend: moderateSpend,
-    moderateGrowthProfit: moderateProfit
+    moderateGrowthProfit: moderateProfit,
+    decliningEfficiency: { minSpendStable: -2, maxProfitDecline: -10 },
+    minimalGrowth: { maxSpendChange: 5, maxProfitChange: 3 },
+    proportionalDeclineRatio: 1.5
   };
   
-  MENU_PROJECTS.forEach(project => {
-    setGrowthThresholds(project.toUpperCase(), newThresholds);
-  });
+  for (var i = 0; i < MENU_PROJECTS.length; i++) {
+    setGrowthThresholds(MENU_PROJECTS[i].toUpperCase(), newThresholds);
+  }
   
   ui.alert('✅ Updated', 'All projects have been updated with the new thresholds!', ui.ButtonSet.OK);
 }
 
-// Reset all thresholds to defaults
 function resetAllThresholdsToDefaults() {
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
   if (ui.alert('Reset to Defaults?', 
                'This will reset all growth thresholds to their default values.\n\nContinue?', 
@@ -336,74 +490,252 @@ function resetAllThresholdsToDefaults() {
     return;
   }
   
-  MENU_PROJECTS.forEach(project => {
-    resetGrowthThresholds(project.toUpperCase());
-  });
+  for (var i = 0; i < MENU_PROJECTS.length; i++) {
+    resetGrowthThresholds(MENU_PROJECTS[i].toUpperCase());
+  }
   
   ui.alert('✅ Reset', 'All growth thresholds have been reset to defaults!', ui.ButtonSet.OK);
 }
 
-// Show growth criteria explanation
-function showGrowthCriteriaExplanation() {
-  const ui = SpreadsheetApp.getUi();
+function showAllProjectsOverview() {
+  var ui = SpreadsheetApp.getUi();
+  var message = '📋 ALL PROJECTS OVERVIEW\n\n';
   
-  const choice = showChoice('Select Project for Explanation:', MENU_PROJECTS);
+  for (var i = 0; i < MENU_PROJECTS.length; i++) {
+    var project = MENU_PROJECTS[i];
+    var projectName = project.toUpperCase();
+    var targetROAS = getTargetEROAS(projectName);
+    var thresholds = getGrowthThresholds(projectName);
+    
+    message += project + ': eROAS ' + targetROAS + '%, Healthy ' + thresholds.healthyGrowth.minSpendChange + '%/' + thresholds.healthyGrowth.minProfitChange + '%\n';
+  }
+  
+  message += '\nClick "View Single Project Details" for full settings.';
+  ui.alert('Projects Overview', message, ui.ButtonSet.OK);
+}
+
+function showThresholdsComparison() {
+  var ui = SpreadsheetApp.getUi();
+  var message = '📊 THRESHOLDS COMPARISON\n\n';
+  
+  var categories = ['healthyGrowth', 'inefficientGrowth', 'scalingDown'];
+  
+  for (var c = 0; c < categories.length; c++) {
+    var category = categories[c];
+    var displayName = category.replace(/([A-Z])/g, ' $1').toLowerCase();
+    message += displayName.toUpperCase() + ':\n';
+    
+    for (var i = 0; i < MENU_PROJECTS.length; i++) {
+      var project = MENU_PROJECTS[i];
+      var thresholds = getGrowthThresholds(project.toUpperCase())[category];
+      if (typeof thresholds === 'object') {
+        var values = Object.keys(thresholds).map(function(key) { return thresholds[key]; }).join('%/');
+        message += project + ': ' + values + '%\n';
+      } else {
+        message += project + ': ' + thresholds + '%\n';
+      }
+    }
+    message += '\n';
+  }
+  
+  ui.alert('Thresholds Comparison', message, ui.ButtonSet.OK);
+}
+
+function testThresholdScenarios() {
+  var ui = SpreadsheetApp.getUi();
+  var project = showChoice('Select Project for Testing:', MENU_PROJECTS);
+  if (!project) return;
+  
+  var projectName = MENU_PROJECTS[project-1].toUpperCase();
+  
+  // Test some common scenarios
+  var scenarios = [
+    { spend: 15, profit: 10, desc: "Strong growth" },
+    { spend: 0, profit: -12, desc: "Stable spend, profit drop" },
+    { spend: -8, profit: -5, desc: "Both declining moderately" },
+    { spend: -25, profit: -20, desc: "Major scaling down" }
+  ];
+  
+  var message = '📊 THRESHOLD TEST - ' + MENU_PROJECTS[project-1] + '\n\n';
+  
+  for (var i = 0; i < scenarios.length; i++) {
+    var scenario = scenarios[i];
+    var analysis = analyzeGrowthScenario(scenario.spend, scenario.profit, projectName);
+    message += scenario.desc + ':\nSpend ' + scenario.spend + '%, Profit ' + scenario.profit + '%\n→ ' + analysis.status + '\n\n';
+  }
+  
+  ui.alert('Threshold Testing', message, ui.ButtonSet.OK);
+}
+
+function showGrowthCriteriaGuide() {
+  var ui = SpreadsheetApp.getUi();
+  var project = showChoice('Select Project for Guide:', MENU_PROJECTS);
+  if (!project) return;
+  
+  var projectName = MENU_PROJECTS[project-1].toUpperCase();
+  var explanation = getProjectGrowthStatusExplanation(projectName);
+  
+  ui.alert('Growth Criteria Guide - ' + MENU_PROJECTS[project-1], explanation, ui.ButtonSet.OK);
+}
+
+// Placeholder functions for advanced features
+function advancedThresholdEditor() {
+  var ui = SpreadsheetApp.getUi();
+  ui.alert('Advanced Editor', 'Advanced threshold editor coming soon!\n\nUse "Update Single Project" for detailed threshold editing.', ui.ButtonSet.OK);
+}
+
+function exportAllSettings() {
+  var ui = SpreadsheetApp.getUi();
+  ui.alert('Export Settings', 'Settings export feature coming soon!', ui.ButtonSet.OK);
+}
+
+// Comments Wizard
+function commentsWizard() {
+  var choice = showChoice('💬 Comments Management', [
+    'Save All Comments Now',
+    'Save Single Project',
+    'View Auto-Cache Status',
+    'Configure Auto-Cache'
+  ]);
+  
   if (!choice) return;
   
-  const projectName = MENU_PROJECTS[choice-1].toUpperCase();
-  const explanation = getProjectGrowthStatusExplanation(projectName);
+  switch(choice) {
+    case 1: 
+      saveAllCommentsToCache(); 
+      break;
+    case 2: 
+      var p = showChoice('Select Project:', MENU_PROJECTS);
+      if (p) {
+        var projectName = MENU_PROJECTS[p-1].toUpperCase();
+        setCurrentProject(projectName);
+        saveProjectCommentsManual(projectName);
+        SpreadsheetApp.getUi().alert('✅ Success', MENU_PROJECTS[p-1] + ' comments saved', SpreadsheetApp.getUi().ButtonSet.OK);
+      }
+      break;
+    case 3: 
+      showAutomationStatus(); 
+      break;
+    case 4: 
+      showAutoCacheSettings(); 
+      break;
+  }
+}
+
+// Clear Data Wizard
+function clearDataWizard() {
+  var choice = showChoice('🗑️ Clear Data', [
+    'Clear All Projects',
+    'Clear Single Project', 
+    'View What Will Be Cleared'
+  ]);
   
-  ui.alert(`Growth Criteria - ${MENU_PROJECTS[choice-1]}`, explanation, ui.ButtonSet.OK);
+  if (!choice) return;
+  
+  if (choice === 1) {
+    clearAllProjectsData();
+  } else if (choice === 2) {
+    var p = showChoice('Select Project:', MENU_PROJECTS);
+    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
+  } else {
+    SpreadsheetApp.getUi().alert('Info', 
+      'Clear Data will:\n\n' +
+      '✓ Remove all report data\n' +
+      '✓ Preserve saved comments\n' +
+      '✓ Keep your settings\n\n' +
+      'Comments can be restored after clearing.',
+      SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+// API Check Wizard
+function apiCheckWizard() {
+  var choice = showChoice('🔍 API Health Check', [
+    'Quick Check All Projects',
+    'Check Single Project',
+    'Test with Custom Date Range'
+  ]);
+  
+  if (!choice) return;
+  
+  if (choice === 1) {
+    checkAllProjectsAPI();
+  } else if (choice === 2) {
+    var p = showChoice('Select Project:', MENU_PROJECTS);
+    if (p) checkProjectAPI(MENU_PROJECTS[p-1].toUpperCase());
+  } else {
+    var dates = promptDateRange();
+    if (dates) testAPIWithDateRange(dates.start, dates.end);
+  }
+}
+
+// Debug Wizard
+function debugWizard() {
+  var p = showChoice('🐛 Debug Tools', MENU_PROJECTS);
+  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
 }
 
 // Helper UI Functions
 function showChoice(title, options) {
-  const ui = SpreadsheetApp.getUi();
-  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
-  const result = ui.prompt(title, `${numbered}\n\nEnter number:`, ui.ButtonSet.OK_CANCEL);
+  var ui = SpreadsheetApp.getUi();
+  var numbered = '';
+  for (var i = 0; i < options.length; i++) {
+    numbered += (i + 1) + ' - ' + options[i] + '\n';
+  }
+  var result = ui.prompt(title, numbered + '\nEnter number:', ui.ButtonSet.OK_CANCEL);
   
   if (result.getSelectedButton() !== ui.Button.OK) return null;
   
-  const choice = parseInt(result.getResponseText());
+  var choice = parseInt(result.getResponseText());
   return (choice >= 1 && choice <= options.length) ? choice : null;
 }
 
 function showMultiChoice(title, options) {
-  const ui = SpreadsheetApp.getUi();
-  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
-  const result = ui.prompt(title, 
-    `${numbered}\n\nEnter numbers separated by commas (e.g., 1,3):`, 
+  var ui = SpreadsheetApp.getUi();
+  var numbered = '';
+  for (var i = 0; i < options.length; i++) {
+    numbered += (i + 1) + ' - ' + options[i] + '\n';
+  }
+  var result = ui.prompt(title, 
+    numbered + '\nEnter numbers separated by commas (e.g., 1,3):', 
     ui.ButtonSet.OK_CANCEL);
   
   if (result.getSelectedButton() !== ui.Button.OK) return null;
   
-  return result.getResponseText()
-    .split(',')
-    .map(n => parseInt(n.trim()))
-    .filter(n => n >= 1 && n <= options.length)
-    .map(n => options[n-1]);
+  var selections = result.getResponseText().split(',');
+  var validSelections = [];
+  
+  for (var i = 0; i < selections.length; i++) {
+    var n = parseInt(selections[i].trim());
+    if (n >= 1 && n <= options.length) {
+      validSelections.push(options[n-1]);
+    }
+  }
+  
+  return validSelections;
 }
 
-function promptNumber(prompt, suggestions = []) {
-  const ui = SpreadsheetApp.getUi();
-  const hint = suggestions.length > 0 ? ` (e.g., ${suggestions.join(', ')})` : '';
-  const result = ui.prompt('Input Required', prompt + hint, ui.ButtonSet.OK_CANCEL);
+function promptNumber(prompt, suggestions) {
+  suggestions = suggestions || [];
+  var ui = SpreadsheetApp.getUi();
+  var hint = suggestions.length > 0 ? ' (e.g., ' + suggestions.join(', ') + ')' : '';
+  var result = ui.prompt('Input Required', prompt + hint, ui.ButtonSet.OK_CANCEL);
   
   if (result.getSelectedButton() !== ui.Button.OK) return null;
   
-  const num = parseInt(result.getResponseText());
+  var num = parseInt(result.getResponseText());
   return isNaN(num) ? null : num;
 }
 
 function promptDateRange() {
-  const ui = SpreadsheetApp.getUi();
+  var ui = SpreadsheetApp.getUi();
   
-  const start = ui.prompt('Start Date', 
+  var start = ui.prompt('Start Date', 
     'Enter date (YYYY-MM-DD):\n\nExample: 2024-01-01', 
     ui.ButtonSet.OK_CANCEL);
   if (start.getSelectedButton() !== ui.Button.OK) return null;
   
-  const end = ui.prompt('End Date', 
+  var end = ui.prompt('End Date', 
     'Enter date (YYYY-MM-DD):\n\nExample: 2024-12-31', 
     ui.ButtonSet.OK_CANCEL);
   if (end.getSelectedButton() !== ui.Button.OK) return null;
@@ -418,126 +750,61 @@ function promptDateRange() {
 
 // Quick Actions
 function quickGenerateAllForDays(days) {
-  const ui = SpreadsheetApp.getUi();
-  const progress = new ProgressManager(`All Reports - ${days} days`).start('Starting...');
-  let success = 0;
+  var ui = SpreadsheetApp.getUi();
+  var progress = new ProgressManager('All Reports - ' + days + ' days').start('Starting...');
+  var success = 0;
   
   try {
-    MENU_PROJECTS.forEach((p, i) => {
-      progress.update(`${p}...`, `${i + 1}/${MENU_PROJECTS.length}`);
+    for (var i = 0; i < MENU_PROJECTS.length; i++) {
+      var p = MENU_PROJECTS[i];
+      progress.update(p + '...', (i + 1) + '/' + MENU_PROJECTS.length);
       try { 
         generateProjectReport(p.toUpperCase(), days); 
         success++; 
       } catch(e) { 
         console.error(e); 
       }
-    });
+    }
     progress.end();
-    ui.alert('✅ Complete', `Generated ${success}/${MENU_PROJECTS.length} reports`, ui.ButtonSet.OK);
+    ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports', ui.ButtonSet.OK);
   } catch(e) {
     progress.end(false);
     ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
   }
 }
 
-// Wizard functions
-function commentsWizard() {
-  const choice = showChoice('💬 Comments Management', [
-    'Save All Comments Now',
-    'Save Single Project',
-    'View Auto-Cache Status',
-    'Configure Auto-Cache'
-  ]);
-  
-  if (!choice) return;
-  
-  switch(choice) {
-    case 1: saveAllCommentsToCache(); break;
-    case 2: 
-      const p = showChoice('Select Project:', MENU_PROJECTS);
-      if (p) this[`save${MENU_PROJECTS[p-1]}CommentsToCache`]();
-      break;
-    case 3: showAutomationStatus(); break;
-    case 4: showAutoCacheSettings(); break;
-  }
-}
-
-function clearDataWizard() {
-  const choice = showChoice('🗑️ Clear Data', [
-    'Clear All Projects',
-    'Clear Single Project', 
-    'View What Will Be Cleared'
-  ]);
-  
-  if (!choice) return;
-  
-  if (choice === 1) {
-    clearAllProjectsData();
-  } else if (choice === 2) {
-    const p = showChoice('Select Project:', MENU_PROJECTS);
-    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
-  } else {
-    SpreadsheetApp.getUi().alert('Info', 
-      'Clear Data will:\n\n' +
-      '✓ Remove all report data\n' +
-      '✓ Preserve saved comments\n' +
-      '✓ Keep your settings\n\n' +
-      'Comments can be restored after clearing.',
-      SpreadsheetApp.getUi().ButtonSet.OK);
-  }
-}
-
-function apiCheckWizard() {
-  const choice = showChoice('🔍 API Health Check', [
-    'Quick Check All Projects',
-    'Check Single Project',
-    'Test with Custom Date Range'
-  ]);
-  
-  if (!choice) return;
-  
-  if (choice === 1) {
-    checkAllProjectsAPI();
-  } else if (choice === 2) {
-    const p = showChoice('Select Project:', MENU_PROJECTS);
-    if (p) checkProjectAPI(MENU_PROJECTS[p-1].toUpperCase());
-  } else {
-    const dates = promptDateRange();
-    if (dates) testAPIWithDateRange(dates.start, dates.end);
-  }
-}
-
-function debugWizard() {
-  const p = showChoice('🐛 Debug Tools', MENU_PROJECTS);
-  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
-}
-
 // Run functions
 function runSelectedProjects(projects, days) {
-  projects.forEach(p => generateProjectReport(p.toUpperCase(), days));
-  SpreadsheetApp.getUi().alert('✅ Complete', `Generated ${projects.length} reports`, SpreadsheetApp.getUi().ButtonSet.OK);
+  for (var i = 0; i < projects.length; i++) {
+    generateProjectReport(projects[i].toUpperCase(), days);
+  }
+  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function runAllProjectsDateRange(start, end) {
-  MENU_PROJECTS.forEach(p => generateProjectReportForDateRange(p.toUpperCase(), start, end));
+  for (var i = 0; i < MENU_PROJECTS.length; i++) {
+    generateProjectReportForDateRange(MENU_PROJECTS[i].toUpperCase(), start, end);
+  }
   SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function runSelectedProjectsDateRange(projects, start, end) {
-  projects.forEach(p => generateProjectReportForDateRange(p.toUpperCase(), start, end));
-  SpreadsheetApp.getUi().alert('✅ Complete', `Generated ${projects.length} reports`, SpreadsheetApp.getUi().ButtonSet.OK);
+  for (var i = 0; i < projects.length; i++) {
+    generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
+  }
+  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // Toggle functions
 function toggleAutoCache() {
-  const props = PropertiesService.getScriptProperties();
-  const isOn = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
+  var props = PropertiesService.getScriptProperties();
+  var isOn = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
   isOn ? disableAutoCache() : enableAutoCache();
 }
 
 function toggleAutoUpdate() {
-  const props = PropertiesService.getScriptProperties();
-  const isOn = props.getProperty('AUTO_UPDATE_ENABLED') === 'true';
+  var props = PropertiesService.getScriptProperties();
+  var isOn = props.getProperty('AUTO_UPDATE_ENABLED') === 'true';
   isOn ? disableAutoUpdate() : enableAutoUpdate();
 }
 
@@ -557,27 +824,23 @@ function debugProjectReportGeneration(projectName) {
   debugReportGeneration();
 }
 
-// Dynamic compatibility functions
-MENU_PROJECTS.forEach(p => {
-  MENU_DAYS.forEach(d => {
-    this[`generate${p}Report${d}`] = () => generateProjectReport(p.toUpperCase(), d);
-  });
-  this[`save${p}CommentsToCache`] = () => {
-    setCurrentProject(p.toUpperCase());
-    saveProjectCommentsManual(p.toUpperCase());
-    SpreadsheetApp.getUi().alert('✅ Success', `${p} comments saved`, SpreadsheetApp.getUi().ButtonSet.OK);
-  };
-  this[`show${p}DaysDialog`] = () => smartReportWizard();
-  this[`show${p}DateRangeDialog`] = () => smartReportWizard();
-  this[`debug${p}ReportGeneration`] = () => debugProjectReportGeneration(p.toUpperCase());
-  this[`show${p}TargetSettings`] = () => targetSettingsWizard();
-});
+// Helper function to check date validity
+function isValidDate(dateString) {
+  var regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
+  
+  var date = new Date(dateString);
+  return date instanceof Date && !isNaN(date);
+}
 
-// Legacy support
+// Legacy support functions
 function generateReport30() { generateProjectReport('TRICKY', 30); }
 function generateReport60() { generateProjectReport('TRICKY', 60); }
 function generateReport90() { generateProjectReport('TRICKY', 90); }
-function saveCommentsToCache() { saveTrickyCommentsToCache(); }
+function saveCommentsToCache() { 
+  setCurrentProject('TRICKY');
+  saveProjectCommentsManual('TRICKY');
+}
 function showDaysDialog() { smartReportWizard(); }
 function showDateRangeDialog() { smartReportWizard(); }
 function clearAllData() { clearProjectAllData('TRICKY'); }
