@@ -1,7 +1,7 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
  * Multi-project support: Tricky, Moloco, and Regular
- * Complete threshold system with UX-friendly descriptions
+ * Complete threshold system with UX-friendly descriptions and ALL scenarios
  */
 
 // Main spreadsheet ID (same for all projects)
@@ -29,20 +29,92 @@ var DEFAULT_TARGET_EROAS = {
   REGULAR: 140
 };
 
-// Comprehensive threshold system with UX descriptions
-// Same defaults for all projects to ensure consistency
+// ПОЛНАЯ система порогов для всех сценариев
 var DEFAULT_GROWTH_THRESHOLDS_BASE = {
-  // Core thresholds
-  healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-  inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 },
-  scalingDown: { maxSpendChange: -15 },
-  moderateGrowthSpend: 3,
-  moderateGrowthProfit: 2,
+  // 🟢 Позитивные сценарии
+  healthyGrowth: { 
+    minSpendChange: 10,    // +10% спенд для здорового роста
+    minProfitChange: 5     // +5% профит для здорового роста
+  },
   
-  // Advanced thresholds for granular control
-  decliningEfficiency: { minSpendStable: -2, maxProfitDecline: -10 },
-  minimalGrowth: { maxSpendChange: 5, maxProfitChange: 3 },
-  proportionalDeclineRatio: 1.5 // For determining decline type
+  efficiencyImprovement: {
+    maxSpendDecline: -5,   // Спенд может падать до -5% для улучшения эффективности
+    minProfitGrowth: 8     // Профит должен расти минимум на +8%
+  },
+  
+  // 🔴 Критические сценарии  
+  inefficientGrowth: { 
+    minSpendChange: 0,     // Любой рост/стабильность спенда при падении профита
+    maxProfitChange: -8    // Критическое падение профита -8%
+  },
+  
+  // 🟠 Предупреждающие сценарии
+  decliningEfficiency: { 
+    minSpendStable: -2,    // Спенд стабилен (от -2% до +2%)
+    maxSpendGrowth: 10,    // Максимальный рост спенда для этого сценария
+    maxProfitDecline: -4,  // Падение профита от -4% до -7%
+    minProfitDecline: -7   // Минимум для этого сценария
+  },
+  
+  // 🔵 Сценарии сокращения (Scaling Down)
+  scalingDown: { 
+    maxSpendChange: -15,   // Большое сокращение спенда
+    // Подкатегории:
+    efficient: {           // Эффективное сокращение
+      minProfitChange: 0   // Профит стабилен или растет
+    },
+    moderate: {            // Умеренное сокращение  
+      maxProfitDecline: -10, // Профит падает умеренно
+      minProfitDecline: -1   // Минимальное падение
+    },
+    problematic: {         // Проблематичное сокращение
+      maxProfitDecline: -15  // Профит падает сильно
+    }
+  },
+  
+  // 🟡 Умеренные сценарии
+  moderateGrowth: {
+    minSpendChange: 3,     // Минимальный рост спенда
+    minProfitChange: 2,    // Минимальный рост профита
+    maxSpendChange: 9,     // Максимум до здорового роста
+    maxProfitChange: 4     // Максимум до здорового роста
+  },
+  
+  minimalGrowth: {
+    maxSpendChange: 2,     // Максимальный рост спенда для минимального роста
+    maxProfitChange: 1     // Максимальный рост профита
+  },
+  
+  // Сценарии умеренного спада
+  moderateDecline: {
+    // Базовые пороги для определения "умеренного" спада
+    maxSpendDecline: -3,   // До -3% считается умеренным
+    maxProfitDecline: -3,  // До -3% считается умеренным
+    
+    // Пороги для определения типа спада
+    spendOptimization: {
+      // Спенд падает быстрее профита (хорошо)
+      spendRatio: 1.5      // Спенд должен падать в 1.5 раза быстрее
+    },
+    
+    efficiencyDrop: {
+      // Профит падает быстрее спенда (плохо) 
+      profitRatio: 1.5     // Профит падает в 1.5 раза быстрее
+    },
+    
+    proportional: {
+      // Оба падают примерно одинаково
+      maxRatioDiff: 1.3    // Разница не более чем в 1.3 раза
+    }
+  },
+  
+  // ⚪ Стабильные сценарии
+  stable: {
+    maxAbsoluteChange: 2   // Изменения до ±2% считаются стабильностью
+  },
+  
+  // Дополнительные настройки
+  proportionalDeclineRatio: 1.5 // Для определения пропорциональности спада
 };
 
 var DEFAULT_GROWTH_THRESHOLDS = {
@@ -51,51 +123,73 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
-// UX-friendly threshold descriptions for settings UI
+// UX-friendly threshold descriptions for settings UI - РАСШИРЕННЫЕ
 var THRESHOLD_DESCRIPTIONS = {
   healthyGrowth: {
     title: "🟢 Healthy Growth",
-    description: "Strong positive performance requiring both metrics to grow significantly",
+    description: "Классический здоровый рост - оба показателя растут значительно",
     fields: {
-      minSpendChange: "Minimum spend increase % needed",
-      minProfitChange: "Minimum profit increase % needed"
+      minSpendChange: "Минимальный рост спенда %",
+      minProfitChange: "Минимальный рост профита %"
     },
     example: "Spend +15%, Profit +10% → 🟢 Healthy Growth"
   },
+  
+  efficiencyImprovement: {
+    title: "🟢 Efficiency Improvement", 
+    description: "Улучшение эффективности - спенд падает/стабилен, профит растет",
+    fields: {
+      maxSpendDecline: "Максимальное падение спенда % (можно до этого значения)",
+      minProfitGrowth: "Минимальный рост профита % для значительного улучшения"
+    },
+    example: "Spend -10%, Profit +15% → 🟢 Efficiency Improvement"
+  },
+  
   inefficientGrowth: {
     title: "🔴 Inefficient Growth", 
-    description: "Critical scenarios where profit declines significantly",
+    description: "Критические сценарии - профит падает значительно при росте/стабильности спенда",
     fields: {
-      minSpendChange: "Spend increase % that triggers concern when profit drops",
-      maxProfitChange: "Maximum profit decline % before marking as inefficient"
+      minSpendChange: "Минимальный рост спенда % для срабатывания при падении профита",
+      maxProfitChange: "Критическое падение профита %"
     },
     example: "Spend +15%, Profit -12% → 🔴 Inefficient Growth"
   },
-  scalingDown: {
-    title: "🔵 Scaling Down",
-    description: "Significant spend reduction scenarios",
-    fields: {
-      maxSpendChange: "Maximum spend decline % before marking as scaling down"
-    },
-    example: "Spend -25%, Profit -8% → 🔵 Scaling Down"
-  },
-  moderateGrowth: {
-    title: "🟡 Moderate Growth",
-    description: "Positive but modest improvements",
-    fields: {
-      spend: "Minimum spend increase % for moderate growth",
-      profit: "Minimum profit increase % for moderate growth"
-    },
-    example: "Spend +5%, Profit +3% → 🟡 Moderate Growth"
-  },
+  
   decliningEfficiency: {
     title: "🟠 Declining Efficiency",
-    description: "Performance deterioration with stable/growing spend",
+    description: "Предупреждение - эффективность снижается при росте/стабильности спенда",
     fields: {
-      minSpendStable: "Minimum spend change to consider 'stable'",
-      maxProfitDecline: "Profit decline % that triggers efficiency warning"
+      minSpendStable: "Минимальное изменение спенда для 'стабильности'",
+      maxSpendGrowth: "Максимальный рост спенда для этого сценария",
+      maxProfitDecline: "Начало падения профита для предупреждения",
+      minProfitDecline: "Конец диапазона (дальше уже критично)"
     },
-    example: "Spend 0%, Profit -8% → 🟠 Declining Efficiency"
+    example: "Spend +8%, Profit -5% → 🟠 Declining Efficiency"
+  },
+  
+  scalingDown: {
+    title: "🔵 Scaling Down",
+    description: "Сценарии значительного сокращения спенда",
+    fields: {
+      maxSpendChange: "Критическое сокращение спенда %"
+    },
+    subcategories: {
+      efficient: "Профит стабилен/растет при сокращении спенда",
+      moderate: "Профит падает умеренно при сокращении спенда", 
+      problematic: "Профит падает сильно при сокращении спенда"
+    },
+    example: "Spend -25%, Profit +2% → 🔵 Scaling Down - Efficient"
+  },
+  
+  moderateScenarios: {
+    title: "🟡 Moderate Scenarios",
+    description: "Умеренные изменения - есть движение, но не критичное",
+    types: {
+      moderateGrowth: "Оба показателя растут, но не достигают порогов здорового роста",
+      minimalGrowth: "Минимальные положительные изменения",
+      moderateDecline: "Умеренные негативные изменения с разными паттернами"
+    },
+    example: "Spend +8%, Profit +4% → 🟡 Moderate Growth"
   }
 };
 
@@ -180,7 +274,7 @@ function getThresholdExplanation(thresholdType, projectName) {
 }
 
 /**
- * Get comprehensive status overview for a project
+ * Get comprehensive status overview for a project - ОБНОВЛЕННЫЙ
  */
 function getProjectStatusOverview(projectName) {
   var thresholds = getGrowthThresholds(projectName);
@@ -188,14 +282,30 @@ function getProjectStatusOverview(projectName) {
   
   return '📊 ' + projectName + ' STATUS OVERVIEW\n\n' +
     '🎯 Target eROAS: ' + targetROAS + '%\n\n' +
-    '🟢 Healthy Growth: Spend >' + thresholds.healthyGrowth.minSpendChange + '% AND Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n' +
-    '🔴 Inefficient Growth: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '% (critical)\n' +
-    '🟠 Declining Efficiency: Stable spend but profit <' + thresholds.decliningEfficiency.maxProfitDecline + '%\n' +
-    '🔵 Scaling Down: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n' +
-    '🟡 Moderate Growth: Spend >' + thresholds.moderateGrowthSpend + '% AND Profit >' + thresholds.moderateGrowthProfit + '%\n\n' +
-    'Advanced Settings:\n' +
-    '• Minimal growth thresholds: ' + thresholds.minimalGrowth.maxSpendChange + '%/' + thresholds.minimalGrowth.maxProfitChange + '%\n' +
-    '• Proportional decline ratio: ' + thresholds.proportionalDeclineRatio + 'x';
+    
+    '🟢 ПОЗИТИВНЫЕ СЦЕНАРИИ:\n' +
+    '• Healthy Growth: Spend >' + thresholds.healthyGrowth.minSpendChange + '% AND Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n' +
+    '• Efficiency Improvement: Spend <' + thresholds.efficiencyImprovement.maxSpendDecline + '% AND Profit >' + thresholds.efficiencyImprovement.minProfitGrowth + '%\n\n' +
+    
+    '🔴 КРИТИЧЕСКИЕ СЦЕНАРИИ:\n' +
+    '• Inefficient Growth: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '% (при любом росте спенда)\n\n' +
+    
+    '🟠 ПРЕДУПРЕЖДЕНИЯ:\n' +
+    '• Declining Efficiency: Spend стабилен/растет, Profit от ' + thresholds.decliningEfficiency.maxProfitDecline + '% до ' + thresholds.decliningEfficiency.minProfitDecline + '%\n\n' +
+    
+    '🔵 СОКРАЩЕНИЕ:\n' +
+    '• Scaling Down: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n' +
+    '  - Efficient: Profit ≥0%\n' +
+    '  - Moderate: Profit от ' + thresholds.scalingDown.moderate.minProfitDecline + '% до ' + thresholds.scalingDown.moderate.maxProfitDecline + '%\n' +
+    '  - Problematic: Profit <' + thresholds.scalingDown.problematic.maxProfitDecline + '%\n\n' +
+    
+    '🟡 УМЕРЕННЫЕ СЦЕНАРИИ:\n' +
+    '• Moderate Growth: Spend ' + thresholds.moderateGrowth.minSpendChange + '%-' + thresholds.moderateGrowth.maxSpendChange + '%, Profit ' + thresholds.moderateGrowth.minProfitChange + '%-' + thresholds.moderateGrowth.maxProfitChange + '%\n' +
+    '• Minimal Growth: Spend ≤' + thresholds.minimalGrowth.maxSpendChange + '%, Profit ≤' + thresholds.minimalGrowth.maxProfitChange + '%\n' +
+    '• Moderate Decline: Различные паттерны умеренного спада\n\n' +
+    
+    '⚪ СТАБИЛЬНОСТЬ:\n' +
+    '• Stable: Изменения ≤±' + thresholds.stable.maxAbsoluteChange + '%';
 }
 
 // Project configurations with dynamic getters
