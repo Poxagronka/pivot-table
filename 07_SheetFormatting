@@ -1,6 +1,7 @@
 /**
  * Sheet Formatting and Table Creation - Multi Project Support
  * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
+ * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId
  */
 
 /**
@@ -318,20 +319,20 @@ function calculateWeekTotals(campaigns) {
 }
 
 /**
- * Add campaign rows to table data - ИСПРАВЛЕНО
+ * Add campaign rows to table data - ИСПРАВЛЕНО: Теперь использует campaignId для WoW метрик
  */
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
   // Sort campaigns by spend (highest first)
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
     const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
     
-    // ИСПРАВЛЕНО: Получаем WoW данные для кампании
-    const key = `${campaign.sourceApp}_${weekKey}`;
-    const sourceWoW = wow.sourceAppWoW[key] || {};
+    // ИСПРАВЛЕНО: Получаем WoW данные для кампании по campaignId
+    const key = `${campaign.campaignId}_${weekKey}`;
+    const campaignWoW = wow.campaignWoW[key] || {};
     
-    const spendPct = sourceWoW.spendChangePercent !== undefined ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = sourceWoW.eProfitChangePercent !== undefined ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const growthStatus = sourceWoW.growthStatus || '';
+    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
+    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const growthStatus = campaignWoW.growthStatus || '';
     
     // Добавляем в formatData информацию о кампании
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
