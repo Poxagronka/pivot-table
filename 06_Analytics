@@ -1,21 +1,21 @@
 /**
  * Analytics Functions - Multi Project Support
  * Contains all analytical calculations and metrics
- * ВОССТАНОВЛЕННАЯ РАБОЧАЯ ВЕРСИЯ с поддержкой новых настроек
+ * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId вместо sourceApp
  */
 
 /**
- * Calculate Week-over-Week metrics per app and per sourceApp
- * ОРИГИНАЛЬНАЯ РАБОЧАЯ ЛОГИКА - НЕ ТРОГАТЬ!
+ * Calculate Week-over-Week metrics per campaign and per app
+ * ИСПРАВЛЕННАЯ ЛОГИКА: Теперь отслеживает каждую кампанию по campaignId
  */
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
     console.error('Invalid appData provided to calculateWoWMetrics');
-    return { sourceAppWoW: {}, appWeekWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {} };
   }
 
   try {
-    const sourceAppData = {};
+    const campaignData = {};
     const appWeekData = {};
 
     // Aggregate raw data
@@ -26,54 +26,54 @@ function calculateWoWMetrics(appData) {
         const profit = week.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
         appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
 
+        // ИСПРАВЛЕНО: Группируем по campaignId вместо sourceApp
         week.campaigns.forEach(c => {
-          if (c.sourceApp) {
-            const key = `${c.sourceApp}_${week.weekStart}`;
-            if (!sourceAppData[key]) {
-              sourceAppData[key] = { 
-                sourceApp: c.sourceApp, 
-                weekStart: week.weekStart, 
-                spend: 0, 
-                eRoasForecast: 0, 
-                eProfitForecast: 0, 
-                count: 0 
-              };
-            }
-            sourceAppData[key].spend += c.spend;
-            sourceAppData[key].eRoasForecast += c.eRoasForecast;
-            sourceAppData[key].eProfitForecast += c.eProfitForecast;
-            sourceAppData[key].count += 1;
+          if (c.campaignId) {
+            const key = `${c.campaignId}_${week.weekStart}`;
+            campaignData[key] = {
+              campaignId: c.campaignId,
+              campaignName: c.campaignName,
+              sourceApp: c.sourceApp,
+              weekStart: week.weekStart,
+              spend: c.spend,
+              eRoasForecast: c.eRoasForecast,
+              eProfitForecast: c.eProfitForecast,
+              installs: c.installs,
+              cpi: c.cpi,
+              roas: c.roas,
+              ipm: c.ipm,
+              eArpuForecast: c.eArpuForecast
+            };
           }
         });
       });
     });
 
-    // Compute sourceApp WoW
-    const sourceApps = {};
-    Object.values(sourceAppData).forEach(d => {
-      if (d.count) d.eRoasForecast /= d.count;
-      if (!sourceApps[d.sourceApp]) sourceApps[d.sourceApp] = [];
-      sourceApps[d.sourceApp].push(d);
+    // Compute campaign WoW - ИСПРАВЛЕНО: Теперь по campaignId
+    const campaigns = {};
+    Object.values(campaignData).forEach(d => {
+      if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
+      campaigns[d.campaignId].push(d);
     });
 
-    const sourceAppWoW = {};
-    Object.keys(sourceApps).forEach(sourceAppName => {
-      sourceApps[sourceAppName].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-      sourceApps[sourceAppName].forEach((curr, i) => {
-        const key = `${sourceAppName}_${curr.weekStart}`;
-        sourceAppWoW[key] = { 
+    const campaignWoW = {};
+    Object.keys(campaigns).forEach(campaignId => {
+      campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+      campaigns[campaignId].forEach((curr, i) => {
+        const key = `${campaignId}_${curr.weekStart}`;
+        campaignWoW[key] = { 
           spendChangePercent: 0, 
           eProfitChangePercent: 0, 
           growthStatus: 'First Week' 
         };
         
         if (i > 0) {
-          const prev = sourceApps[sourceAppName][i - 1];
+          const prev = campaigns[campaignId][i - 1];
           const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
           const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
           
           const status = calculateGrowthStatus(prev, curr, spendPct, profitPct);
-          sourceAppWoW[key] = { 
+          campaignWoW[key] = { 
             spendChangePercent: spendPct, 
             eProfitChangePercent: profitPct, 
             growthStatus: status 
@@ -82,7 +82,7 @@ function calculateWoWMetrics(appData) {
       });
     });
 
-    // Compute app-level WoW
+    // Compute app-level WoW (остается без изменений)
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
       const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
@@ -109,10 +109,11 @@ function calculateWoWMetrics(appData) {
       });
     });
 
-    return { sourceAppWoW, appWeekWoW };
+    // ИСПРАВЛЕНО: Возвращаем campaignWoW вместо sourceAppWoW
+    return { campaignWoW, appWeekWoW };
   } catch (error) {
     console.error('Error calculating WoW metrics:', error);
-    return { sourceAppWoW: {}, appWeekWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {} };
   }
 }
 
