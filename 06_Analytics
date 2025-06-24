@@ -2,6 +2,7 @@
  * Analytics Functions - Multi Project Support
  * Contains all analytical calculations and metrics
  * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId вместо sourceApp
+ * ИСПРАВЛЕНО: Принудительное использование новых порогов с эмодзи
  */
 
 /**
@@ -119,152 +120,185 @@ function calculateWoWMetrics(appData) {
 
 /**
  * Calculate growth status based on spend and profit changes
- * УЛУЧШЕННАЯ ВЕРСИЯ: использует новые настройки с fallback на рабочие значения
+ * ИСПРАВЛЕНО: Принудительное использование новых порогов с эмодзи
  */
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
   const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
   
-  // Получаем пороги с fallback на проверенные значения
-  let thresholds;
-  try {
-    thresholds = getGrowthThresholds(CURRENT_PROJECT);
-    // Проверяем что основные поля есть
-    if (!thresholds.healthyGrowth || !thresholds.inefficientGrowth || !thresholds.scalingDown) {
-      throw new Error('Incomplete thresholds');
-    }
-  } catch (e) {
-    // Fallback на рабочие hardcoded значения
-    console.log('Using fallback thresholds for', CURRENT_PROJECT);
-    thresholds = {
-      healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-      inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
-      scalingDown: { maxSpendChange: -15 },
-      moderateGrowthSpend: 3,
-      moderateGrowthProfit: 2,
-      // Добавляем недостающие поля
-      efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
-      decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
-      moderateDecline: { maxSpendDecline: -3, maxProfitDecline: -3 },
-      stable: { maxAbsoluteChange: 2 },
-      minimalGrowth: { maxSpendChange: 2, maxProfitChange: 1 }
-    };
-  }
+  // ПРИНУДИТЕЛЬНО используем новые пороги с правильной структурой
+  const thresholds = {
+    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+    efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
+    inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
+    decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
+    scalingDown: { 
+      maxSpendChange: -15,
+      efficient: { minProfitChange: 0 },
+      moderate: { maxProfitDecline: -10, minProfitDecline: -1 },
+      problematic: { maxProfitDecline: -15 }
+    },
+    moderateGrowthSpend: 3,
+    moderateGrowthProfit: 2,
+    minimalGrowth: { maxSpendChange: 2, maxProfitChange: 1 },
+    moderateDecline: { 
+      maxSpendDecline: -3, 
+      maxProfitDecline: -3,
+      spendOptimizationRatio: 1.5,
+      efficiencyDropRatio: 1.5,
+      proportionalRatio: 1.3
+    },
+    stable: { maxAbsoluteChange: 2 }
+  };
+  
+  console.log(`Calculating growth status: spend=${spendPct.toFixed(1)}%, profit=${profitPct.toFixed(1)}%`);
   
   // ПРИОРИТЕТ 1: Переходы между прибылью и убытком (всегда приоритетны)
   if (prevProfit < 0 && currProfit > 0) {
+    console.log('Status: Profit transition positive');
     return '🟢 Healthy Growth';
   }
   if (prevProfit > 0 && currProfit < 0) {
+    console.log('Status: Profit transition negative');
     return '🔴 Inefficient Growth';
   }
   
   // ПРИОРИТЕТ 2: Критическое падение профита
   if (profitPct <= thresholds.inefficientGrowth.maxProfitChange) {
+    console.log('Status: Critical profit decline');
     return '🔴 Inefficient Growth';
   }
   
   // ПРИОРИТЕТ 3: Здоровый рост
   if (spendPct >= thresholds.healthyGrowth.minSpendChange && 
       profitPct >= thresholds.healthyGrowth.minProfitChange) {
+    console.log('Status: Healthy growth criteria met');
     return '🟢 Healthy Growth';
   }
   
   // ПРИОРИТЕТ 4: Улучшение эффективности
-  if (thresholds.efficiencyImprovement) {
-    if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
-        profitPct >= thresholds.efficiencyImprovement.minProfitGrowth) {
-      return '🟢 Efficiency Improvement';
-    }
-    if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
-        profitPct > 0 && profitPct < thresholds.efficiencyImprovement.minProfitGrowth) {
-      return '🟡 Efficiency Improvement';
-    }
+  // Значительное улучшение эффективности
+  if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
+      profitPct >= thresholds.efficiencyImprovement.minProfitGrowth) {
+    console.log('Status: Significant efficiency improvement');
+    return '🟢 Efficiency Improvement';
+  }
+  // Умеренное улучшение эффективности
+  if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
+      profitPct > 0 && profitPct < thresholds.efficiencyImprovement.minProfitGrowth) {
+    console.log('Status: Moderate efficiency improvement');
+    return '🟡 Efficiency Improvement';
   }
   
-  // ПРИОРИТЕТ 5: Scaling Down
+  // ПРИОРИТЕТ 5: Scaling Down сценарии
   if (spendPct <= thresholds.scalingDown.maxSpendChange) {
-    // Подкатегории scaling down если настройки есть
-    if (thresholds.scalingDown.efficient && profitPct >= 0) {
+    if (profitPct >= thresholds.scalingDown.efficient.minProfitChange) {
+      console.log('Status: Efficient scaling down');
       return '🔵 Scaling Down - Efficient';
     }
-    if (thresholds.scalingDown.moderate && profitPct >= -10 && profitPct < 0) {
+    if (profitPct >= thresholds.scalingDown.moderate.minProfitDecline && 
+        profitPct <= thresholds.scalingDown.moderate.maxProfitDecline) {
+      console.log('Status: Moderate scaling down');
       return '🔵 Scaling Down - Moderate';
     }
-    if (thresholds.scalingDown.problematic && profitPct < -15) {
+    if (profitPct <= thresholds.scalingDown.problematic.maxProfitDecline) {
+      console.log('Status: Problematic scaling down');
       return '🔵 Scaling Down - Problematic';
     }
+    console.log('Status: General scaling down');
     return '🔵 Scaling Down';
   }
   
   // ПРИОРИТЕТ 6: Снижение эффективности
-  if (thresholds.decliningEfficiency) {
-    if (spendPct >= thresholds.decliningEfficiency.minSpendStable && 
-        spendPct <= thresholds.decliningEfficiency.maxSpendGrowth &&
-        profitPct >= thresholds.decliningEfficiency.maxProfitDecline && 
-        profitPct <= thresholds.decliningEfficiency.minProfitDecline) {
-      return '🟠 Declining Efficiency';
-    }
-  } else {
-    // Fallback на оригинальную логику
-    if (spendPct > 5 && profitPct < -2) {
-      return '🟠 Declining Efficiency';
-    }
-    if (spendPct >= -2 && profitPct < -10) {
-      return '🟠 Declining Efficiency';
-    }
+  if (spendPct >= thresholds.decliningEfficiency.minSpendStable && 
+      spendPct <= thresholds.decliningEfficiency.maxSpendGrowth &&
+      profitPct >= thresholds.decliningEfficiency.maxProfitDecline && 
+      profitPct <= thresholds.decliningEfficiency.minProfitDecline) {
+    console.log('Status: Declining efficiency');
+    return '🟠 Declining Efficiency';
   }
   
   // ПРИОРИТЕТ 7: Умеренные сценарии спада
-  if (thresholds.moderateDecline && 
-      spendPct < 0 && profitPct < 0 && 
+  if (spendPct < 0 && profitPct < 0 && 
       spendPct >= thresholds.moderateDecline.maxSpendDecline && 
       profitPct >= thresholds.moderateDecline.maxProfitDecline) {
     
     const spendDeclineAbs = Math.abs(spendPct);
     const profitDeclineAbs = Math.abs(profitPct);
     
-    if (spendDeclineAbs >= profitDeclineAbs * 1.5) {
+    // Спенд падает значительно быстрее профита = оптимизация
+    if (spendDeclineAbs >= profitDeclineAbs * thresholds.moderateDecline.spendOptimizationRatio) {
+      console.log('Status: Spend optimization decline');
       return '🟡 Moderate Decline - Spend Optimization';
     }
-    if (profitDeclineAbs >= spendDeclineAbs * 1.5) {
+    // Профит падает значительно быстрее спенда = падение эффективности
+    if (profitDeclineAbs >= spendDeclineAbs * thresholds.moderateDecline.efficiencyDropRatio) {
+      console.log('Status: Efficiency drop decline');
       return '🟡 Moderate Decline - Efficiency Drop';
     }
+    // Оба падают примерно одинаково
+    console.log('Status: Proportional decline');
     return '🟡 Moderate Decline - Proportional';
   }
   
   // ПРИОРИТЕТ 8: Умеренный рост
-  if (spendPct > thresholds.moderateGrowthSpend && 
-      profitPct > thresholds.moderateGrowthProfit) {
+  if (spendPct >= thresholds.moderateGrowthSpend && 
+      profitPct >= thresholds.moderateGrowthProfit &&
+      (spendPct < thresholds.healthyGrowth.minSpendChange || profitPct < thresholds.healthyGrowth.minProfitChange)) {
+    console.log('Status: Moderate growth');
     return '🟡 Moderate Growth';
   }
   
-  // ПРИОРИТЕТ 9: Fallback на оригинальную логику для остальных случаев
-  if (spendPct < -5 && profitPct < -5 && spendPct > thresholds.scalingDown.maxSpendChange) {
+  // ПРИОРИТЕТ 9: Минимальный рост
+  if (spendPct > 0 && profitPct > 0) {
+    if (spendPct <= thresholds.minimalGrowth.maxSpendChange && 
+        profitPct <= thresholds.minimalGrowth.maxProfitChange) {
+      console.log('Status: Minimal growth (small)');
+      return '🟡 Minimal Growth';
+    }
+    if (spendPct < thresholds.moderateGrowthSpend || profitPct < thresholds.moderateGrowthProfit) {
+      console.log('Status: Minimal growth (below moderate)');
+      return '🟡 Minimal Growth';
+    }
+  }
+  
+  // ПРИОРИТЕТ 10: Общий умеренный спад
+  if (spendPct < 0 && profitPct < 0 && 
+      spendPct >= thresholds.scalingDown.maxSpendChange && 
+      profitPct >= thresholds.inefficientGrowth.maxProfitChange) {
+    console.log('Status: General moderate decline');
     return '🟡 Moderate Decline';
   }
   
-  // ПРИОРИТЕТ 10: Минимальный рост
-  if (spendPct > 0 && profitPct > 0) {
-    if (thresholds.minimalGrowth && 
-        spendPct <= thresholds.minimalGrowth.maxSpendChange && 
-        profitPct <= thresholds.minimalGrowth.maxProfitChange) {
-      return '🟡 Minimal Growth';
-    }
-    if (spendPct <= thresholds.moderateGrowthSpend || profitPct <= thresholds.moderateGrowthProfit) {
-      return '🟡 Minimal Growth';
-    }
+  // ПРИОРИТЕТ 11: Пограничные случаи declining efficiency
+  
+  // Спенд растет умеренно, профит падает умеренно
+  if (spendPct > 0 && spendPct <= 15 && profitPct < 0 && profitPct >= -10) {
+    console.log('Status: Borderline declining efficiency (spend up, profit down)');
+    return '🟠 Declining Efficiency';
   }
   
-  // ПРИОРИТЕТ 11: Стабильность
-  if (thresholds.stable) {
-    if (Math.abs(spendPct) <= thresholds.stable.maxAbsoluteChange && 
-        Math.abs(profitPct) <= thresholds.stable.maxAbsoluteChange) {
-      return '⚪ Stable';
-    }
+  // Спенд стабилен, профит падает умеренно
+  if (Math.abs(spendPct) <= 5 && profitPct < -2 && profitPct >= -12) {
+    console.log('Status: Borderline declining efficiency (spend stable, profit down)');
+    return '🟠 Declining Efficiency';
   }
   
-  // Все остальное считаем стабильным
+  // ПРИОРИТЕТ 12: Стабильность
+  if (Math.abs(spendPct) <= thresholds.stable.maxAbsoluteChange && 
+      Math.abs(profitPct) <= thresholds.stable.maxAbsoluteChange) {
+    console.log('Status: Stable (strict)');
+    return '⚪ Stable';
+  }
+  
+  // Расширенная стабильность
+  if (Math.abs(spendPct) <= 10 && Math.abs(profitPct) <= 10) {
+    console.log('Status: Stable (extended)');
+    return '⚪ Stable';
+  }
+  
+  // Fallback
+  console.log('Status: Fallback to stable');
   return '⚪ Stable';
 }
 
@@ -286,49 +320,36 @@ function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitP
  * Get growth status explanation for current project
  */
 function getGrowthStatusExplanation() {
-  let thresholds;
-  try {
-    thresholds = getGrowthThresholds(CURRENT_PROJECT);
-  } catch (e) {
-    thresholds = {
-      healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-      inefficientGrowth: { maxProfitChange: -8 },
-      scalingDown: { maxSpendChange: -15 },
-      moderateGrowthSpend: 3,
-      moderateGrowthProfit: 2
-    };
-  }
-  
   return `Growth Status Criteria for ${CURRENT_PROJECT}:
 
 🟢 ПОЗИТИВНЫЕ СЦЕНАРИИ:
-• Healthy Growth: Spend ≥${thresholds.healthyGrowth.minSpendChange}% AND Profit ≥${thresholds.healthyGrowth.minProfitChange}%
-• Efficiency Improvement: Спенд падает, профит растет
-• Переход из убытка в прибыль
+- Healthy Growth: Spend ≥10% AND Profit ≥5%
+- Efficiency Improvement: Спенд падает, профит растет
+- Переход из убытка в прибыль
 
 🔴 КРИТИЧЕСКИЕ СЦЕНАРИИ:
-• Inefficient Growth: Profit ≤${thresholds.inefficientGrowth.maxProfitChange}%
-• Переход из прибыли в убыток
+- Inefficient Growth: Profit ≤-8%
+- Переход из прибыли в убыток
 
 🟠 ПРЕДУПРЕЖДАЮЩИЕ СЦЕНАРИИ:
-• Declining Efficiency: Спенд растет/стабилен, профит падает умеренно
+- Declining Efficiency: Спенд растет/стабилен, профит падает умеренно
 
 🔵 СЦЕНАРИИ СОКРАЩЕНИЯ:
-• Scaling Down: Spend ≤${thresholds.scalingDown.maxSpendChange}%
+- Scaling Down: Spend ≤-15%
   - Efficient: профит стабилен/растет
   - Moderate: профит падает умеренно
   - Problematic: профит падает сильно
 
 🟡 УМЕРЕННЫЕ СЦЕНАРИИ:
-• Moderate Growth: Spend >${thresholds.moderateGrowthSpend}% AND Profit >${thresholds.moderateGrowthProfit}%
-• Minimal Growth: Небольшие положительные изменения
-• Moderate Decline: Умеренные негативные изменения
+- Moderate Growth: Spend >3% AND Profit >2%
+- Minimal Growth: Небольшие положительные изменения
+- Moderate Decline: Умеренные негативные изменения
   - Spend Optimization: спенд падает быстрее
   - Efficiency Drop: профит падает быстрее
   - Proportional: оба падают пропорционально
 
 ⚪ СТАБИЛЬНЫЕ СЦЕНАРИИ:
-• Stable: Минимальные изменения в любую сторону`;
+- Stable: Минимальные изменения в любую сторону`;
 }
 
 /**
@@ -349,36 +370,10 @@ function getProjectGrowthStatusExplanation(projectName) {
  * Get detailed scenario analysis for debugging
  */
 function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJECT) {
-  let thresholds;
-  try {
-    thresholds = getGrowthThresholds(projectName);
-  } catch (e) {
-    thresholds = {
-      healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-      inefficientGrowth: { maxProfitChange: -8 },
-      scalingDown: { maxSpendChange: -15 },
-      moderateGrowthSpend: 3,
-      moderateGrowthProfit: 2
-    };
-  }
-  
   const analysis = {
     spendPct,
     profitPct,
-    projectName,
-    thresholds,
-    categories: {
-      spendUp: spendPct > thresholds.moderateGrowthSpend,
-      spendDown: spendPct < -thresholds.moderateGrowthSpend,
-      spendStable: Math.abs(spendPct) <= 2,
-      profitUp: profitPct > thresholds.moderateGrowthProfit,
-      profitDown: profitPct < -thresholds.moderateGrowthProfit,
-      profitStable: Math.abs(profitPct) <= 2,
-      spendBigUp: spendPct >= thresholds.healthyGrowth.minSpendChange,
-      spendBigDown: spendPct <= thresholds.scalingDown.maxSpendChange,
-      profitBigUp: profitPct >= thresholds.healthyGrowth.minProfitChange,
-      profitBigDown: profitPct <= thresholds.inefficientGrowth.maxProfitChange
-    }
+    projectName
   };
   
   // Simulate the status calculation
