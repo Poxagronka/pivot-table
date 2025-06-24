@@ -1,7 +1,7 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
  * Multi-project support: Tricky, Moloco, and Regular
- * Complete threshold system with UX-friendly descriptions and ALL scenarios
+ * ОБНОВЛЕНО: Ширины колонок для Installs, CPI, ROAS D-1, IPM = 60
  */
 
 // Main spreadsheet ID (same for all projects)
@@ -472,7 +472,7 @@ function setCurrentProject(projectName) {
 var CONFIG = getCurrentConfig();
 var API_CONFIG = getCurrentApiConfig();
 
-// Table configuration with updated column widths
+// Table configuration with UPDATED column widths
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -480,9 +480,22 @@ var TABLE_CONFIG = {
     'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 }, { c: 5, w: 75 },
-    { c: 6, w: 100 }, { c: 7, w: 75 }, { c: 8, w: 75 }, { c: 9, w: 75 }, { c: 10, w: 75 },      // Spend WoW % = 100
-    { c: 11, w: 100 }, { c: 12, w: 120 }, { c: 13, w: 125 }, { c: 14, w: 100 }, { c: 15, w: 220 }, { c: 16, w: 200 }  // eProfit WoW % = 100, Growth Status = 220
+    { c: 1, w: 80 },   // Level
+    { c: 2, w: 300 },  // Week Range / Source App
+    { c: 3, w: 50 },   // ID
+    { c: 4, w: 50 },   // GEO
+    { c: 5, w: 75 },   // Spend
+    { c: 6, w: 80 },  // Spend WoW %
+    { c: 7, w: 60 },   // Installs - ОБНОВЛЕНО
+    { c: 8, w: 60 },   // CPI - ОБНОВЛЕНО  
+    { c: 9, w: 60 },   // ROAS D-1 - ОБНОВЛЕНО
+    { c: 10, w: 50 },  // IPM - ОБНОВЛЕНО
+    { c: 11, w: 75 }, // eARPU 365d
+    { c: 12, w: 75 }, // eROAS 365d
+    { c: 13, w: 75 }, // eProfit 730d
+    { c: 14, w: 85 }, // eProfit 730d WoW %
+    { c: 15, w: 220 }, // Growth Status
+    { c: 16, w: 250 }  // Comments - УВЕЛИЧЕНО для text wrap
   ]
 };
 
