@@ -1,13 +1,13 @@
 /**
  * Sheet Formatting and Table Creation - Multi Project Support
- * Handles all table creation, formatting, and styling for Tricky and Moloco
+ * Updated with text wrap for headers and comprehensive growth status formatting
  */
 
 /**
  * Create enhanced pivot table with week-level WoW analysis
  */
 function createEnhancedPivotTable(appData) {
-  const config = getCurrentConfig(); // Use current project config
+  const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
@@ -79,110 +79,21 @@ function createEnhancedPivotTable(appData) {
 }
 
 /**
- * Create enhanced pivot table for specific project
- */
-function createProjectPivotTable(projectName, appData) {
-  // Set current project context
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  
-  try {
-    createEnhancedPivotTable(appData);
-  } finally {
-    // Restore original project context
-    setCurrentProject(originalProject);
-  }
-}
-
-/**
- * Calculate totals for a week's campaigns
- * Updated to exclude campaigns with < 50 installs from eROAS calculation
- */
-function calculateWeekTotals(campaigns) {
-  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
-  const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
-  const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
-  const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
-  const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
-  const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
-  
-  // Calculate spend-weighted average eROAS
-  // Formula: Weighted eROAS = Σ(eROAS_i × Spend_i) / Σ(Spend_i)
-  // Only filter out obviously invalid eROAS values
-  const validForEROAS = campaigns.filter(c => 
-    c.eRoasForecast >= 1 && 
-    c.eRoasForecast <= 1000 && 
-    c.spend > 0
-  );
-  
-  let avgERoas = 0;
-  if (validForEROAS.length > 0) {
-    const totalWeightedEROAS = validForEROAS.reduce((sum, c) => sum + (c.eRoasForecast * c.spend), 0);
-    const totalSpendForEROAS = validForEROAS.reduce((sum, c) => sum + c.spend, 0);
-    avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
-  }
-  
-  const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-
-  return {
-    totalSpend,
-    totalInstalls,
-    avgCpi,
-    avgRoas,
-    avgIpm,
-    avgArpu,
-    avgERoas,
-    totalProfit
-  };
-}
-
-/**
- * Add campaign rows to table data
- */
-function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
-  // Sort campaigns by spend (highest first)
-  campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
-    const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
-    const key = `${campaign.sourceApp}_${weekKey}`;
-    const sourceWoW = wow.sourceAppWoW[key] || {};
-    const spendPct = sourceWoW.spendChangePercent ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = sourceWoW.eProfitChangePercent ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const growthStatus = sourceWoW.growthStatus || '';
-    
-    tableData.push([
-      'CAMPAIGN',
-      campaign.sourceApp,
-      link,
-      campaign.geo,
-      campaign.spend.toFixed(2),
-      spendPct,
-      campaign.installs,
-      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-      campaign.roas.toFixed(2),
-      campaign.ipm.toFixed(1),
-      campaign.eArpuForecast.toFixed(3),
-      `${campaign.eRoasForecast.toFixed(0)}%`,
-      campaign.eProfitForecast.toFixed(2),
-      profitPct,
-      growthStatus,
-      '' // Comments column
-    ]);
-  });
-}
-
-/**
- * Enhanced formatting function using batch operations
+ * Enhanced formatting function with text wrap for headers
  */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
-  const config = getCurrentConfig(); // Use current project config for colors
+  const config = getCurrentConfig();
   
-  // Header formatting
-  sheet.getRange(1, 1, 1, numCols)
-       .setBackground(COLORS.HEADER.background)
-       .setFontColor(COLORS.HEADER.fontColor)
-       .setFontWeight('bold')
-       .setHorizontalAlignment('center')
-       .setFontSize(11);
+  // Header formatting with text wrap
+  const headerRange = sheet.getRange(1, 1, 1, numCols);
+  headerRange
+    .setBackground(COLORS.HEADER.background)
+    .setFontColor(COLORS.HEADER.fontColor)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(11)
+    .setWrap(true);  // Enable text wrapping for headers
 
   // Set column widths
   TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => {
@@ -240,10 +151,10 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
 }
 
 /**
- * Enhanced conditional formatting with color gradients and new growth statuses
+ * Comprehensive conditional formatting with all growth status variations
  */
 function applyConditionalFormatting(sheet, numRows) {
-  const config = getCurrentConfig(); // Use current project config
+  const config = getCurrentConfig();
   const rules = [];
   
   if (numRows > 1) {
@@ -305,17 +216,35 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    // Growth Status formatting with new statuses
+    // Comprehensive Growth Status formatting
     const growthRange = sheet.getRange(2, 15, numRows - 1, 1);
     const statusColors = {
-      '🟢 Healthy Growth': COLORS.POSITIVE,
-      '🔴 Inefficient Growth': { background: '#f5c6cb', fontColor: '#721c24' },
-      '🟠 Declining Efficiency': { background: '#ff9800', fontColor: 'white' },
-      '🟡 Moderate Growth': COLORS.WARNING,
-      '🟡 Minimal Growth': { background: '#fff8e1', fontColor: '#f57f17' },
-      '🟡 Moderate Decline': { background: '#ffe0b2', fontColor: '#ef6c00' },
-      '🔵 Scaling Down': COLORS.INFO,
-      '⚪ Stable': { background: '#f5f5f5', fontColor: '#616161' }
+      // Positive statuses - Green shades
+      "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
+      "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
+      
+      // Negative statuses - Red shades  
+      "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
+      
+      // Declining efficiency - Orange
+      "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
+      
+      // Scaling down scenarios - Blue shades
+      "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
+      "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
+      "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
+      "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
+      
+      // Moderate scenarios - Yellow/Amber shades
+      "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
+      "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
+      "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
+      "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
+      "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
+      "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
+      
+      // Stable - Gray
+      "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" }
     };
 
     Object.entries(statusColors).forEach(([status, colors]) => {
@@ -328,7 +257,82 @@ function applyConditionalFormatting(sheet, numRows) {
       );
     });
   }
+  
   sheet.setConditionalFormatRules(rules);
+}
+
+/**
+ * Calculate totals for a week's campaigns
+ * Updated to exclude campaigns with < 50 installs from eROAS calculation
+ */
+function calculateWeekTotals(campaigns) {
+  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
+  const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
+  const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
+  const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
+  const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
+  const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
+  
+  // Calculate spend-weighted average eROAS
+  const validForEROAS = campaigns.filter(c => 
+    c.eRoasForecast >= 1 && 
+    c.eRoasForecast <= 1000 && 
+    c.spend > 0
+  );
+  
+  let avgERoas = 0;
+  if (validForEROAS.length > 0) {
+    const totalWeightedEROAS = validForEROAS.reduce((sum, c) => sum + (c.eRoasForecast * c.spend), 0);
+    const totalSpendForEROAS = validForEROAS.reduce((sum, c) => sum + c.spend, 0);
+    avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
+  }
+  
+  const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+
+  return {
+    totalSpend,
+    totalInstalls,
+    avgCpi,
+    avgRoas,
+    avgIpm,
+    avgArpu,
+    avgERoas,
+    totalProfit
+  };
+}
+
+/**
+ * Add campaign rows to table data
+ */
+function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
+  // Sort campaigns by spend (highest first)
+  campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
+    const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+    const key = `${campaign.sourceApp}_${weekKey}`;
+    const sourceWoW = wow.sourceAppWoW[key] || {};
+    const spendPct = sourceWoW.spendChangePercent ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
+    const profitPct = sourceWoW.eProfitChangePercent ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const growthStatus = sourceWoW.growthStatus || '';
+    
+    tableData.push([
+      'CAMPAIGN',
+      campaign.sourceApp,
+      link,
+      campaign.geo,
+      campaign.spend.toFixed(2),
+      spendPct,
+      campaign.installs,
+      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+      campaign.roas.toFixed(2),
+      campaign.ipm.toFixed(1),
+      campaign.eArpuForecast.toFixed(3),
+      `${campaign.eRoasForecast.toFixed(0)}%`,
+      campaign.eProfitForecast.toFixed(2),
+      profitPct,
+      growthStatus,
+      '' // Comments column
+    ]);
+  });
 }
 
 /**
@@ -466,6 +470,22 @@ function createGroupingFromAppData(sheet, appData, numCols) {
 }
 
 /**
+ * Create enhanced pivot table for specific project
+ */
+function createProjectPivotTable(projectName, appData) {
+  // Set current project context
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    createEnhancedPivotTable(appData);
+  } finally {
+    // Restore original project context
+    setCurrentProject(originalProject);
+  }
+}
+
+/**
  * Project-specific formatting functions
  */
 
@@ -477,7 +497,8 @@ function getProjectHeaderColors(projectName) {
   // In the future, could customize colors per project
   const projectColors = {
     'TRICKY': { background: '#4285f4', fontColor: 'white' },
-    'MOLOCO': { background: '#4285f4', fontColor: 'white' }
+    'MOLOCO': { background: '#4285f4', fontColor: 'white' },
+    'REGULAR': { background: '#4285f4', fontColor: 'white' }
   };
   
   return projectColors[projectName] || COLORS.HEADER;
@@ -499,6 +520,9 @@ function applyProjectSpecificFormatting(sheet, projectName, numRows) {
       break;
     case 'MOLOCO':
       // Moloco-specific formatting if needed
+      break;
+    case 'REGULAR':
+      // Regular-specific formatting if needed
       break;
     default:
       // Default formatting
