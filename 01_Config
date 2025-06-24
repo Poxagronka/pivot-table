@@ -1,95 +1,111 @@
 /**
  * Configuration file for Campaign Report Google Apps Script
  * Multi-project support: Tricky, Moloco, and Regular
- * Updated with individual target eROAS settings and Growth Status Thresholds
+ * Complete threshold system with UX-friendly descriptions
  */
 
 // Main spreadsheet ID (same for all projects)
-const MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
+var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 
 // Shared Bearer Token for all projects
-const SHARED_BEARER_TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA';
+var SHARED_BEARER_TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA';
 
 // Settings storage property keys
-const PROPERTY_KEYS = {
+var PROPERTY_KEYS = {
   TARGET_EROAS_TRICKY: 'TARGET_EROAS_TRICKY',
   TARGET_EROAS_MOLOCO: 'TARGET_EROAS_MOLOCO',
   TARGET_EROAS_REGULAR: 'TARGET_EROAS_REGULAR',
   AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
   AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED',
-  
-  // Growth Status Thresholds
   GROWTH_THRESHOLDS_TRICKY: 'GROWTH_THRESHOLDS_TRICKY',
   GROWTH_THRESHOLDS_MOLOCO: 'GROWTH_THRESHOLDS_MOLOCO',
   GROWTH_THRESHOLDS_REGULAR: 'GROWTH_THRESHOLDS_REGULAR'
 };
 
 // Default target eROAS values
-const DEFAULT_TARGET_EROAS = {
+var DEFAULT_TARGET_EROAS = {
   TRICKY: 160,
   MOLOCO: 140,
   REGULAR: 140
 };
 
-// Default threshold values for Growth Status calculation
-const DEFAULT_GROWTH_THRESHOLDS = {
-  TRICKY: {
-    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 }, // More sensitive to profit decline
-    scalingDown: { maxSpendChange: -15 }, // Allow for moderate spend reduction before marking as scaling
-    moderateGrowthSpend: 3, // Lower threshold for detecting growth
-    moderateGrowthProfit: 2
+// Comprehensive threshold system with UX descriptions
+// Same defaults for all projects to ensure consistency
+var DEFAULT_GROWTH_THRESHOLDS_BASE = {
+  // Core thresholds
+  healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+  inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 },
+  scalingDown: { maxSpendChange: -15 },
+  moderateGrowthSpend: 3,
+  moderateGrowthProfit: 2,
+  
+  // Advanced thresholds for granular control
+  decliningEfficiency: { minSpendStable: -2, maxProfitDecline: -10 },
+  minimalGrowth: { maxSpendChange: 5, maxProfitChange: 3 },
+  proportionalDeclineRatio: 1.5 // For determining decline type
+};
+
+var DEFAULT_GROWTH_THRESHOLDS = {
+  TRICKY: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
+  MOLOCO: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
+  REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
+};
+
+// UX-friendly threshold descriptions for settings UI
+var THRESHOLD_DESCRIPTIONS = {
+  healthyGrowth: {
+    title: "🟢 Healthy Growth",
+    description: "Strong positive performance requiring both metrics to grow significantly",
+    fields: {
+      minSpendChange: "Minimum spend increase % needed",
+      minProfitChange: "Minimum profit increase % needed"
+    },
+    example: "Spend +15%, Profit +10% → 🟢 Healthy Growth"
   },
-  MOLOCO: {
-    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 }, // Stricter for Moloco
-    scalingDown: { maxSpendChange: -15 },
-    moderateGrowthSpend: 3,
-    moderateGrowthProfit: 2
+  inefficientGrowth: {
+    title: "🔴 Inefficient Growth", 
+    description: "Critical scenarios where profit declines significantly",
+    fields: {
+      minSpendChange: "Spend increase % that triggers concern when profit drops",
+      maxProfitChange: "Maximum profit decline % before marking as inefficient"
+    },
+    example: "Spend +15%, Profit -12% → 🔴 Inefficient Growth"
   },
-  REGULAR: {
-    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-    inefficientGrowth: { minSpendChange: 10, maxProfitChange: -8 },
-    scalingDown: { maxSpendChange: -15 },
-    moderateGrowthSpend: 3,
-    moderateGrowthProfit: 2
+  scalingDown: {
+    title: "🔵 Scaling Down",
+    description: "Significant spend reduction scenarios",
+    fields: {
+      maxSpendChange: "Maximum spend decline % before marking as scaling down"
+    },
+    example: "Spend -25%, Profit -8% → 🔵 Scaling Down"
+  },
+  moderateGrowth: {
+    title: "🟡 Moderate Growth",
+    description: "Positive but modest improvements",
+    fields: {
+      spend: "Minimum spend increase % for moderate growth",
+      profit: "Minimum profit increase % for moderate growth"
+    },
+    example: "Spend +5%, Profit +3% → 🟡 Moderate Growth"
+  },
+  decliningEfficiency: {
+    title: "🟠 Declining Efficiency",
+    description: "Performance deterioration with stable/growing spend",
+    fields: {
+      minSpendStable: "Minimum spend change to consider 'stable'",
+      maxProfitDecline: "Profit decline % that triggers efficiency warning"
+    },
+    example: "Spend 0%, Profit -8% → 🟠 Declining Efficiency"
   }
 };
 
 /**
- * Example scenarios and their expected statuses:
- * 
- * Scenario 1: Spend +0%, Profit -15%
- * Result: 🟠 Declining Efficiency (spend stable but profit drops significantly)
- * 
- * Scenario 2: Spend +8%, Profit -6%  
- * Result: 🟠 Declining Efficiency (spend increases but profit declines)
- * 
- * Scenario 3: Spend +20%, Profit -12%
- * Result: 🔴 Inefficient Growth (high spend, major profit decline)
- * 
- * Scenario 4: Spend +2%, Profit +1%
- * Result: 🟡 Minimal Growth (positive but small changes)
- * 
- * Scenario 5: Spend -8%, Profit -7%
- * Result: 🟡 Moderate Decline (both declining moderately)
- * 
- * Scenario 6: Spend +15%, Profit +10%
- * Result: 🟢 Healthy Growth (good growth in both metrics)
- * 
- * Scenario 7: Spend -20%, Profit -5%
- * Result: 🔵 Scaling Down (significant spend reduction)
- * 
- * Scenario 8: Spend +1%, Profit -1%
- * Result: ⚪ Stable (minimal changes in both directions)
- */
-/**
  * Get target eROAS for a project from script properties or default
  */
 function getTargetEROAS(projectName) {
-  const props = PropertiesService.getScriptProperties();
-  const key = `TARGET_EROAS_${projectName}`;
-  const value = props.getProperty(key);
+  var props = PropertiesService.getScriptProperties();
+  var key = 'TARGET_EROAS_' + projectName;
+  var value = props.getProperty(key);
   return value ? parseInt(value) : DEFAULT_TARGET_EROAS[projectName];
 }
 
@@ -97,8 +113,8 @@ function getTargetEROAS(projectName) {
  * Set target eROAS for a project
  */
 function setTargetEROAS(projectName, value) {
-  const props = PropertiesService.getScriptProperties();
-  const key = `TARGET_EROAS_${projectName}`;
+  var props = PropertiesService.getScriptProperties();
+  var key = 'TARGET_EROAS_' + projectName;
   props.setProperty(key, value.toString());
 }
 
@@ -106,15 +122,15 @@ function setTargetEROAS(projectName, value) {
  * Get growth thresholds for a project from script properties or default
  */
 function getGrowthThresholds(projectName) {
-  const props = PropertiesService.getScriptProperties();
-  const key = `GROWTH_THRESHOLDS_${projectName}`;
-  const value = props.getProperty(key);
+  var props = PropertiesService.getScriptProperties();
+  var key = 'GROWTH_THRESHOLDS_' + projectName;
+  var value = props.getProperty(key);
   
   if (value) {
     try {
       return JSON.parse(value);
     } catch (e) {
-      console.error(`Error parsing growth thresholds for ${projectName}:`, e);
+      console.error('Error parsing growth thresholds for ' + projectName + ':', e);
       return DEFAULT_GROWTH_THRESHOLDS[projectName];
     }
   }
@@ -126,8 +142,8 @@ function getGrowthThresholds(projectName) {
  * Set growth thresholds for a project
  */
 function setGrowthThresholds(projectName, thresholds) {
-  const props = PropertiesService.getScriptProperties();
-  const key = `GROWTH_THRESHOLDS_${projectName}`;
+  var props = PropertiesService.getScriptProperties();
+  var key = 'GROWTH_THRESHOLDS_' + projectName;
   props.setProperty(key, JSON.stringify(thresholds));
 }
 
@@ -135,22 +151,70 @@ function setGrowthThresholds(projectName, thresholds) {
  * Reset growth thresholds to default for a project
  */
 function resetGrowthThresholds(projectName) {
-  const props = PropertiesService.getScriptProperties();
-  const key = `GROWTH_THRESHOLDS_${projectName}`;
+  var props = PropertiesService.getScriptProperties();
+  var key = 'GROWTH_THRESHOLDS_' + projectName;
   props.deleteProperty(key);
 }
 
-// Project configurations
-const PROJECTS = {
+/**
+ * Get user-friendly threshold explanation for UI
+ */
+function getThresholdExplanation(thresholdType, projectName) {
+  var desc = THRESHOLD_DESCRIPTIONS[thresholdType];
+  var current = getGrowthThresholds(projectName)[thresholdType];
+  
+  if (!desc) return 'Unknown threshold type';
+  
+  var explanation = desc.title + '\n' + desc.description + '\n\n';
+  
+  if (desc.fields) {
+    Object.keys(desc.fields).forEach(function(field) {
+      var description = desc.fields[field];
+      var value = typeof current === 'object' ? current[field] : current;
+      explanation += '• ' + description + ': ' + value + '%\n';
+    });
+  }
+  
+  explanation += '\nExample: ' + desc.example;
+  return explanation;
+}
+
+/**
+ * Get comprehensive status overview for a project
+ */
+function getProjectStatusOverview(projectName) {
+  var thresholds = getGrowthThresholds(projectName);
+  var targetROAS = getTargetEROAS(projectName);
+  
+  return '📊 ' + projectName + ' STATUS OVERVIEW\n\n' +
+    '🎯 Target eROAS: ' + targetROAS + '%\n\n' +
+    '🟢 Healthy Growth: Spend >' + thresholds.healthyGrowth.minSpendChange + '% AND Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n' +
+    '🔴 Inefficient Growth: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '% (critical)\n' +
+    '🟠 Declining Efficiency: Stable spend but profit <' + thresholds.decliningEfficiency.maxProfitDecline + '%\n' +
+    '🔵 Scaling Down: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n' +
+    '🟡 Moderate Growth: Spend >' + thresholds.moderateGrowthSpend + '% AND Profit >' + thresholds.moderateGrowthProfit + '%\n\n' +
+    'Advanced Settings:\n' +
+    '• Minimal growth thresholds: ' + thresholds.minimalGrowth.maxSpendChange + '%/' + thresholds.minimalGrowth.maxProfitChange + '%\n' +
+    '• Proportional decline ratio: ' + thresholds.proportionalDeclineRatio + 'x';
+}
+
+// Project configurations with dynamic getters
+function getTrickyTargetEROAS() { return getTargetEROAS('TRICKY'); }
+function getMolocoTargetEROAS() { return getTargetEROAS('MOLOCO'); }
+function getRegularTargetEROAS() { return getTargetEROAS('REGULAR'); }
+
+function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
+function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
+function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
+
+var PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
     API_URL: 'https://app.appodeal.com/graphql',
-    get TARGET_EROAS() { return getTargetEROAS('TRICKY'); }, // Dynamic from properties
-    get GROWTH_THRESHOLDS() { return getGrowthThresholds('TRICKY'); }, // Dynamic thresholds
+    TARGET_EROAS: getTrickyTargetEROAS,
+    GROWTH_THRESHOLDS: getTrickyGrowthThresholds,
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
-    
-    // API Configuration for Tricky
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
       FILTERS: {
@@ -165,11 +229,11 @@ const PROJECTS = {
         { dimension: "APP" }
       ],
       MEASURES: [
-        { id: "cpi", day: null },
-        { id: "installs", day: null },
+        { id: "cpi", day: null }, 
+        { id: "installs", day: null }, 
         { id: "ipm", day: null },
-        { id: "spend", day: null },
-        { id: "roas", day: 1 },
+        { id: "spend", day: null }, 
+        { id: "roas", day: 1 }, 
         { id: "e_arpu_forecast", day: 365 },
         { id: "e_roas_forecast", day: 365 },
         { id: "e_profit_forecast", day: 730 }
@@ -180,19 +244,17 @@ const PROJECTS = {
   MOLOCO: {
     SHEET_NAME: 'Moloco',
     API_URL: 'https://app.appodeal.com/graphql',
-    get TARGET_EROAS() { return getTargetEROAS('MOLOCO'); }, // Dynamic from properties
-    get GROWTH_THRESHOLDS() { return getGrowthThresholds('MOLOCO'); }, // Dynamic thresholds
+    TARGET_EROAS: getMolocoTargetEROAS,
+    GROWTH_THRESHOLDS: getMolocoGrowthThresholds,
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
-    
-    // API Configuration for Moloco (NO campaign filter - takes all campaigns)
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["445856363109679104"], // Moloco Network HID
-        ATTRIBUTION_CAMPAIGN_SEARCH: null // NO CAMPAIGN FILTER for Moloco
+        ATTRIBUTION_NETWORK_HID: ["445856363109679104"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null
       },
       GROUP_BY: [
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
@@ -200,13 +262,13 @@ const PROJECTS = {
         { dimension: "APP" }
       ],
       MEASURES: [
-        { id: "cpi", day: null },
-        { id: "installs", day: null },
+        { id: "cpi", day: null }, 
+        { id: "installs", day: null }, 
         { id: "ipm", day: null },
-        { id: "spend", day: null },
-        { id: "roas", day: 1 },
+        { id: "spend", day: null }, 
+        { id: "roas", day: 1 }, 
         { id: "e_arpu_forecast", day: 365 },
-        { id: "e_roas_forecast", day: 365 },
+        { id: "e_roas_forecast", day: 365 }, 
         { id: "e_profit_forecast", day: 730 }
       ]
     }
@@ -215,19 +277,17 @@ const PROJECTS = {
   REGULAR: {
     SHEET_NAME: 'Regular',
     API_URL: 'https://app.appodeal.com/graphql',
-    get TARGET_EROAS() { return getTargetEROAS('REGULAR'); }, // Dynamic from properties
-    get GROWTH_THRESHOLDS() { return getGrowthThresholds('REGULAR'); }, // Dynamic thresholds
+    TARGET_EROAS: getRegularTargetEROAS,
+    GROWTH_THRESHOLDS: getRegularGrowthThresholds,
     BEARER_TOKEN: SHARED_BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
-    
-    // API Configuration for Regular (excludes "Tricky" campaigns)
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["234187180623265792"], // Same as Tricky
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/tricky/i" // EXCLUDE campaigns with "tricky"
+        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/tricky/i"
       },
       GROUP_BY: [
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
@@ -235,13 +295,13 @@ const PROJECTS = {
         { dimension: "APP" }
       ],
       MEASURES: [
-        { id: "cpi", day: null },
-        { id: "installs", day: null },
+        { id: "cpi", day: null }, 
+        { id: "installs", day: null }, 
         { id: "ipm", day: null },
-        { id: "spend", day: null },
-        { id: "roas", day: 1 },
+        { id: "spend", day: null }, 
+        { id: "roas", day: 1 }, 
         { id: "e_arpu_forecast", day: 365 },
-        { id: "e_roas_forecast", day: 365 },
+        { id: "e_roas_forecast", day: 365 }, 
         { id: "e_profit_forecast", day: 730 }
       ]
     }
@@ -249,7 +309,7 @@ const PROJECTS = {
 };
 
 // Current project (для обратной совместимости)
-let CURRENT_PROJECT = 'TRICKY';
+var CURRENT_PROJECT = 'TRICKY';
 
 // Helper functions to get current project configuration
 function getCurrentConfig() {
@@ -257,8 +317,8 @@ function getCurrentConfig() {
     SHEET_ID: MAIN_SHEET_ID,
     SHEET_NAME: PROJECTS[CURRENT_PROJECT].SHEET_NAME,
     API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
-    TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS,
-    GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS,
+    TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS(),
+    GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET
   };
@@ -276,8 +336,8 @@ function getProjectConfig(projectName) {
     SHEET_ID: MAIN_SHEET_ID,
     SHEET_NAME: PROJECTS[projectName].SHEET_NAME,
     API_URL: PROJECTS[projectName].API_URL,
-    TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS,
-    GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS,
+    TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS(),
+    GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET
   };
@@ -299,25 +359,25 @@ function setCurrentProject(projectName) {
 }
 
 // Legacy support - keep old CONFIG and API_CONFIG for backward compatibility
-const CONFIG = getCurrentConfig();
-const API_CONFIG = getCurrentApiConfig();
+var CONFIG = getCurrentConfig();
+var API_CONFIG = getCurrentApiConfig();
 
-// Table configuration (same for all projects)
-const TABLE_CONFIG = {
+// Table configuration with updated column widths
+var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
     'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
-    {c:1,w:80},{c:2,w:300},{c:3,w:50},{c:4,w:50},{c:5,w:75},
-    {c:6,w:125},{c:7,w:75},{c:8,w:75},{c:9,w:75},{c:10,w:75},
-    {c:11,w:100},{c:12,w:120},{c:13,w:125},{c:14,w:170},{c:15,w:150},{c:16,w:200}
+    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 }, { c: 5, w: 75 },
+    { c: 6, w: 100 }, { c: 7, w: 75 }, { c: 8, w: 75 }, { c: 9, w: 75 }, { c: 10, w: 75 },      // Spend WoW % = 100
+    { c: 11, w: 100 }, { c: 12, w: 120 }, { c: 13, w: 125 }, { c: 14, w: 100 }, { c: 15, w: 220 }, { c: 16, w: 200 }  // eProfit WoW % = 100, Growth Status = 220
   ]
 };
 
 // Formatting colors (same for all projects)
-const COLORS = {
+var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
