@@ -270,7 +270,7 @@ function showProjectSettings() {
     
     '⚙️ AUTOMATION:\n' +
     `• Auto Cache: ${cacheEnabled ? '✅ Enabled (2 AM daily)' : '❌ Disabled'}\n` +
-    `• Auto Update: ${updateEnabled ? '✅ Enabled (Monday 5 AM)' : '❌ Disabled'}\n\n` +
+    `• Auto Update: ${updateEnabled ? '✅ Enabled (Tuesday 5 AM)' : '❌ Disabled'}\n\n` +
     
     '📝 FEATURES:\n' +
     '• Week-level comments: ✅ Supported\n' +
@@ -503,7 +503,7 @@ function showAutoUpdateSettings() {
   const result = ui.alert(
     '🔄 Auto Update Settings',
     `Auto-update is currently: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\n` +
-    'When enabled, all project data will be automatically updated every Monday at 5:00 AM.\n\n' +
+    'When enabled, all project data will be automatically updated every Tuesday at 5:00 AM.\n\n' +
     'This will fetch new data including the previous complete week.\n\n' +
     `Would you like to ${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`,
     ui.ButtonSet.YES_NO_CANCEL
@@ -546,7 +546,7 @@ function enableAutoUpdate() {
     ui.alert(
       'Auto Update Enabled',
       '✅ Auto-update has been enabled!\n\n' +
-      '• Data will be updated every Monday at 5:00 AM\n' +
+      '• Data will be updated every Tuesday at 5:00 AM\n' +
       '• All projects will include the previous week\'s data\n' +
       '• Comments will be preserved during updates',
       ui.ButtonSet.OK
@@ -577,7 +577,7 @@ function disableAutoUpdate() {
     ui.alert(
       'Auto Update Disabled',
       '❌ Auto-update has been disabled.\n\n' +
-      'Data will no longer be updated automatically on Mondays.',
+      'Data will no longer be updated automatically on Tuesdays.',
       ui.ButtonSet.OK
     );
     
