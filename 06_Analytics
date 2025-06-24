@@ -1,7 +1,6 @@
 /**
  * Analytics Functions - Multi Project Support
- * Contains all analytical calculations and metrics
- * Updated with project-specific Growth Status thresholds
+ * Complete growth status logic with comprehensive threshold system
  */
 
 /**
@@ -116,8 +115,7 @@ function calculateWoWMetrics(appData) {
 }
 
 /**
- * Calculate growth status based on spend and profit changes using project-specific thresholds
- * FIXED: Better handling of profit decline scenarios
+ * Calculate comprehensive growth status using project-specific thresholds
  */
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
@@ -126,101 +124,165 @@ function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'e
   // Get project-specific thresholds
   const thresholds = getGrowthThresholds(CURRENT_PROJECT);
   
-  // Transition from negative to positive profit (always healthy regardless of thresholds)
+  // SPECIAL CASES: Profit sign transitions (always override other logic)
   if (prevProfit < 0 && currProfit > 0) {
     return '🟢 Healthy Growth';
   }
-  
-  // Transition from positive to negative profit (always inefficient regardless of thresholds)
   if (prevProfit > 0 && currProfit < 0) {
     return '🔴 Inefficient Growth';
   }
   
-  // PRIORITY 1: Check for significant profit decline (regardless of spend change)
-  // If profit drops significantly, it's always concerning
-  if (profitPct < thresholds.inefficientGrowth.maxProfitChange) {
-    return '🔴 Inefficient Growth';
-  }
+  // CATEGORIZE SCENARIOS
+  const spendUp = spendPct > thresholds.moderateGrowthSpend;
+  const spendDown = spendPct < -thresholds.moderateGrowthSpend;
+  const spendStable = !spendUp && !spendDown;
   
-  // PRIORITY 2: Check for healthy growth pattern
-  // High spend increase with good profit growth
-  if (spendPct > thresholds.healthyGrowth.minSpendChange && 
-      profitPct > thresholds.healthyGrowth.minProfitChange) {
+  const profitUp = profitPct > thresholds.moderateGrowthProfit;
+  const profitDown = profitPct < -thresholds.moderateGrowthProfit;
+  const profitStable = !profitUp && !profitDown;
+  
+  const spendBigUp = spendPct > thresholds.healthyGrowth.minSpendChange;
+  const spendBigDown = spendPct < thresholds.scalingDown.maxSpendChange;
+  const profitBigUp = profitPct > thresholds.healthyGrowth.minProfitChange;
+  const profitBigDown = profitPct < thresholds.inefficientGrowth.maxProfitChange;
+  
+  // PRIORITY 1: Healthy Growth Scenarios
+  if (spendBigUp && profitBigUp) {
     return '🟢 Healthy Growth';
   }
   
-  // PRIORITY 3: Check for scaling down (significant spend reduction)
-  if (spendPct < thresholds.scalingDown.maxSpendChange) {
+  // PRIORITY 2: Inefficient Growth Scenarios
+  if (profitBigDown) {
+    // Major profit decline - check spend context
+    if (spendBigUp) {
+      return '🔴 Inefficient Growth';  // High spend + major profit decline
+    }
+    if (spendUp || spendStable) {
+      return '🔴 Inefficient Growth';  // Any spend increase/stable + major profit decline
+    }
+    // If spend also declining significantly, might be intentional scaling
+  }
+  
+  // PRIORITY 3: Scaling Down Scenarios
+  if (spendBigDown) {
+    // Major spend reduction - check profit context
+    if (profitBigDown) {
+      return '🔵 Scaling Down - Problematic';  // Both declining significantly
+    }
+    if (profitDown) {
+      return '🔵 Scaling Down - Moderate';     // Spend down big, profit down moderate
+    }
+    if (profitStable || profitUp) {
+      return '🔵 Scaling Down - Efficient';   // Spend down, profit stable/up
+    }
     return '🔵 Scaling Down';
   }
   
-  // PRIORITY 4: Check for moderate positive growth
-  if (spendPct > thresholds.moderateGrowthSpend && 
-      profitPct > thresholds.moderateGrowthProfit) {
-    return '🟡 Moderate Growth';
+  // PRIORITY 4: Declining Efficiency Scenarios
+  if (profitDown && !profitBigDown) {
+    if (spendUp) {
+      return '🟠 Declining Efficiency';  // Spend up, profit down moderately
+    }
+    if (spendStable) {
+      return '🟠 Declining Efficiency';  // Spend stable, profit down
+    }
   }
   
-  // PRIORITY 5: Check for concerning patterns even with moderate changes
-  
-  // Case: Spend increases moderately but profit declines
-  if (spendPct > 5 && profitPct < -2) {
-    return '🟠 Declining Efficiency';
+  // PRIORITY 5: Both Declining Scenarios (not major declines)
+  if (spendDown && profitDown && !spendBigDown && !profitBigDown) {
+    // Both declining moderately
+    const spendDeclineRatio = Math.abs(spendPct);
+    const profitDeclineRatio = Math.abs(profitPct);
+    
+    if (profitDeclineRatio > spendDeclineRatio * thresholds.proportionalDeclineRatio) {
+      return '🟡 Moderate Decline - Efficiency Drop';  // Profit declining faster than spend
+    }
+    if (spendDeclineRatio > profitDeclineRatio * thresholds.proportionalDeclineRatio) {
+      return '🟡 Moderate Decline - Spend Optimization'; // Spend declining faster than profit
+    }
+    return '🟡 Moderate Decline - Proportional';  // Both declining similarly
   }
   
-  // Case: Spend stays same/increases slightly but profit drops significantly
-  if (spendPct >= -2 && profitPct < -10) {
-    return '🟠 Declining Efficiency';
+  // PRIORITY 6: Mixed Moderate Changes
+  if (spendDown && profitUp) {
+    if (profitBigUp) {
+      return '🟢 Efficiency Improvement';  // Spend down, profit up significantly
+    }
+    return '🟡 Efficiency Improvement';    // Spend down, profit up moderately
   }
   
-  // Case: Both spend and profit are declining moderately
-  if (spendPct < -5 && profitPct < -5 && spendPct > thresholds.scalingDown.maxSpendChange) {
-    return '🟡 Moderate Decline';
+  if (spendUp && profitUp && (!spendBigUp || !profitBigUp)) {
+    return '🟡 Moderate Growth';  // Both up but not meeting healthy growth thresholds
   }
   
-  // Case: Positive but minimal growth
-  if (spendPct > 0 && profitPct > 0 && 
-      (spendPct <= thresholds.moderateGrowthSpend || profitPct <= thresholds.moderateGrowthProfit)) {
-    return '🟡 Minimal Growth';
+  // PRIORITY 7: Minimal changes
+  if ((spendUp || spendStable) && (profitUp || profitStable)) {
+    if (spendPct > 0 && profitPct > 0 && 
+        spendPct <= thresholds.minimalGrowth.maxSpendChange && 
+        profitPct <= thresholds.minimalGrowth.maxProfitChange) {
+      return '🟡 Minimal Growth';
+    }
   }
   
-  // Everything else is stable
+  // PRIORITY 8: Everything else is stable
   return '⚪ Stable';
 }
 
 /**
- * Get updated growth status explanation for current project
+ * Calculate growth status for specific project using its thresholds
+ */
+function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    return calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField);
+  } finally {
+    setCurrentProject(originalProject);
+  }
+}
+
+/**
+ * Get comprehensive growth status explanation for current project
  */
 function getGrowthStatusExplanation() {
   const thresholds = getGrowthThresholds(CURRENT_PROJECT);
   
   return `Growth Status Criteria for ${CURRENT_PROJECT}:
 
-🟢 Healthy Growth:
-• Spend increase > ${thresholds.healthyGrowth.minSpendChange}% AND profit increase > ${thresholds.healthyGrowth.minProfitChange}%
-• OR transition from negative to positive profit
+🟢 POSITIVE SCENARIOS:
+• Healthy Growth: Spend >${thresholds.healthyGrowth.minSpendChange}% AND Profit >${thresholds.healthyGrowth.minProfitChange}%
+• Efficiency Improvement: Spend decreasing AND profit increasing significantly
 
-🔴 Inefficient Growth:
-• Profit decrease < ${thresholds.inefficientGrowth.maxProfitChange}% (regardless of spend)
-• OR transition from positive to negative profit
+🔴 NEGATIVE SCENARIOS:
+• Inefficient Growth: Major profit decline (<${thresholds.inefficientGrowth.maxProfitChange}%) with stable/increasing spend
+• Transition from profit to loss
 
-🟠 Declining Efficiency:
-• Spend increase >5% but profit decrease <-2%
-• OR spend stable (>-2%) but profit drops <-10%
+🟠 DECLINING EFFICIENCY:
+• Spend increasing/stable but profit declining moderately
+• Efficiency deteriorating without major spend changes
 
-🔵 Scaling Down:
-• Spend decrease < ${thresholds.scalingDown.maxSpendChange}%
+🔵 SCALING DOWN SCENARIOS:
+• Scaling Down - Efficient: Spend <${thresholds.scalingDown.maxSpendChange}% with stable/improving profit
+• Scaling Down - Moderate: Spend <${thresholds.scalingDown.maxSpendChange}% with moderate profit decline
+• Scaling Down - Problematic: Both spend and profit declining significantly
 
-🟡 Moderate Growth:
-• Spend increase > ${thresholds.moderateGrowthSpend}% AND profit increase > ${thresholds.moderateGrowthProfit}%
+🟡 MODERATE SCENARIOS:
+• Moderate Growth: Both increasing but below healthy thresholds
+• Moderate Decline - Efficiency Drop: Both declining, profit declining faster
+• Moderate Decline - Spend Optimization: Both declining, spend declining faster  
+• Moderate Decline - Proportional: Both declining at similar rates
+• Efficiency Improvement: Spend down, profit up moderately
+• Minimal Growth: Small positive changes (≤${thresholds.minimalGrowth.maxSpendChange}%/${thresholds.minimalGrowth.maxProfitChange}%)
 
-🟡 Minimal Growth:
-• Small positive changes in both spend and profit
+⚪ Stable: Small changes in both directions, no clear trend
 
-🟡 Moderate Decline:
-• Both spend and profit declining moderately (>-5% but not scaling down)
-
-⚪ Stable:
-• Small changes in both directions, no clear trend`;
+CURRENT THRESHOLDS:
+• Healthy Growth: ${thresholds.healthyGrowth.minSpendChange}%/${thresholds.healthyGrowth.minProfitChange}%
+• Inefficient: <${thresholds.inefficientGrowth.maxProfitChange}% profit decline
+• Scaling Down: <${thresholds.scalingDown.maxSpendChange}% spend decline
+• Moderate: >${thresholds.moderateGrowthSpend}%/${thresholds.moderateGrowthProfit}%
+• Proportional Ratio: ${thresholds.proportionalDeclineRatio}x`;
 }
 
 /**
@@ -238,11 +300,48 @@ function getProjectGrowthStatusExplanation(projectName) {
 }
 
 /**
+ * Get detailed scenario analysis for debugging
+ */
+function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJECT) {
+  const thresholds = getGrowthThresholds(projectName);
+  
+  const analysis = {
+    spendPct,
+    profitPct,
+    projectName,
+    thresholds,
+    categories: {
+      spendUp: spendPct > thresholds.moderateGrowthSpend,
+      spendDown: spendPct < -thresholds.moderateGrowthSpend,
+      spendStable: Math.abs(spendPct) <= thresholds.moderateGrowthSpend,
+      profitUp: profitPct > thresholds.moderateGrowthProfit,
+      profitDown: profitPct < -thresholds.moderateGrowthProfit,
+      profitStable: Math.abs(profitPct) <= thresholds.moderateGrowthProfit,
+      spendBigUp: spendPct > thresholds.healthyGrowth.minSpendChange,
+      spendBigDown: spendPct < thresholds.scalingDown.maxSpendChange,
+      profitBigUp: profitPct > thresholds.healthyGrowth.minProfitChange,
+      profitBigDown: profitPct < thresholds.inefficientGrowth.maxProfitChange
+    }
+  };
+  
+  // Simulate the status calculation
+  const mockPrev = { eProfitForecast: 100, spend: 100 };
+  const mockCurr = { eProfitForecast: 100 + profitPct, spend: 100 + spendPct };
+  
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  analysis.status = calculateGrowthStatus(mockPrev, mockCurr, spendPct, profitPct);
+  setCurrentProject(originalProject);
+  
+  return analysis;
+}
+
+/**
  * Main: generate report for the last N days without progress indicators
  */
 function generateReport(days) {
   try {
-    const config = getCurrentConfig(); // Use current project config
+    const config = getCurrentConfig();
     
     // Save existing comments first
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -295,7 +394,7 @@ function generateReportForDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
   
   try {
-    const config = getCurrentConfig(); // Use current project config
+    const config = getCurrentConfig();
     
     // Save existing comments first
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -352,7 +451,7 @@ function generateReportForDateRange(startDate, endDate) {
  */
 function updateAllDataToCurrent() {
   const ui = SpreadsheetApp.getUi();
-  const config = getCurrentConfig(); // Use current project config
+  const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
@@ -392,8 +491,6 @@ function updateAllDataToCurrent() {
     // Calculate date range from earliest date to yesterday (excluding current incomplete week)
     const today = new Date();
     const dayOfWeek = today.getDay();
-    // If today is Sunday (0), we include up to Saturday (yesterday)
-    // Otherwise, we include up to last Saturday
     let endDate;
     if (dayOfWeek === 0) {
       // Today is Sunday, include up to yesterday (Saturday)
