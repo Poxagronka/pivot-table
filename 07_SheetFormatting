@@ -1,6 +1,6 @@
 /**
  * Sheet Formatting and Table Creation - Multi Project Support
- * Updated with text wrap for headers and comprehensive growth status formatting
+ * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
  */
 
 /**
@@ -13,6 +13,7 @@ function createEnhancedPivotTable(appData) {
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   else sheet.clear();
 
+  // ВАЖНО: Сначала вычисляем WoW метрики
   const wow = calculateWoWMetrics(appData);
 
   const headers = TABLE_CONFIG.HEADERS;
@@ -37,11 +38,12 @@ function createEnhancedPivotTable(appData) {
       // Calculate week totals
       const weekTotals = calculateWeekTotals(campaigns);
       
-      // WEEK row
+      // ИСПРАВЛЕНО: Получаем WoW данные для недели
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
-      const spendWoW = weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      
+      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
       const status = weekWoW.growthStatus || '';
       
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
@@ -50,7 +52,7 @@ function createEnhancedPivotTable(appData) {
         `${week.weekStart} - ${week.weekEnd}`,
         '', '',
         weekTotals.totalSpend.toFixed(2),
-        spendWoW,
+        spendWoW,  // Колонка F - Spend WoW %
         weekTotals.totalInstalls,
         weekTotals.avgCpi.toFixed(3),
         weekTotals.avgRoas.toFixed(2),
@@ -58,13 +60,13 @@ function createEnhancedPivotTable(appData) {
         weekTotals.avgArpu.toFixed(3),
         `${weekTotals.avgERoas.toFixed(0)}%`,
         weekTotals.totalProfit.toFixed(2),
-        profitWoW,
-        status,
-        '' // Comments column
+        profitWoW,  // Колонка N - eProfit WoW %
+        status,     // Колонка O - Growth Status
+        ''          // Колонка P - Comments
       ]);
       
       // Add campaign rows
-      addCampaignRows(tableData, campaigns, week, weekKey, wow);
+      addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData);
     });
   });
 
@@ -79,7 +81,8 @@ function createEnhancedPivotTable(appData) {
 }
 
 /**
- * Enhanced formatting function with text wrap for headers
+ * Enhanced formatting function with text wrap for headers and comments
+ * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
  */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const config = getCurrentConfig();
@@ -92,13 +95,22 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     .setFontWeight('bold')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
-    .setFontSize(11)
+    .setFontSize(10)
     .setWrap(true);  // Enable text wrapping for headers
 
   // Set column widths
   TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => {
     sheet.setColumnWidth(col.c, col.w);
   });
+
+  // НОВОЕ: Text wrap для колонки комментариев (колонка 16)
+  if (numRows > 1) {
+    const commentsRange = sheet.getRange(2, 16, numRows - 1, 1);
+    commentsRange
+      .setWrap(true)
+      .setVerticalAlignment('top')
+      .setHorizontalAlignment('left');
+  }
 
   // Categorize rows by type
   const appRows = [], weekRows = [];
@@ -118,19 +130,19 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
          .setBackground(COLORS.APP_ROW.background)
          .setFontColor(COLORS.APP_ROW.fontColor)
          .setFontWeight('bold')
-         .setFontSize(11)
+         .setFontSize(10)
   );
 
   weekRows.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.WEEK_ROW.background)
-         .setFontSize(11)
+         .setFontSize(10)
   );
 
   campaignRows.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.CAMPAIGN_ROW.background)
-         .setFontSize(10)
+         .setFontSize(9)
   );
 
   // Apply numeric formats
@@ -158,7 +170,7 @@ function applyConditionalFormatting(sheet, numRows) {
   const rules = [];
   
   if (numRows > 1) {
-    // Spend WoW % formatting
+    // Spend WoW % formatting (колонка F = 6)
     const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -175,7 +187,7 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([spendRange]).build()
     );
 
-    // E-ROAS 365d formatting (using current project's target)
+    // E-ROAS 365d formatting (колонка L = 12)
     const eroasRange = sheet.getRange(2, 12, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -199,7 +211,7 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([eroasRange]).build()
     );
 
-    // eProfit WoW % formatting
+    // eProfit WoW % formatting (колонка N = 14)
     const profitRange = sheet.getRange(2, 14, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -216,7 +228,7 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    // Comprehensive Growth Status formatting
+    // Comprehensive Growth Status formatting (колонка O = 15)
     const growthRange = sheet.getRange(2, 15, numRows - 1, 1);
     const statusColors = {
       // Positive statuses - Green shades
@@ -242,9 +254,13 @@ function applyConditionalFormatting(sheet, numRows) {
       "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
       "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
       "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
+      "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
       
       // Stable - Gray
-      "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" }
+      "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" },
+      
+      // First week
+      "First Week": { background: "#e0e0e0", fontColor: "#757575" }
     };
 
     Object.entries(statusColors).forEach(([status, colors]) => {
@@ -302,17 +318,23 @@ function calculateWeekTotals(campaigns) {
 }
 
 /**
- * Add campaign rows to table data
+ * Add campaign rows to table data - ИСПРАВЛЕНО
  */
-function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
+function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
   // Sort campaigns by spend (highest first)
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
     const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+    
+    // ИСПРАВЛЕНО: Получаем WoW данные для кампании
     const key = `${campaign.sourceApp}_${weekKey}`;
     const sourceWoW = wow.sourceAppWoW[key] || {};
-    const spendPct = sourceWoW.spendChangePercent ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = sourceWoW.eProfitChangePercent ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    
+    const spendPct = sourceWoW.spendChangePercent !== undefined ? `${sourceWoW.spendChangePercent.toFixed(0)}%` : '';
+    const profitPct = sourceWoW.eProfitChangePercent !== undefined ? `${sourceWoW.eProfitChangePercent.toFixed(0)}%` : '';
     const growthStatus = sourceWoW.growthStatus || '';
+    
+    // Добавляем в formatData информацию о кампании
+    formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
     tableData.push([
       'CAMPAIGN',
@@ -320,7 +342,7 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
       link,
       campaign.geo,
       campaign.spend.toFixed(2),
-      spendPct,
+      spendPct,      // Колонка F - Spend WoW %
       campaign.installs,
       campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
       campaign.roas.toFixed(2),
@@ -328,9 +350,9 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow) {
       campaign.eArpuForecast.toFixed(3),
       `${campaign.eRoasForecast.toFixed(0)}%`,
       campaign.eProfitForecast.toFixed(2),
-      profitPct,
-      growthStatus,
-      '' // Comments column
+      profitPct,     // Колонка N - eProfit WoW %
+      growthStatus,  // Колонка O - Growth Status
+      ''             // Колонка P - Comments
     ]);
   });
 }
