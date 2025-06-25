@@ -7,8 +7,8 @@
  * Fetch data from API with updated headers using current project configuration
  */
 function fetchCampaignData(dateRange) {
-  const config = getCurrentConfig(); // Get current project config
-  const apiConfig = getCurrentApiConfig(); // Get current project API config
+  const config = getCurrentConfig();
+  const apiConfig = getCurrentApiConfig();
   
   // Build filters array
   const filters = [
@@ -22,12 +22,12 @@ function fetchCampaignData(dateRange) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular - exclude campaigns)
-      const excludePattern = searchPattern.substring(1); // Remove '!' prefix
+      // Negative filter (for Regular/Google_Ads - exclude campaigns)
+      const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
         values: [], 
-        include: false, // exclude instead of include
+        include: false,
         searchByString: excludePattern
       });
     } else {
@@ -40,13 +40,15 @@ function fetchCampaignData(dateRange) {
       });
     }
   }
-  // For Moloco: no campaign filter at all
+  
+  // Determine date dimension based on project
+  const dateDimension = CURRENT_PROJECT === 'GOOGLE_ADS' ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
     variables: {
       dateFilters: [{
-        dimension: "INSTALL_DATE",
+        dimension: dateDimension,
         from: dateRange.from,
         to: dateRange.to,
         include: true
@@ -95,7 +97,6 @@ function fetchProjectCampaignData(projectName, dateRange) {
   const config = getProjectConfig(projectName);
   const apiConfig = getProjectApiConfig(projectName);
   
-  // Validate project configuration
   if (!config.BEARER_TOKEN) {
     throw new Error(`${projectName} project is not configured: missing BEARER_TOKEN`);
   }
@@ -116,12 +117,12 @@ function fetchProjectCampaignData(projectName, dateRange) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular - exclude campaigns)
-      const excludePattern = searchPattern.substring(1); // Remove '!' prefix
+      // Negative filter (for Regular/Google_Ads - exclude campaigns)
+      const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
         values: [], 
-        include: false, // exclude instead of include
+        include: false,
         searchByString: excludePattern
       });
     } else {
@@ -134,13 +135,15 @@ function fetchProjectCampaignData(projectName, dateRange) {
       });
     }
   }
-  // For Moloco: no campaign filter at all
+  
+  // Determine date dimension based on project
+  const dateDimension = projectName === 'GOOGLE_ADS' ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
     variables: {
       dateFilters: [{
-        dimension: "INSTALL_DATE",
+        dimension: dateDimension,
         from: dateRange.from,
         to: dateRange.to,
         include: true
@@ -287,14 +290,40 @@ function processApiData(rawData) {
 
       const campaign = row[1];
       const app = row[2];
-      const cpi = parseFloat(row[3].value) || 0;
-      const installs = parseInt(row[4].value) || 0;
-      const ipm = parseFloat(row[5].value) || 0;
-      const spend = parseFloat(row[6].value) || 0;
-      const roas = parseFloat(row[7].value) || 0;
-      const eArpuForecast = parseFloat(row[8].value) || 0;
-      const eRoasForecast = parseFloat(row[9].value) || 0;
-      const eProfitForecast = parseFloat(row[10].value) || 0;
+      
+      // Extract metrics based on project type
+      let metrics;
+      if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+        // Google Ads format: cpi, installs, spend, rr_d1, roas_d1, rr_d7, e_roas_365, e_profit_730
+        metrics = {
+          cpi: parseFloat(row[3].value) || 0,
+          installs: parseInt(row[4].value) || 0,
+          spend: parseFloat(row[5].value) || 0,
+          rrD1: parseFloat(row[6].value) || 0,
+          roas: parseFloat(row[7].value) || 0,
+          rrD7: parseFloat(row[8].value) || 0,
+          eRoasForecast: parseFloat(row[9].value) || 0,
+          eProfitForecast: parseFloat(row[10].value) || 0,
+          // Default values for missing metrics
+          ipm: 0,
+          eArpuForecast: 0
+        };
+      } else {
+        // Original format: cpi, installs, ipm, spend, roas, e_arpu, e_roas, e_profit
+        metrics = {
+          cpi: parseFloat(row[3].value) || 0,
+          installs: parseInt(row[4].value) || 0,
+          ipm: parseFloat(row[5].value) || 0,
+          spend: parseFloat(row[6].value) || 0,
+          roas: parseFloat(row[7].value) || 0,
+          eArpuForecast: parseFloat(row[8].value) || 0,
+          eRoasForecast: parseFloat(row[9].value) || 0,
+          eProfitForecast: parseFloat(row[10].value) || 0,
+          // Default values for Google Ads metrics
+          rrD1: 0,
+          rrD7: 0
+        };
+      }
 
       const sunday = getSundayOfWeek(new Date(date));
 
@@ -322,7 +351,7 @@ function processApiData(rawData) {
       let campaignId = 'Unknown';
       
       if (campaign) {
-        // For UaCampaign objects (Tricky/Regular)
+        // For UaCampaign objects (Tricky/Regular/Google_Ads)
         if (campaign.campaignName) {
           campaignName = campaign.campaignName;
           campaignId = campaign.campaignId || campaign.id || 'Unknown';
@@ -341,14 +370,7 @@ function processApiData(rawData) {
         date: date,
         campaignId: campaignId,
         campaignName: campaignName,
-        cpi,
-        installs,
-        ipm,
-        spend,
-        roas,
-        eArpuForecast,
-        eRoasForecast,
-        eProfitForecast,
+        ...metrics,
         status: campaign.status || 'Unknown',
         type: campaign.type || 'Unknown',
         geo,
@@ -383,7 +405,6 @@ function processProjectApiData(projectName, rawData) {
 
 /**
  * Extract geo information from campaign name
- * This function might be project-specific in the future
  */
 function extractGeoFromCampaign(campaignName) {
   const geoMap = {
@@ -414,12 +435,12 @@ function extractSourceApp(campaignName) {
   try {
     // Handle Moloco APD_ campaigns: show full campaign name
     if (campaignName.startsWith('APD_')) {
-      return campaignName; // Return full campaign name for Moloco
+      return campaignName;
     }
     
-    // Handle Regular campaigns: DO NOT modify campaign names - return as is
-    if (CURRENT_PROJECT === 'REGULAR') {
-      return campaignName; // Return full campaign name for Regular without modification
+    // Handle Regular and Google_Ads campaigns: DO NOT modify campaign names - return as is
+    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS') {
+      return campaignName;
     }
     
     // Handle Tricky campaigns (original logic)
