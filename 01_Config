@@ -1,180 +1,58 @@
 /**
- * Configuration file for Campaign Report Google Apps Script
- * Multi-project support: Tricky, Moloco, and Regular
- * ОБНОВЛЕНО: Ширины колонок для Installs, CPI, ROAS D-1, IPM = 60
+ * Configuration file - ИСПРАВЛЕНО: добавлен GOOGLE_ADS
  */
 
-// Main spreadsheet ID (same for all projects)
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
-
-// Shared Bearer Token for all projects
 var SHARED_BEARER_TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA';
 
-// Settings storage property keys
 var PROPERTY_KEYS = {
   TARGET_EROAS_TRICKY: 'TARGET_EROAS_TRICKY',
   TARGET_EROAS_MOLOCO: 'TARGET_EROAS_MOLOCO',
   TARGET_EROAS_REGULAR: 'TARGET_EROAS_REGULAR',
+  TARGET_EROAS_GOOGLE_ADS: 'TARGET_EROAS_GOOGLE_ADS',
   AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
   AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED',
   GROWTH_THRESHOLDS_TRICKY: 'GROWTH_THRESHOLDS_TRICKY',
   GROWTH_THRESHOLDS_MOLOCO: 'GROWTH_THRESHOLDS_MOLOCO',
-  GROWTH_THRESHOLDS_REGULAR: 'GROWTH_THRESHOLDS_REGULAR'
+  GROWTH_THRESHOLDS_REGULAR: 'GROWTH_THRESHOLDS_REGULAR',
+  GROWTH_THRESHOLDS_GOOGLE_ADS: 'GROWTH_THRESHOLDS_GOOGLE_ADS'
 };
 
-// Default target eROAS values
 var DEFAULT_TARGET_EROAS = {
   TRICKY: 160,
   MOLOCO: 140,
-  REGULAR: 140
+  REGULAR: 140,
+  GOOGLE_ADS: 140
 };
 
-// ИСПРАВЛЕННАЯ система порогов - единая структура для всех сценариев
 var DEFAULT_GROWTH_THRESHOLDS_BASE = {
-  // 🟢 Позитивные сценарии
-  healthyGrowth: { 
-    minSpendChange: 10,    // +10% спенд для здорового роста 
-    minProfitChange: 5     // +5% профит для здорового роста
-  },
-  
-  efficiencyImprovement: {
-    maxSpendDecline: -5,   // Спенд может падать до -5% для улучшения эффективности
-    minProfitGrowth: 8     // Профит должен расти минимум на +8%
-  },
-  
-  // 🔴 Критические сценарии  
-  inefficientGrowth: { 
-    minSpendChange: 0,     // Любой рост/стабильность спенда при падении профита
-    maxProfitChange: -8    // Критическое падение профита -8%
-  },
-  
-  // 🟠 Предупреждающие сценарии
-  decliningEfficiency: { 
-    minSpendStable: -2,    // Спенд стабилен (от -2% до +2%)
-    maxSpendGrowth: 10,    // Максимальный рост спенда для этого сценария
-    maxProfitDecline: -4,  // Падение профита от -4% до -7%
-    minProfitDecline: -7   // Минимум для этого сценария
-  },
-  
-  // 🔵 Сценарии сокращения (Scaling Down)
+  healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+  efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
+  inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
+  decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
   scalingDown: { 
-    maxSpendChange: -15,   // Большое сокращение спенда
-    // Подкатегории:
-    efficient: {           // Эффективное сокращение
-      minProfitChange: 0   // Профит стабилен или растет
-    },
-    moderate: {            // Умеренное сокращение  
-      maxProfitDecline: -10, // Профит падает умеренно
-      minProfitDecline: -1   // Минимальное падение
-    },
-    problematic: {         // Проблематичное сокращение
-      maxProfitDecline: -15  // Профит падает сильно
-    }
+    maxSpendChange: -15,
+    efficient: { minProfitChange: 0 },
+    moderate: { maxProfitDecline: -10, minProfitDecline: -1 },
+    problematic: { maxProfitDecline: -15 }
   },
-  
-  // 🟡 Умеренные сценарии - ИСПРАВЛЕНЫ для совместимости
-  moderateGrowthSpend: 3,     // Минимальный рост спенда для умеренного роста
-  moderateGrowthProfit: 2,    // Минимальный рост профита для умеренного роста
-  
-  minimalGrowth: {
-    maxSpendChange: 2,     // Максимальный рост спенда для минимального роста
-    maxProfitChange: 1     // Максимальный рост профита
+  moderateGrowthSpend: 3,
+  moderateGrowthProfit: 2,
+  minimalGrowth: { maxSpendChange: 2, maxProfitChange: 1 },
+  moderateDecline: { 
+    maxSpendDecline: -3, maxProfitDecline: -3, spendOptimizationRatio: 1.5,
+    efficiencyDropRatio: 1.5, proportionalRatio: 1.3
   },
-  
-  // Сценарии умеренного спада
-  moderateDecline: {
-    maxSpendDecline: -3,   // До -3% считается умеренным спадом спенда
-    maxProfitDecline: -3,  // До -3% считается умеренным спадом профита
-    spendOptimizationRatio: 1.5,  // Спенд должен падать в 1.5 раза быстрее для оптимизации
-    efficiencyDropRatio: 1.5,     // Профит падает в 1.5 раза быстрее - падение эффективности
-    proportionalRatio: 1.3        // Разница не более чем в 1.3 раза для пропорционального спада
-  },
-  
-  // ⚪ Стабильные сценарии
-  stable: {
-    maxAbsoluteChange: 2   // Изменения до ±2% считаются стабильностью
-  }
+  stable: { maxAbsoluteChange: 2 }
 };
 
 var DEFAULT_GROWTH_THRESHOLDS = {
   TRICKY: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
   MOLOCO: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
-  REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
+  REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
+  GOOGLE_ADS: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
-// UX-friendly threshold descriptions for settings UI - ОБНОВЛЕННЫЕ
-var THRESHOLD_DESCRIPTIONS = {
-  healthyGrowth: {
-    title: "🟢 Healthy Growth",
-    description: "Классический здоровый рост - оба показателя растут значительно",
-    fields: {
-      minSpendChange: "Минимальный рост спенда %",
-      minProfitChange: "Минимальный рост профита %"
-    },
-    example: "Spend +15%, Profit +10% → 🟢 Healthy Growth"
-  },
-  
-  efficiencyImprovement: {
-    title: "🟢 Efficiency Improvement", 
-    description: "Улучшение эффективности - спенд падает/стабилен, профит растет",
-    fields: {
-      maxSpendDecline: "Максимальное падение спенда % (можно до этого значения)",
-      minProfitGrowth: "Минимальный рост профита % для значительного улучшения"
-    },
-    example: "Spend -10%, Profit +15% → 🟢 Efficiency Improvement"
-  },
-  
-  inefficientGrowth: {
-    title: "🔴 Inefficient Growth", 
-    description: "Критические сценарии - профит падает значительно при росте/стабильности спенда",
-    fields: {
-      minSpendChange: "Минимальный рост спенда % для срабатывания при падении профита",
-      maxProfitChange: "Критическое падение профита %"
-    },
-    example: "Spend +15%, Profit -12% → 🔴 Inefficient Growth"
-  },
-  
-  decliningEfficiency: {
-    title: "🟠 Declining Efficiency",
-    description: "Предупреждение - эффективность снижается при росте/стабильности спенда",
-    fields: {
-      minSpendStable: "Минимальное изменение спенда для 'стабильности'",
-      maxSpendGrowth: "Максимальный рост спенда для этого сценария",
-      maxProfitDecline: "Начало падения профита для предупреждения",
-      minProfitDecline: "Конец диапазона (дальше уже критично)"
-    },
-    example: "Spend +8%, Profit -5% → 🟠 Declining Efficiency"
-  },
-  
-  scalingDown: {
-    title: "🔵 Scaling Down",
-    description: "Сценарии значительного сокращения спенда",
-    fields: {
-      maxSpendChange: "Критическое сокращение спенда %"
-    },
-    subcategories: {
-      efficient: "Профит стабилен/растет при сокращении спенда",
-      moderate: "Профит падает умеренно при сокращении спенда", 
-      problematic: "Профит падает сильно при сокращении спенда"
-    },
-    example: "Spend -25%, Profit +2% → 🔵 Scaling Down - Efficient"
-  },
-  
-  moderateScenarios: {
-    title: "🟡 Moderate Scenarios",
-    description: "Умеренные изменения - есть движение, но не критичное",
-    types: {
-      moderateGrowth: "Оба показателя растут, но не достигают порогов здорового роста",
-      minimalGrowth: "Минимальные положительные изменения",
-      moderateDecline: "Умеренные негативные изменения с разными паттернами"
-    },
-    example: "Spend +8%, Profit +4% → 🟡 Moderate Growth"
-  }
-};
-
-/**
- * Get target eROAS for a project from script properties or default
- */
 function getTargetEROAS(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'TARGET_EROAS_' + projectName;
@@ -182,18 +60,12 @@ function getTargetEROAS(projectName) {
   return value ? parseInt(value) : DEFAULT_TARGET_EROAS[projectName];
 }
 
-/**
- * Set target eROAS for a project
- */
 function setTargetEROAS(projectName, value) {
   var props = PropertiesService.getScriptProperties();
   var key = 'TARGET_EROAS_' + projectName;
   props.setProperty(key, value.toString());
 }
 
-/**
- * Get growth thresholds for a project from script properties or default
- */
 function getGrowthThresholds(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'GROWTH_THRESHOLDS_' + projectName;
@@ -211,90 +83,27 @@ function getGrowthThresholds(projectName) {
   return DEFAULT_GROWTH_THRESHOLDS[projectName];
 }
 
-/**
- * Set growth thresholds for a project
- */
 function setGrowthThresholds(projectName, thresholds) {
   var props = PropertiesService.getScriptProperties();
   var key = 'GROWTH_THRESHOLDS_' + projectName;
   props.setProperty(key, JSON.stringify(thresholds));
 }
 
-/**
- * Reset growth thresholds to default for a project
- */
 function resetGrowthThresholds(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'GROWTH_THRESHOLDS_' + projectName;
   props.deleteProperty(key);
 }
 
-/**
- * Get user-friendly threshold explanation for UI
- */
-function getThresholdExplanation(thresholdType, projectName) {
-  var desc = THRESHOLD_DESCRIPTIONS[thresholdType];
-  var current = getGrowthThresholds(projectName)[thresholdType];
-  
-  if (!desc) return 'Unknown threshold type';
-  
-  var explanation = desc.title + '\n' + desc.description + '\n\n';
-  
-  if (desc.fields) {
-    Object.keys(desc.fields).forEach(function(field) {
-      var description = desc.fields[field];
-      var value = typeof current === 'object' ? current[field] : current;
-      explanation += '• ' + description + ': ' + value + '%\n';
-    });
-  }
-  
-  explanation += '\nExample: ' + desc.example;
-  return explanation;
-}
-
-/**
- * Get comprehensive status overview for a project - ИСПРАВЛЕННЫЙ
- */
-function getProjectStatusOverview(projectName) {
-  var thresholds = getGrowthThresholds(projectName);
-  var targetROAS = getTargetEROAS(projectName);
-  
-  return '📊 ' + projectName + ' STATUS OVERVIEW\n\n' +
-    '🎯 Target eROAS: ' + targetROAS + '%\n\n' +
-    
-    '🟢 ПОЗИТИВНЫЕ СЦЕНАРИИ:\n' +
-    '• Healthy Growth: Spend >' + thresholds.healthyGrowth.minSpendChange + '% AND Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n' +
-    '• Efficiency Improvement: Spend <' + thresholds.efficiencyImprovement.maxSpendDecline + '% AND Profit >' + thresholds.efficiencyImprovement.minProfitGrowth + '%\n\n' +
-    
-    '🔴 КРИТИЧЕСКИЕ СЦЕНАРИИ:\n' +
-    '• Inefficient Growth: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '% (при любом росте спенда)\n\n' +
-    
-    '🟠 ПРЕДУПРЕЖДЕНИЯ:\n' +
-    '• Declining Efficiency: Spend стабилен/растет, Profit от ' + thresholds.decliningEfficiency.maxProfitDecline + '% до ' + thresholds.decliningEfficiency.minProfitDecline + '%\n\n' +
-    
-    '🔵 СОКРАЩЕНИЕ:\n' +
-    '• Scaling Down: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n' +
-    '  - Efficient: Profit ≥0%\n' +
-    '  - Moderate: Profit от ' + thresholds.scalingDown.moderate.minProfitDecline + '% до ' + thresholds.scalingDown.moderate.maxProfitDecline + '%\n' +
-    '  - Problematic: Profit <' + thresholds.scalingDown.problematic.maxProfitDecline + '%\n\n' +
-    
-    '🟡 УМЕРЕННЫЕ СЦЕНАРИИ:\n' +
-    '• Moderate Growth: Spend >' + thresholds.moderateGrowthSpend + '%, Profit >' + thresholds.moderateGrowthProfit + '%\n' +
-    '• Minimal Growth: Spend ≤' + thresholds.minimalGrowth.maxSpendChange + '%, Profit ≤' + thresholds.minimalGrowth.maxProfitChange + '%\n' +
-    '• Moderate Decline: Различные паттерны умеренного спада до ' + thresholds.moderateDecline.maxSpendDecline + '%/' + thresholds.moderateDecline.maxProfitDecline + '%\n\n' +
-    
-    '⚪ СТАБИЛЬНОСТЬ:\n' +
-    '• Stable: Изменения ≤±' + thresholds.stable.maxAbsoluteChange + '%';
-}
-
-// Project configurations with dynamic getters
 function getTrickyTargetEROAS() { return getTargetEROAS('TRICKY'); }
 function getMolocoTargetEROAS() { return getTargetEROAS('MOLOCO'); }
 function getRegularTargetEROAS() { return getTargetEROAS('REGULAR'); }
+function getGoogleAdsTargetEROAS() { return getTargetEROAS('GOOGLE_ADS'); }
 
 function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
 function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
 function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
+function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS'); }
 
 var PROJECTS = {
   TRICKY: {
@@ -394,13 +203,44 @@ var PROJECTS = {
         { id: "e_profit_forecast", day: 730 }
       ]
     }
+  },
+
+  GOOGLE_ADS: {
+    SHEET_NAME: 'Google_Ads',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getGoogleAdsTargetEROAS,
+    GROWTH_THRESHOLDS: getGoogleAdsGrowthThresholds,
+    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Google_Ads',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["378302368699121664"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: [
+        { id: "cpi", day: null },
+        { id: "installs", day: null },
+        { id: "spend", day: null },
+        { id: "retention_rate", day: 1 },
+        { id: "roas", day: 1 },
+        { id: "retention_rate", day: 7 },
+        { id: "e_roas_forecast", day: 365 },
+        { id: "e_profit_forecast", day: 730 }
+      ]
+    }
   }
 };
 
-// Current project (для обратной совместимости)
 var CURRENT_PROJECT = 'TRICKY';
 
-// Helper functions to get current project configuration
 function getCurrentConfig() {
   return {
     SHEET_ID: MAIN_SHEET_ID,
@@ -439,7 +279,6 @@ function getProjectApiConfig(projectName) {
   return PROJECTS[projectName].API_CONFIG;
 }
 
-// Set current project
 function setCurrentProject(projectName) {
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
@@ -447,11 +286,9 @@ function setCurrentProject(projectName) {
   CURRENT_PROJECT = projectName;
 }
 
-// Legacy support - keep old CONFIG and API_CONFIG for backward compatibility
 var CONFIG = getCurrentConfig();
 var API_CONFIG = getCurrentApiConfig();
 
-// Table configuration with UPDATED column widths
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -459,26 +296,13 @@ var TABLE_CONFIG = {
     'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 },   // Level
-    { c: 2, w: 300 },  // Week Range / Source App
-    { c: 3, w: 50 },   // ID
-    { c: 4, w: 50 },   // GEO
-    { c: 5, w: 75 },   // Spend
-    { c: 6, w: 80 },  // Spend WoW %
-    { c: 7, w: 60 },   // Installs - ОБНОВЛЕНО
-    { c: 8, w: 60 },   // CPI - ОБНОВЛЕНО  
-    { c: 9, w: 60 },   // ROAS D-1 - ОБНОВЛЕНО
-    { c: 10, w: 50 },  // IPM - ОБНОВЛЕНО
-    { c: 11, w: 75 }, // eARPU 365d
-    { c: 12, w: 75 }, // eROAS 365d
-    { c: 13, w: 75 }, // eProfit 730d
-    { c: 14, w: 85 }, // eProfit 730d WoW %
-    { c: 15, w: 160 }, // Growth Status
-    { c: 16, w: 250 }  // Comments - УВЕЛИЧЕНО для text wrap
+    { c: 1, w: 80 },   { c: 2, w: 300 },  { c: 3, w: 50 },   { c: 4, w: 50 },
+    { c: 5, w: 75 },   { c: 6, w: 80 },   { c: 7, w: 60 },   { c: 8, w: 60 },
+    { c: 9, w: 60 },   { c: 10, w: 50 },  { c: 11, w: 75 },  { c: 12, w: 75 },
+    { c: 13, w: 75 },  { c: 14, w: 85 },  { c: 15, w: 160 }, { c: 16, w: 250 }
   ]
 };
 
-// Formatting colors (same for all projects)
 var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
