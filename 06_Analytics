@@ -1,6 +1,5 @@
 /**
- * Analytics Functions - Multi Project Support
- * ИСПРАВЛЕНО: WoW по campaignId, убрано логирование, добавлен ProgressManager
+ * Analytics Functions - Сокращенная версия
  */
 
 function calculateWoWMetrics(appData) {
@@ -26,7 +25,8 @@ function calculateWoWMetrics(appData) {
               campaignId: c.campaignId, campaignName: c.campaignName, sourceApp: c.sourceApp,
               weekStart: week.weekStart, spend: c.spend, eRoasForecast: c.eRoasForecast,
               eProfitForecast: c.eProfitForecast, installs: c.installs, cpi: c.cpi,
-              roas: c.roas, ipm: c.ipm, eArpuForecast: c.eArpuForecast
+              roas: c.roas, ipm: c.ipm || 0, eArpuForecast: c.eArpuForecast || 0,
+              rrD1: c.rrD1 || 0, rrD7: c.rrD7 || 0
             };
           }
         });
@@ -72,8 +72,8 @@ function calculateWoWMetrics(appData) {
     });
 
     return { campaignWoW, appWeekWoW };
-  } catch (error) {
-    console.error('Error calculating WoW metrics:', error);
+  } catch (e) {
+    console.error('Error calculating WoW metrics:', e);
     return { campaignWoW: {}, appWeekWoW: {} };
   }
 }
@@ -172,7 +172,6 @@ function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJEC
   return { spendPct, profitPct, projectName, status };
 }
 
-// ИСПРАВЛЕНО: Убран ProgressManager, простая генерация отчетов
 function generateReport(days) {
   try {
     const config = getCurrentConfig();
@@ -204,7 +203,6 @@ function generateReport(days) {
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
-    
   } catch (e) {
     console.error('Error generating report:', e);
     SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
@@ -246,7 +244,6 @@ function generateReportForDateRange(startDate, endDate) {
     cache.applyCommentsToSheet();
     
     ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
-    
   } catch (e) {
     console.error('Error generating report for date range:', e);
     ui.alert('Error', 'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n1. Your internet connection\n2. The API token is still valid\n3. Try a smaller date range', ui.ButtonSet.OK);
@@ -314,7 +311,6 @@ function updateAllDataToCurrent() {
     cache.applyCommentsToSheet();
     
     ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
-    
   } catch (e) {
     console.error('Error updating data:', e);
     ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
