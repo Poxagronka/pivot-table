@@ -2,6 +2,7 @@
  * Sheet Formatting and Table Creation - Multi Project Support
  * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
  * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId
+ * ИСПРАВЛЕНО: Добавлен text wrap для колонки Growth Status
  */
 
 /**
@@ -84,6 +85,7 @@ function createEnhancedPivotTable(appData) {
 /**
  * Enhanced formatting function with text wrap for headers and comments
  * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
+ * ИСПРАВЛЕНО: Добавлен text wrap для колонки Growth Status
  */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const config = getCurrentConfig();
@@ -104,12 +106,20 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     sheet.setColumnWidth(col.c, col.w);
   });
 
-  // НОВОЕ: Text wrap для колонки комментариев (колонка 16)
+  // ИСПРАВЛЕНИЕ: Text wrap для колонки комментариев (колонка 16) И Growth Status (колонка 15)
   if (numRows > 1) {
+    // Comments column (16)
     const commentsRange = sheet.getRange(2, 16, numRows - 1, 1);
     commentsRange
       .setWrap(true)
       .setVerticalAlignment('top')
+      .setHorizontalAlignment('left');
+    
+    // НОВОЕ: Growth Status column (15) - добавляем text wrap
+    const growthStatusRange = sheet.getRange(2, 15, numRows - 1, 1);
+    growthStatusRange
+      .setWrap(true)
+      .setVerticalAlignment('middle')
       .setHorizontalAlignment('left');
   }
 
