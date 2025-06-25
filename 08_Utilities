@@ -1,15 +1,8 @@
 /**
- * Utility Functions - Multi Project Support
- * Contains helper functions for date manipulation, validation, and sheet operations
+ * Utility Functions - Сокращенная версия
  */
 
-/**
- * Date Utility Functions
- */
-
-/**
- * Get Monday of the week for a given date
- */
+// Date Utils
 function getMondayOfWeek(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -17,9 +10,6 @@ function getMondayOfWeek(date) {
   return new Date(d.setDate(diff));
 }
 
-/**
- * Get Sunday of the week for a given date
- */
 function getSundayOfWeek(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -27,9 +17,6 @@ function getSundayOfWeek(date) {
   return new Date(d.setDate(diff));
 }
 
-/**
- * Format date for API (YYYY-MM-DD)
- */
 function formatDateForAPI(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -37,13 +24,9 @@ function formatDateForAPI(date) {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * Calculate date range for last N days (inclusive)
- */
 function getDateRange(days) {
   const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
   const today = new Date();
-  // Zero out time portion
   today.setHours(0, 0, 0, 0);
   const endDate = new Date(today);
   const startDate = new Date(today);
@@ -54,34 +37,21 @@ function getDateRange(days) {
   };
 }
 
-/**
- * Validate date format (YYYY-MM-DD)
- */
 function isValidDate(dateString) {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
-  
   const date = new Date(dateString);
   return date instanceof Date && !isNaN(date);
 }
 
-/**
- * Sheet Utility Functions
- */
-
-/**
- * Expand all groups in the sheet
- */
+// Sheet Utils
 function expandAllGroups(sheet) {
   try {
-    // Expand all row groups
     const maxRows = sheet.getMaxRows();
-    // Try to expand multiple times to handle nested groups
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         sheet.getRange(1, 1, maxRows, 1).expandGroups();
       } catch (e) {
-        // No more groups to expand
         break;
       }
     }
@@ -90,13 +60,9 @@ function expandAllGroups(sheet) {
   }
 }
 
-/**
- * Clear all existing groups in the sheet
- */
 function clearAllGroups(sheet) {
   try {
     const maxRows = sheet.getMaxRows();
-    // Keep removing group depth until there are no more groups
     let hasGroups = true;
     let attempts = 0;
     
@@ -105,7 +71,6 @@ function clearAllGroups(sheet) {
         sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
         attempts++;
       } catch (e) {
-        // No more groups to remove
         hasGroups = false;
       }
     }
@@ -114,42 +79,28 @@ function clearAllGroups(sheet) {
   }
 }
 
-/**
- * Recreate grouping for the entire sheet
- */
 function recreateGrouping(sheet) {
-  // First, expand all existing groups to ensure we can work with all rows
   expandAllGroups(sheet);
-  
-  // Clear all existing groups
   clearAllGroups(sheet);
-  
-  // Recreate groups
   const data = sheet.getDataRange().getValues();
   createRowGrouping(sheet, data, null);
 }
 
-/**
- * Clear all data without UI prompts (for internal use) - Multi Project Support
- */
 function clearAllDataSilent() {
   try {
-    const config = getCurrentConfig(); // Use current project config
+    const config = getCurrentConfig();
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
     const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
     const newSheet = spreadsheet.insertSheet(tempSheetName);
     const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (oldSheet) spreadsheet.deleteSheet(oldSheet);
     newSheet.setName(config.SHEET_NAME);
-  } catch (error) {
-    console.error('Error during sheet recreation:', error);
-    throw error;
+  } catch (e) {
+    console.error('Error during sheet recreation:', e);
+    throw e;
   }
 }
 
-/**
- * Clear data for specific project
- */
 function clearProjectDataSilent(projectName) {
   try {
     const config = getProjectConfig(projectName);
@@ -159,15 +110,12 @@ function clearProjectDataSilent(projectName) {
     const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (oldSheet) spreadsheet.deleteSheet(oldSheet);
     newSheet.setName(config.SHEET_NAME);
-  } catch (error) {
-    console.error(`Error during ${projectName} sheet recreation:`, error);
-    throw error;
+  } catch (e) {
+    console.error(`Error during ${projectName} sheet recreation:`, e);
+    throw e;
   }
 }
 
-/**
- * Get or create sheet for specific project
- */
 function getOrCreateProjectSheet(projectName) {
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -178,41 +126,23 @@ function getOrCreateProjectSheet(projectName) {
   return sheet;
 }
 
-/**
- * String Utility Functions
- */
-
-/**
- * Sanitize string for use as sheet name or other identifiers
- */
+// String Utils
 function sanitizeString(str) {
   if (!str) return '';
   return str.toString().trim().replace(/[^\w\s-]/g, '').substring(0, 100);
 }
 
-/**
- * Truncate string to specified length with ellipsis
- */
 function truncateString(str, maxLength = 50) {
   if (!str) return '';
   if (str.length <= maxLength) return str;
   return str.substring(0, maxLength - 3) + '...';
 }
 
-/**
- * Array Utility Functions
- */
-
-/**
- * Remove duplicates from array
- */
+// Array Utils
 function removeDuplicates(arr) {
   return [...new Set(arr)];
 }
 
-/**
- * Group array by key function
- */
 function groupBy(arr, keyFn) {
   return arr.reduce((groups, item) => {
     const key = keyFn(item);
@@ -222,9 +152,6 @@ function groupBy(arr, keyFn) {
   }, {});
 }
 
-/**
- * Sort array of objects by property
- */
 function sortByProperty(arr, property, ascending = true) {
   return arr.sort((a, b) => {
     const aVal = a[property];
@@ -235,13 +162,7 @@ function sortByProperty(arr, property, ascending = true) {
   });
 }
 
-/**
- * Number Utility Functions
- */
-
-/**
- * Format number as currency
- */
+// Number Utils
 function formatCurrency(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -251,56 +172,38 @@ function formatCurrency(amount, currency = 'USD') {
   }).format(amount);
 }
 
-/**
- * Format number as percentage
- */
 function formatPercentage(value, decimals = 1) {
   return (value * 100).toFixed(decimals) + '%';
 }
 
-/**
- * Round number to specified decimal places
- */
 function roundToDecimals(num, decimals = 2) {
   return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }
 
-/**
- * Check if value is a valid number
- */
 function isValidNumber(value) {
   return typeof value === 'number' && !isNaN(value) && isFinite(value);
 }
 
-/**
- * Error Handling Utilities
- */
-
-/**
- * Safe execution wrapper that catches and logs errors
- */
+// Error Handling
 function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
   try {
     return fn();
-  } catch (error) {
-    console.error(`Error in ${context}:`, error);
+  } catch (e) {
+    console.error(`Error in ${context}:`, e);
     return fallbackValue;
   }
 }
 
-/**
- * Retry function execution with exponential backoff
- */
 function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
   let attempts = 0;
   
   function attempt() {
     try {
       return fn();
-    } catch (error) {
+    } catch (e) {
       attempts++;
       if (attempts >= maxRetries) {
-        throw error;
+        throw e;
       }
       
       const delay = baseDelay * Math.pow(2, attempts - 1);
@@ -313,13 +216,7 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
   return attempt();
 }
 
-/**
- * Performance Utilities
- */
-
-/**
- * Measure execution time of a function
- */
+// Performance Utils
 function measureExecutionTime(fn, label = 'Function') {
   const startTime = new Date().getTime();
   const result = fn();
@@ -328,9 +225,6 @@ function measureExecutionTime(fn, label = 'Function') {
   return result;
 }
 
-/**
- * Batch operations to avoid quota limits
- */
 function batchOperation(items, batchSize, operation) {
   const results = [];
   for (let i = 0; i < items.length; i += batchSize) {
@@ -338,7 +232,6 @@ function batchOperation(items, batchSize, operation) {
     const batchResults = operation(batch, i);
     results.push(...batchResults);
     
-    // Small delay between batches to avoid quota issues
     if (i + batchSize < items.length) {
       Utilities.sleep(100);
     }
@@ -346,13 +239,7 @@ function batchOperation(items, batchSize, operation) {
   return results;
 }
 
-/**
- * Project Utility Functions
- */
-
-/**
- * Get all configured projects
- */
+// Project Utils
 function getConfiguredProjects() {
   const configured = [];
   Object.keys(PROJECTS).forEach(projectName => {
@@ -364,9 +251,6 @@ function getConfiguredProjects() {
   return configured;
 }
 
-/**
- * Validate project configuration
- */
 function validateProjectConfig(projectName) {
   if (!PROJECTS[projectName]) {
     return { valid: false, error: `Project ${projectName} does not exist` };
@@ -389,9 +273,6 @@ function validateProjectConfig(projectName) {
   return { valid: true };
 }
 
-/**
- * Get project status summary
- */
 function getProjectStatus(projectName) {
   const validation = validateProjectConfig(projectName);
   if (!validation.valid) {
