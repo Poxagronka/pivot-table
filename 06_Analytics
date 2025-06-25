@@ -1,14 +1,8 @@
 /**
  * Analytics Functions - Multi Project Support
- * Contains all analytical calculations and metrics
- * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId вместо sourceApp
- * ИСПРАВЛЕНО: Принудительное использование новых порогов с эмодзи
+ * ИСПРАВЛЕНО: WoW по campaignId, убрано логирование, добавлен ProgressManager
  */
 
-/**
- * Calculate Week-over-Week metrics per campaign and per app
- * ИСПРАВЛЕННАЯ ЛОГИКА: Теперь отслеживает каждую кампанию по campaignId
- */
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
     console.error('Invalid appData provided to calculateWoWMetrics');
@@ -19,7 +13,6 @@ function calculateWoWMetrics(appData) {
     const campaignData = {};
     const appWeekData = {};
 
-    // Aggregate raw data
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
       Object.values(app.weeks).forEach(week => {
@@ -27,30 +20,19 @@ function calculateWoWMetrics(appData) {
         const profit = week.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
         appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
 
-        // ИСПРАВЛЕНО: Группируем по campaignId вместо sourceApp
         week.campaigns.forEach(c => {
           if (c.campaignId) {
-            const key = `${c.campaignId}_${week.weekStart}`;
-            campaignData[key] = {
-              campaignId: c.campaignId,
-              campaignName: c.campaignName,
-              sourceApp: c.sourceApp,
-              weekStart: week.weekStart,
-              spend: c.spend,
-              eRoasForecast: c.eRoasForecast,
-              eProfitForecast: c.eProfitForecast,
-              installs: c.installs,
-              cpi: c.cpi,
-              roas: c.roas,
-              ipm: c.ipm,
-              eArpuForecast: c.eArpuForecast
+            campaignData[`${c.campaignId}_${week.weekStart}`] = {
+              campaignId: c.campaignId, campaignName: c.campaignName, sourceApp: c.sourceApp,
+              weekStart: week.weekStart, spend: c.spend, eRoasForecast: c.eRoasForecast,
+              eProfitForecast: c.eProfitForecast, installs: c.installs, cpi: c.cpi,
+              roas: c.roas, ipm: c.ipm, eArpuForecast: c.eArpuForecast
             };
           }
         });
       });
     });
 
-    // Compute campaign WoW - ИСПРАВЛЕНО: Теперь по campaignId
     const campaigns = {};
     Object.values(campaignData).forEach(d => {
       if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
@@ -62,55 +44,33 @@ function calculateWoWMetrics(appData) {
       campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
       campaigns[campaignId].forEach((curr, i) => {
         const key = `${campaignId}_${curr.weekStart}`;
-        campaignWoW[key] = { 
-          spendChangePercent: 0, 
-          eProfitChangePercent: 0, 
-          growthStatus: 'First Week' 
-        };
+        campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
         
         if (i > 0) {
           const prev = campaigns[campaignId][i - 1];
           const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
           const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
-          
-          const status = calculateGrowthStatus(prev, curr, spendPct, profitPct);
-          campaignWoW[key] = { 
-            spendChangePercent: spendPct, 
-            eProfitChangePercent: profitPct, 
-            growthStatus: status 
-          };
+          campaignWoW[key] = { spendChangePercent: spendPct, eProfitChangePercent: profitPct, growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) };
         }
       });
     });
 
-    // Compute app-level WoW (остается без изменений)
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
       const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
       weeks.forEach((curr, i) => {
         const key = `${appName}_${curr.weekStart}`;
-        appWeekWoW[key] = { 
-          spendChangePercent: 0, 
-          eProfitChangePercent: 0, 
-          growthStatus: 'First Week' 
-        };
+        appWeekWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
         
         if (i > 0) {
           const prev = weeks[i - 1];
           const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
           const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-          
-          const status = calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit');
-          appWeekWoW[key] = { 
-            spendChangePercent: spendPct, 
-            eProfitChangePercent: profitPct, 
-            growthStatus: status 
-          };
+          appWeekWoW[key] = { spendChangePercent: spendPct, eProfitChangePercent: profitPct, growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') };
         }
       });
     });
 
-    // ИСПРАВЛЕНО: Возвращаем campaignWoW вместо sourceAppWoW
     return { campaignWoW, appWeekWoW };
   } catch (error) {
     console.error('Error calculating WoW metrics:', error);
@@ -118,197 +78,62 @@ function calculateWoWMetrics(appData) {
   }
 }
 
-/**
- * Calculate growth status based on spend and profit changes
- * ИСПРАВЛЕНО: Принудительное использование новых порогов с эмодзи
- */
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
   const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
   
-  // ПРИНУДИТЕЛЬНО используем новые пороги с правильной структурой
-  const thresholds = {
+  const t = {
     healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
     efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
     inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
     decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
-    scalingDown: { 
-      maxSpendChange: -15,
-      efficient: { minProfitChange: 0 },
-      moderate: { maxProfitDecline: -10, minProfitDecline: -1 },
-      problematic: { maxProfitDecline: -15 }
-    },
-    moderateGrowthSpend: 3,
-    moderateGrowthProfit: 2,
+    scalingDown: { maxSpendChange: -15, efficient: { minProfitChange: 0 }, moderate: { maxProfitDecline: -10, minProfitDecline: -1 }, problematic: { maxProfitDecline: -15 } },
+    moderateGrowthSpend: 3, moderateGrowthProfit: 2,
     minimalGrowth: { maxSpendChange: 2, maxProfitChange: 1 },
-    moderateDecline: { 
-      maxSpendDecline: -3, 
-      maxProfitDecline: -3,
-      spendOptimizationRatio: 1.5,
-      efficiencyDropRatio: 1.5,
-      proportionalRatio: 1.3
-    },
+    moderateDecline: { maxSpendDecline: -3, maxProfitDecline: -3, spendOptimizationRatio: 1.5, efficiencyDropRatio: 1.5, proportionalRatio: 1.3 },
     stable: { maxAbsoluteChange: 2 }
   };
   
-  console.log(`Calculating growth status: spend=${spendPct.toFixed(1)}%, profit=${profitPct.toFixed(1)}%`);
+  if (prevProfit < 0 && currProfit > 0) return '🟢 Healthy Growth';
+  if (prevProfit > 0 && currProfit < 0) return '🔴 Inefficient Growth';
+  if (profitPct <= t.inefficientGrowth.maxProfitChange) return '🔴 Inefficient Growth';
+  if (spendPct >= t.healthyGrowth.minSpendChange && profitPct >= t.healthyGrowth.minProfitChange) return '🟢 Healthy Growth';
+  if (spendPct <= t.efficiencyImprovement.maxSpendDecline && profitPct >= t.efficiencyImprovement.minProfitGrowth) return '🟢 Efficiency Improvement';
+  if (spendPct <= t.efficiencyImprovement.maxSpendDecline && profitPct > 0 && profitPct < t.efficiencyImprovement.minProfitGrowth) return '🟡 Efficiency Improvement';
   
-  // ПРИОРИТЕТ 1: Переходы между прибылью и убытком (всегда приоритетны)
-  if (prevProfit < 0 && currProfit > 0) {
-    console.log('Status: Profit transition positive');
-    return '🟢 Healthy Growth';
-  }
-  if (prevProfit > 0 && currProfit < 0) {
-    console.log('Status: Profit transition negative');
-    return '🔴 Inefficient Growth';
-  }
-  
-  // ПРИОРИТЕТ 2: Критическое падение профита
-  if (profitPct <= thresholds.inefficientGrowth.maxProfitChange) {
-    console.log('Status: Critical profit decline');
-    return '🔴 Inefficient Growth';
-  }
-  
-  // ПРИОРИТЕТ 3: Здоровый рост
-  if (spendPct >= thresholds.healthyGrowth.minSpendChange && 
-      profitPct >= thresholds.healthyGrowth.minProfitChange) {
-    console.log('Status: Healthy growth criteria met');
-    return '🟢 Healthy Growth';
-  }
-  
-  // ПРИОРИТЕТ 4: Улучшение эффективности
-  // Значительное улучшение эффективности
-  if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
-      profitPct >= thresholds.efficiencyImprovement.minProfitGrowth) {
-    console.log('Status: Significant efficiency improvement');
-    return '🟢 Efficiency Improvement';
-  }
-  // Умеренное улучшение эффективности
-  if (spendPct <= thresholds.efficiencyImprovement.maxSpendDecline && 
-      profitPct > 0 && profitPct < thresholds.efficiencyImprovement.minProfitGrowth) {
-    console.log('Status: Moderate efficiency improvement');
-    return '🟡 Efficiency Improvement';
-  }
-  
-  // ПРИОРИТЕТ 5: Scaling Down сценарии
-  if (spendPct <= thresholds.scalingDown.maxSpendChange) {
-    if (profitPct >= thresholds.scalingDown.efficient.minProfitChange) {
-      console.log('Status: Efficient scaling down');
-      return '🔵 Scaling Down - Efficient';
-    }
-    if (profitPct >= thresholds.scalingDown.moderate.minProfitDecline && 
-        profitPct <= thresholds.scalingDown.moderate.maxProfitDecline) {
-      console.log('Status: Moderate scaling down');
-      return '🔵 Scaling Down - Moderate';
-    }
-    if (profitPct <= thresholds.scalingDown.problematic.maxProfitDecline) {
-      console.log('Status: Problematic scaling down');
-      return '🔵 Scaling Down - Problematic';
-    }
-    console.log('Status: General scaling down');
+  if (spendPct <= t.scalingDown.maxSpendChange) {
+    if (profitPct >= t.scalingDown.efficient.minProfitChange) return '🔵 Scaling Down - Efficient';
+    if (profitPct >= t.scalingDown.moderate.minProfitDecline && profitPct <= t.scalingDown.moderate.maxProfitDecline) return '🔵 Scaling Down - Moderate';
+    if (profitPct <= t.scalingDown.problematic.maxProfitDecline) return '🔵 Scaling Down - Problematic';
     return '🔵 Scaling Down';
   }
   
-  // ПРИОРИТЕТ 6: Снижение эффективности
-  if (spendPct >= thresholds.decliningEfficiency.minSpendStable && 
-      spendPct <= thresholds.decliningEfficiency.maxSpendGrowth &&
-      profitPct >= thresholds.decliningEfficiency.maxProfitDecline && 
-      profitPct <= thresholds.decliningEfficiency.minProfitDecline) {
-    console.log('Status: Declining efficiency');
-    return '🟠 Declining Efficiency';
-  }
+  if (spendPct >= t.decliningEfficiency.minSpendStable && spendPct <= t.decliningEfficiency.maxSpendGrowth && profitPct >= t.decliningEfficiency.maxProfitDecline && profitPct <= t.decliningEfficiency.minProfitDecline) return '🟠 Declining Efficiency';
   
-  // ПРИОРИТЕТ 7: Умеренные сценарии спада
-  if (spendPct < 0 && profitPct < 0 && 
-      spendPct >= thresholds.moderateDecline.maxSpendDecline && 
-      profitPct >= thresholds.moderateDecline.maxProfitDecline) {
-    
+  if (spendPct < 0 && profitPct < 0 && spendPct >= t.moderateDecline.maxSpendDecline && profitPct >= t.moderateDecline.maxProfitDecline) {
     const spendDeclineAbs = Math.abs(spendPct);
     const profitDeclineAbs = Math.abs(profitPct);
-    
-    // Спенд падает значительно быстрее профита = оптимизация
-    if (spendDeclineAbs >= profitDeclineAbs * thresholds.moderateDecline.spendOptimizationRatio) {
-      console.log('Status: Spend optimization decline');
-      return '🟡 Moderate Decline - Spend Optimization';
-    }
-    // Профит падает значительно быстрее спенда = падение эффективности
-    if (profitDeclineAbs >= spendDeclineAbs * thresholds.moderateDecline.efficiencyDropRatio) {
-      console.log('Status: Efficiency drop decline');
-      return '🟡 Moderate Decline - Efficiency Drop';
-    }
-    // Оба падают примерно одинаково
-    console.log('Status: Proportional decline');
+    if (spendDeclineAbs >= profitDeclineAbs * t.moderateDecline.spendOptimizationRatio) return '🟡 Moderate Decline - Spend Optimization';
+    if (profitDeclineAbs >= spendDeclineAbs * t.moderateDecline.efficiencyDropRatio) return '🟡 Moderate Decline - Efficiency Drop';
     return '🟡 Moderate Decline - Proportional';
   }
   
-  // ПРИОРИТЕТ 8: Умеренный рост
-  if (spendPct >= thresholds.moderateGrowthSpend && 
-      profitPct >= thresholds.moderateGrowthProfit &&
-      (spendPct < thresholds.healthyGrowth.minSpendChange || profitPct < thresholds.healthyGrowth.minProfitChange)) {
-    console.log('Status: Moderate growth');
-    return '🟡 Moderate Growth';
-  }
-  
-  // ПРИОРИТЕТ 9: Минимальный рост
+  if (spendPct >= t.moderateGrowthSpend && profitPct >= t.moderateGrowthProfit && (spendPct < t.healthyGrowth.minSpendChange || profitPct < t.healthyGrowth.minProfitChange)) return '🟡 Moderate Growth';
   if (spendPct > 0 && profitPct > 0) {
-    if (spendPct <= thresholds.minimalGrowth.maxSpendChange && 
-        profitPct <= thresholds.minimalGrowth.maxProfitChange) {
-      console.log('Status: Minimal growth (small)');
-      return '🟡 Minimal Growth';
-    }
-    if (spendPct < thresholds.moderateGrowthSpend || profitPct < thresholds.moderateGrowthProfit) {
-      console.log('Status: Minimal growth (below moderate)');
-      return '🟡 Minimal Growth';
-    }
+    if (spendPct <= t.minimalGrowth.maxSpendChange && profitPct <= t.minimalGrowth.maxProfitChange) return '🟡 Minimal Growth';
+    if (spendPct < t.moderateGrowthSpend || profitPct < t.moderateGrowthProfit) return '🟡 Minimal Growth';
   }
-  
-  // ПРИОРИТЕТ 10: Общий умеренный спад
-  if (spendPct < 0 && profitPct < 0 && 
-      spendPct >= thresholds.scalingDown.maxSpendChange && 
-      profitPct >= thresholds.inefficientGrowth.maxProfitChange) {
-    console.log('Status: General moderate decline');
-    return '🟡 Moderate Decline';
-  }
-  
-  // ПРИОРИТЕТ 11: Пограничные случаи declining efficiency
-  
-  // Спенд растет умеренно, профит падает умеренно
-  if (spendPct > 0 && spendPct <= 15 && profitPct < 0 && profitPct >= -10) {
-    console.log('Status: Borderline declining efficiency (spend up, profit down)');
-    return '🟠 Declining Efficiency';
-  }
-  
-  // Спенд стабилен, профит падает умеренно
-  if (Math.abs(spendPct) <= 5 && profitPct < -2 && profitPct >= -12) {
-    console.log('Status: Borderline declining efficiency (spend stable, profit down)');
-    return '🟠 Declining Efficiency';
-  }
-  
-  // ПРИОРИТЕТ 12: Стабильность
-  if (Math.abs(spendPct) <= thresholds.stable.maxAbsoluteChange && 
-      Math.abs(profitPct) <= thresholds.stable.maxAbsoluteChange) {
-    console.log('Status: Stable (strict)');
-    return '⚪ Stable';
-  }
-  
-  // Расширенная стабильность
-  if (Math.abs(spendPct) <= 10 && Math.abs(profitPct) <= 10) {
-    console.log('Status: Stable (extended)');
-    return '⚪ Stable';
-  }
-  
-  // Fallback
-  console.log('Status: Fallback to stable');
+  if (spendPct < 0 && profitPct < 0 && spendPct >= t.scalingDown.maxSpendChange && profitPct >= t.inefficientGrowth.maxProfitChange) return '🟡 Moderate Decline';
+  if (spendPct > 0 && spendPct <= 15 && profitPct < 0 && profitPct >= -10) return '🟠 Declining Efficiency';
+  if (Math.abs(spendPct) <= 5 && profitPct < -2 && profitPct >= -12) return '🟠 Declining Efficiency';
+  if (Math.abs(spendPct) <= t.stable.maxAbsoluteChange && Math.abs(profitPct) <= t.stable.maxAbsoluteChange) return '⚪ Stable';
+  if (Math.abs(spendPct) <= 10 && Math.abs(profitPct) <= 10) return '⚪ Stable';
   return '⚪ Stable';
 }
 
-/**
- * Calculate growth status for specific project using its thresholds
- */
 function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
   try {
     return calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField);
   } finally {
@@ -316,49 +141,20 @@ function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitP
   }
 }
 
-/**
- * Get growth status explanation for current project
- */
 function getGrowthStatusExplanation() {
   return `Growth Status Criteria for ${CURRENT_PROJECT}:
 
-🟢 ПОЗИТИВНЫЕ СЦЕНАРИИ:
-- Healthy Growth: Spend ≥10% AND Profit ≥5%
-- Efficiency Improvement: Спенд падает, профит растет
-- Переход из убытка в прибыль
-
-🔴 КРИТИЧЕСКИЕ СЦЕНАРИИ:
-- Inefficient Growth: Profit ≤-8%
-- Переход из прибыли в убыток
-
-🟠 ПРЕДУПРЕЖДАЮЩИЕ СЦЕНАРИИ:
-- Declining Efficiency: Спенд растет/стабилен, профит падает умеренно
-
-🔵 СЦЕНАРИИ СОКРАЩЕНИЯ:
-- Scaling Down: Spend ≤-15%
-  - Efficient: профит стабилен/растет
-  - Moderate: профит падает умеренно
-  - Problematic: профит падает сильно
-
-🟡 УМЕРЕННЫЕ СЦЕНАРИИ:
-- Moderate Growth: Spend >3% AND Profit >2%
-- Minimal Growth: Небольшие положительные изменения
-- Moderate Decline: Умеренные негативные изменения
-  - Spend Optimization: спенд падает быстрее
-  - Efficiency Drop: профит падает быстрее
-  - Proportional: оба падают пропорционально
-
-⚪ СТАБИЛЬНЫЕ СЦЕНАРИИ:
-- Stable: Минимальные изменения в любую сторону`;
+🟢 ПОЗИТИВНЫЕ: Healthy Growth (Spend ≥10% AND Profit ≥5%), Efficiency Improvement (спенд падает, профит растет), переход из убытка в прибыль
+🔴 КРИТИЧЕСКИЕ: Inefficient Growth (Profit ≤-8%), переход из прибыли в убыток  
+🟠 ПРЕДУПРЕЖДАЮЩИЕ: Declining Efficiency (спенд растет/стабилен, профит падает умеренно)
+🔵 СОКРАЩЕНИЕ: Scaling Down (Spend ≤-15%) - Efficient/Moderate/Problematic
+🟡 УМЕРЕННЫЕ: Moderate Growth/Decline, Minimal Growth, различные паттерны
+⚪ СТАБИЛЬНЫЕ: Минимальные изменения в любую сторону`;
 }
 
-/**
- * Get growth status explanation for specific project
- */
 function getProjectGrowthStatusExplanation(projectName) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
   try {
     return getGrowthStatusExplanation();
   } finally {
@@ -366,36 +162,20 @@ function getProjectGrowthStatusExplanation(projectName) {
   }
 }
 
-/**
- * Get detailed scenario analysis for debugging
- */
 function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJECT) {
-  const analysis = {
-    spendPct,
-    profitPct,
-    projectName
-  };
-  
-  // Simulate the status calculation
   const mockPrev = { eProfitForecast: 100, spend: 100 };
   const mockCurr = { eProfitForecast: 100 + profitPct, spend: 100 + spendPct };
-  
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  analysis.status = calculateGrowthStatus(mockPrev, mockCurr, spendPct, profitPct);
+  const status = calculateGrowthStatus(mockPrev, mockCurr, spendPct, profitPct);
   setCurrentProject(originalProject);
-  
-  return analysis;
+  return { spendPct, profitPct, projectName, status };
 }
 
-/**
- * Main: generate report for the last N days without progress indicators
- */
+// ИСПРАВЛЕНО: Убран ProgressManager, простая генерация отчетов
 function generateReport(days) {
   try {
     const config = getCurrentConfig();
-    
-    // Save existing comments first
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
@@ -403,14 +183,9 @@ function generateReport(days) {
       expandAllGroups(sheet);
       const cache = new CommentCache();
       cache.syncCommentsFromSheet();
-    } else {
-      const cache = new CommentCache();
     }
     
-    // Calculate date range
     const dateRange = getDateRange(days);
-    
-    // Fetch data from API
     const raw = fetchCampaignData(dateRange);
     
     if (!raw.data?.analytics?.richStats?.stats?.length) {
@@ -418,18 +193,15 @@ function generateReport(days) {
       return;
     }
     
-    // Process data
     const processed = processApiData(raw);
     if (Object.keys(processed).length === 0) {
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
     }
     
-    // Clear and create report
     clearAllDataSilent();
     createEnhancedPivotTable(processed);
     
-    // Restore comments
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
     
@@ -439,16 +211,11 @@ function generateReport(days) {
   }
 }
 
-/**
- * Generate report for specific date range without progress indicators
- */
 function generateReportForDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
   
   try {
     const config = getCurrentConfig();
-    
-    // Save existing comments first
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     
@@ -456,11 +223,8 @@ function generateReportForDateRange(startDate, endDate) {
       expandAllGroups(sheet);
       const cache = new CommentCache();
       cache.syncCommentsFromSheet();
-    } else {
-      const cache = new CommentCache();
     }
     
-    // Fetch data from API
     const dateRange = { from: startDate, to: endDate };
     const raw = fetchCampaignData(dateRange);
     
@@ -469,38 +233,26 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    // Process data
     const processed = processApiData(raw);
     if (Object.keys(processed).length === 0) {
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
       return;
     }
     
-    // Clear and create report
     clearAllDataSilent();
     createEnhancedPivotTable(processed);
     
-    // Restore comments
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
     
     ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
+    
   } catch (e) {
     console.error('Error generating report for date range:', e);
-    ui.alert(
-      'Error', 
-      'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n' +
-      '1. Your internet connection\n' +
-      '2. The API token is still valid\n' +
-      '3. Try a smaller date range',
-      ui.ButtonSet.OK
-    );
+    ui.alert('Error', 'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n1. Your internet connection\n2. The API token is still valid\n3. Try a smaller date range', ui.ButtonSet.OK);
   }
 }
 
-/**
- * Update all data to current - fetches from first existing week to current date
- */
 function updateAllDataToCurrent() {
   const ui = SpreadsheetApp.getUi();
   const config = getCurrentConfig();
@@ -513,25 +265,19 @@ function updateAllDataToCurrent() {
   }
   
   try {
-    // Expand all groups first to ensure we can read all data
     expandAllGroups(sheet);
-    
-    // Save existing comments first
     const cache = new CommentCache();
     cache.syncCommentsFromSheet();
     
-    // Find the earliest week in the sheet
     let earliestDate = null;
     const data = sheet.getDataRange().getValues();
     
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === 'WEEK') {
         const weekRange = data[i][1];
-        const [startStr, endStr] = weekRange.split(' - ');
+        const [startStr] = weekRange.split(' - ');
         const startDate = new Date(startStr);
-        if (!earliestDate || startDate < earliestDate) {
-          earliestDate = startDate;
-        }
+        if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
       }
     }
     
@@ -540,27 +286,16 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    // Calculate date range from earliest date to yesterday (excluding current incomplete week)
     const today = new Date();
     const dayOfWeek = today.getDay();
-    let endDate;
+    let endDate = new Date(today);
     if (dayOfWeek === 0) {
-      // Today is Sunday, include up to yesterday (Saturday)
-      endDate = new Date(today);
       endDate.setDate(today.getDate() - 1);
     } else {
-      // Today is Mon-Sat, include up to last Saturday
-      const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
-      endDate = new Date(today);
-      endDate.setDate(today.getDate() - daysFromLastSaturday);
+      endDate.setDate(today.getDate() - dayOfWeek);
     }
     
-    const dateRange = {
-      from: formatDateForAPI(earliestDate),
-      to: formatDateForAPI(endDate)
-    };
-    
-    // Fetch all data for the complete range
+    const dateRange = { from: formatDateForAPI(earliestDate), to: formatDateForAPI(endDate) };
     const raw = fetchCampaignData(dateRange);
     
     if (!raw.data?.analytics?.richStats?.stats?.length) {
@@ -568,21 +303,14 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    // Process data
     const processed = processApiData(raw);
-    
     if (Object.keys(processed).length === 0) {
       ui.alert('No valid data to process.');
       return;
     }
     
-    // Clear old data silently
     clearAllDataSilent();
-    
-    // Create updated report
     createEnhancedPivotTable(processed);
-    
-    // Restore comments
     cache.applyCommentsToSheet();
     
     ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
