@@ -1,6 +1,7 @@
 /**
  * Auto Functions - Centralized Auto Cache and Auto Update System
  * Runs at 2AM for caching and Tuesday 5AM for updates
+ * ИСПРАВЛЕНО: Улучшен ProgressManager для автоматических операций
  */
 
 // =============================================================================
@@ -187,26 +188,21 @@ function updateProjectData(projectName) {
 }
 
 // =============================================================================
-// MANUAL SAVE COMMENTS FUNCTIONS
+// MANUAL SAVE COMMENTS FUNCTIONS - С УЛУЧШЕННЫМ PROGRESS MANAGER
 // =============================================================================
 
 /**
  * Save all project comments to cache
+ * ИСПРАВЛЕНО: Убран ProgressManager
  */
 function saveAllCommentsToCache() {
   const ui = SpreadsheetApp.getUi();
-  const progress = new ProgressManager('Saving All Comments').start('Initializing...');
   
   try {
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
     let successCount = 0;
     
-    projects.forEach((projectName, index) => {
-      progress.update(
-        `Saving ${projectName} comments...`,
-        `Processing project ${index + 1} of ${projects.length}`
-      );
-      
+    projects.forEach(projectName => {
       try {
         saveProjectCommentsManual(projectName);
         successCount++;
@@ -215,8 +211,6 @@ function saveAllCommentsToCache() {
       }
     });
     
-    progress.end();
-    
     if (successCount === projects.length) {
       ui.alert('Success', 'All project comments have been saved to cache.', ui.ButtonSet.OK);
     } else {
@@ -224,7 +218,6 @@ function saveAllCommentsToCache() {
     }
     
   } catch (error) {
-    progress.end(false);
     ui.alert('Error', 'Error saving comments: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
