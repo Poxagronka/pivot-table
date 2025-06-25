@@ -1,8 +1,6 @@
 /**
  * Sheet Formatting and Table Creation - Multi Project Support
- * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
- * ИСПРАВЛЕНО: WoW метрики теперь работают по campaignId
- * ИСПРАВЛЕНО: Добавлен text wrap для колонки Growth Status
+ * ОБНОВЛЕНО: Добавлена поддержка Google Ads метрик
  */
 
 /**
@@ -18,7 +16,7 @@ function createEnhancedPivotTable(appData) {
   // ВАЖНО: Сначала вычисляем WoW метрики
   const wow = calculateWoWMetrics(appData);
 
-  const headers = TABLE_CONFIG.HEADERS;
+  const headers = getProjectHeaders();
   const tableData = [headers];
   const formatData = [];
 
@@ -29,7 +27,10 @@ function createEnhancedPivotTable(appData) {
     
     // APP row
     formatData.push({ row: tableData.length + 1, type: 'APP' });
-    tableData.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    const emptyRow = new Array(headers.length).fill('');
+    emptyRow[0] = 'APP';
+    emptyRow[1] = app.appName;
+    tableData.push(emptyRow);
 
     // Process weeks for this app
     const weekKeys = Object.keys(app.weeks).sort();
@@ -49,23 +50,9 @@ function createEnhancedPivotTable(appData) {
       const status = weekWoW.growthStatus || '';
       
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-      tableData.push([
-        'WEEK',
-        `${week.weekStart} - ${week.weekEnd}`,
-        '', '',
-        weekTotals.totalSpend.toFixed(2),
-        spendWoW,  // Колонка F - Spend WoW %
-        weekTotals.totalInstalls,
-        weekTotals.avgCpi.toFixed(3),
-        weekTotals.avgRoas.toFixed(2),
-        weekTotals.avgIpm.toFixed(1),
-        weekTotals.avgArpu.toFixed(3),
-        `${weekTotals.avgERoas.toFixed(0)}%`,
-        weekTotals.totalProfit.toFixed(2),
-        profitWoW,  // Колонка N - eProfit WoW %
-        status,     // Колонка O - Growth Status
-        ''          // Колонка P - Comments
-      ]);
+      
+      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+      tableData.push(weekRow);
       
       // Add campaign rows
       addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData);
@@ -83,9 +70,69 @@ function createEnhancedPivotTable(appData) {
 }
 
 /**
+ * Get project-specific headers
+ */
+function getProjectHeaders() {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    return [
+      'Level', 'Week Range / Source App', 'ID', 'GEO',
+      'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'RR D-1',
+      'RR D-7', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    ];
+  } else {
+    return [
+      'Level', 'Week Range / Source App', 'ID', 'GEO',
+      'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+      'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    ];
+  }
+}
+
+/**
+ * Create week row based on project type
+ */
+function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    return [
+      'WEEK',
+      `${week.weekStart} - ${week.weekEnd}`,
+      '', '',
+      weekTotals.totalSpend.toFixed(2),
+      spendWoW,
+      weekTotals.totalInstalls,
+      weekTotals.avgCpi.toFixed(3),
+      weekTotals.avgRoas.toFixed(2),
+      `${weekTotals.avgRrD1.toFixed(1)}%`,
+      `${weekTotals.avgRrD7.toFixed(1)}%`,
+      `${weekTotals.avgERoas.toFixed(0)}%`,
+      weekTotals.totalProfit.toFixed(2),
+      profitWoW,
+      status,
+      ''
+    ];
+  } else {
+    return [
+      'WEEK',
+      `${week.weekStart} - ${week.weekEnd}`,
+      '', '',
+      weekTotals.totalSpend.toFixed(2),
+      spendWoW,
+      weekTotals.totalInstalls,
+      weekTotals.avgCpi.toFixed(3),
+      weekTotals.avgRoas.toFixed(2),
+      weekTotals.avgIpm.toFixed(1),
+      weekTotals.avgArpu.toFixed(3),
+      `${weekTotals.avgERoas.toFixed(0)}%`,
+      weekTotals.totalProfit.toFixed(2),
+      profitWoW,
+      status,
+      ''
+    ];
+  }
+}
+
+/**
  * Enhanced formatting function with text wrap for headers and comments
- * ОБНОВЛЕНО: Добавлен text wrap для колонки комментариев
- * ИСПРАВЛЕНО: Добавлен text wrap для колонки Growth Status
  */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const config = getCurrentConfig();
@@ -99,24 +146,25 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
     .setFontSize(10)
-    .setWrap(true);  // Enable text wrapping for headers
+    .setWrap(true);
 
-  // Set column widths
-  TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => {
+  // Set column widths based on project
+  const columnWidths = getProjectColumnWidths();
+  columnWidths.forEach(col => {
     sheet.setColumnWidth(col.c, col.w);
   });
 
-  // ИСПРАВЛЕНИЕ: Text wrap для колонки комментариев (колонка 16) И Growth Status (колонка 15)
+  // Text wrap для колонки комментариев И Growth Status
   if (numRows > 1) {
-    // Comments column (16)
-    const commentsRange = sheet.getRange(2, 16, numRows - 1, 1);
+    // Comments column (last column)
+    const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
     commentsRange
       .setWrap(true)
       .setVerticalAlignment('top')
       .setHorizontalAlignment('left');
     
-    // НОВОЕ: Growth Status column (15) - добавляем text wrap
-    const growthStatusRange = sheet.getRange(2, 15, numRows - 1, 1);
+    // Growth Status column (second to last)
+    const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
     growthStatusRange
       .setWrap(true)
       .setVerticalAlignment('middle')
@@ -161,9 +209,15 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00'); // Spend
     sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000'); // CPI
     sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00'); // ROAS
-    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0'); // IPM
-    sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000'); // E-ARPU
-    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+    
+    if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+      // RR columns already formatted as percentages in data
+      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+    } else {
+      sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0'); // IPM
+      sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000'); // E-ARPU
+      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+    }
   }
 
   // Apply conditional formatting
@@ -171,6 +225,34 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   
   // Hide Level column
   sheet.hideColumns(1);
+}
+
+/**
+ * Get project-specific column widths
+ */
+function getProjectColumnWidths() {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    return [
+      { c: 1, w: 80 },   // Level
+      { c: 2, w: 300 },  // Week Range / Source App
+      { c: 3, w: 50 },   // ID
+      { c: 4, w: 50 },   // GEO
+      { c: 5, w: 75 },   // Spend
+      { c: 6, w: 80 },   // Spend WoW %
+      { c: 7, w: 60 },   // Installs
+      { c: 8, w: 60 },   // CPI
+      { c: 9, w: 60 },   // ROAS D-1
+      { c: 10, w: 50 },  // RR D-1
+      { c: 11, w: 50 },  // RR D-7
+      { c: 12, w: 75 },  // eROAS 365d
+      { c: 13, w: 75 },  // eProfit 730d
+      { c: 14, w: 85 },  // eProfit 730d WoW %
+      { c: 15, w: 160 }, // Growth Status
+      { c: 16, w: 250 }  // Comments
+    ];
+  } else {
+    return TABLE_CONFIG.COLUMN_WIDTHS;
+  }
 }
 
 /**
@@ -198,32 +280,34 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([spendRange]).build()
     );
 
-    // E-ROAS 365d formatting (колонка L = 12)
-    const eroasRange = sheet.getRange(2, 12, numRows - 1, 1);
+    // E-ROAS 365d formatting (разные колонки для разных проектов)
+    const eroasColumn = CURRENT_PROJECT === 'GOOGLE_ADS' ? 12 : 12;
+    const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= ${config.TARGET_EROAS})`)
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) >= ${config.TARGET_EROAS})`)
         .setBackground(COLORS.POSITIVE.background)
         .setFontColor(COLORS.POSITIVE.fontColor)
         .setRanges([eroasRange]).build()
     );
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) >= 120, VALUE(SUBSTITUTE(L2,"%","")) < ${config.TARGET_EROAS})`)
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) < ${config.TARGET_EROAS})`)
         .setBackground(COLORS.WARNING.background)
         .setFontColor(COLORS.WARNING.fontColor)
         .setRanges([eroasRange]).build()
     );
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied('=AND(NOT(ISBLANK(L2)), VALUE(SUBSTITUTE(L2,"%","")) < 120)')
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) < 120)`)
         .setBackground(COLORS.NEGATIVE.background)
         .setFontColor(COLORS.NEGATIVE.fontColor)
         .setRanges([eroasRange]).build()
     );
 
-    // eProfit WoW % formatting (колонка N = 14)
-    const profitRange = sheet.getRange(2, 14, numRows - 1, 1);
+    // eProfit WoW % formatting (разные колонки)
+    const profitColumn = CURRENT_PROJECT === 'GOOGLE_ADS' ? 14 : 14;
+    const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
         .whenTextContains('%').whenNumberGreaterThan(0)
@@ -239,26 +323,18 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    // Comprehensive Growth Status formatting (колонка O = 15)
-    const growthRange = sheet.getRange(2, 15, numRows - 1, 1);
+    // Growth Status formatting (разные колонки)
+    const growthColumn = CURRENT_PROJECT === 'GOOGLE_ADS' ? 15 : 15;
+    const growthRange = sheet.getRange(2, growthColumn, numRows - 1, 1);
     const statusColors = {
-      // Positive statuses - Green shades
       "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
       "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
-      
-      // Negative statuses - Red shades  
       "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
-      
-      // Declining efficiency - Orange
       "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
-      
-      // Scaling down scenarios - Blue shades
       "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
       "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
       "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
       "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
-      
-      // Moderate scenarios - Yellow/Amber shades
       "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
       "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
       "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
@@ -266,11 +342,7 @@ function applyConditionalFormatting(sheet, numRows) {
       "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
       "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
       "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
-      
-      // Stable - Gray
       "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" },
-      
-      // First week
       "First Week": { background: "#e0e0e0", fontColor: "#757575" }
     };
 
@@ -289,16 +361,13 @@ function applyConditionalFormatting(sheet, numRows) {
 }
 
 /**
- * Calculate totals for a week's campaigns
- * Updated to exclude campaigns with < 50 installs from eROAS calculation
+ * Calculate totals for a week's campaigns - Updated for Google Ads metrics
  */
 function calculateWeekTotals(campaigns) {
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
   const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
   const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
   const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
-  const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
-  const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
   
   // Calculate spend-weighted average eROAS
   const validForEROAS = campaigns.filter(c => 
@@ -316,27 +385,35 @@ function calculateWeekTotals(campaigns) {
   
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
-  return {
-    totalSpend,
-    totalInstalls,
-    avgCpi,
-    avgRoas,
-    avgIpm,
-    avgArpu,
-    avgERoas,
-    totalProfit
-  };
+  // Project-specific metrics
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
+    const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
+    
+    return {
+      totalSpend, totalInstalls, avgCpi, avgRoas, avgERoas, totalProfit,
+      avgRrD1, avgRrD7, avgIpm: 0, avgArpu: 0
+    };
+  } else {
+    const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
+    const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
+    
+    return {
+      totalSpend, totalInstalls, avgCpi, avgRoas, avgERoas, totalProfit,
+      avgIpm, avgArpu, avgRrD1: 0, avgRrD7: 0
+    };
+  }
 }
 
 /**
- * Add campaign rows to table data - ИСПРАВЛЕНО: Теперь использует campaignId для WoW метрик
+ * Add campaign rows to table data
  */
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
   // Sort campaigns by spend (highest first)
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
     const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
     
-    // ИСПРАВЛЕНО: Получаем WoW данные для кампании по campaignId
+    // Получаем WoW данные для кампании по campaignId
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
@@ -344,16 +421,44 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
     const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
     const growthStatus = campaignWoW.growthStatus || '';
     
-    // Добавляем в formatData информацию о кампании
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    tableData.push([
+    const campaignRow = createCampaignRow(campaign, link, spendPct, profitPct, growthStatus);
+    tableData.push(campaignRow);
+  });
+}
+
+/**
+ * Create campaign row based on project type
+ */
+function createCampaignRow(campaign, link, spendPct, profitPct, growthStatus) {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    return [
       'CAMPAIGN',
       campaign.sourceApp,
       link,
       campaign.geo,
       campaign.spend.toFixed(2),
-      spendPct,      // Колонка F - Spend WoW %
+      spendPct,
+      campaign.installs,
+      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+      campaign.roas.toFixed(2),
+      `${campaign.rrD1.toFixed(1)}%`,
+      `${campaign.rrD7.toFixed(1)}%`,
+      `${campaign.eRoasForecast.toFixed(0)}%`,
+      campaign.eProfitForecast.toFixed(2),
+      profitPct,
+      growthStatus,
+      ''
+    ];
+  } else {
+    return [
+      'CAMPAIGN',
+      campaign.sourceApp,
+      link,
+      campaign.geo,
+      campaign.spend.toFixed(2),
+      spendPct,
       campaign.installs,
       campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
       campaign.roas.toFixed(2),
@@ -361,18 +466,18 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
       campaign.eArpuForecast.toFixed(3),
       `${campaign.eRoasForecast.toFixed(0)}%`,
       campaign.eProfitForecast.toFixed(2),
-      profitPct,     // Колонка N - eProfit WoW %
-      growthStatus,  // Колонка O - Growth Status
-      ''             // Колонка P - Comments
-    ]);
-  });
+      profitPct,
+      growthStatus,
+      ''
+    ];
+  }
 }
 
 /**
  * Create row grouping: App → Week → Campaign
  */
 function createRowGrouping(sheet, tableData, appData) {
-  const numCols = TABLE_CONFIG.HEADERS.length;
+  const numCols = getProjectHeaders().length;
 
   // If appData not provided, parse structure from tableData
   if (!appData) {
@@ -515,50 +620,5 @@ function createProjectPivotTable(projectName, appData) {
   } finally {
     // Restore original project context
     setCurrentProject(originalProject);
-  }
-}
-
-/**
- * Project-specific formatting functions
- */
-
-/**
- * Get project-specific header colors (for future customization)
- */
-function getProjectHeaderColors(projectName) {
-  // For now, use same colors for all projects
-  // In the future, could customize colors per project
-  const projectColors = {
-    'TRICKY': { background: '#4285f4', fontColor: 'white' },
-    'MOLOCO': { background: '#4285f4', fontColor: 'white' },
-    'REGULAR': { background: '#4285f4', fontColor: 'white' }
-  };
-  
-  return projectColors[projectName] || COLORS.HEADER;
-}
-
-/**
- * Apply project-specific formatting rules
- */
-function applyProjectSpecificFormatting(sheet, projectName, numRows) {
-  // Apply any project-specific formatting rules here
-  // For now, all projects use the same formatting
-  
-  const config = getProjectConfig(projectName);
-  
-  // Could add project-specific conditional formatting
-  switch (projectName) {
-    case 'TRICKY':
-      // Tricky-specific formatting if needed
-      break;
-    case 'MOLOCO':
-      // Moloco-specific formatting if needed
-      break;
-    case 'REGULAR':
-      // Regular-specific formatting if needed
-      break;
-    default:
-      // Default formatting
-      break;
   }
 }
