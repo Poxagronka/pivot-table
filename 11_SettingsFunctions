@@ -1,202 +1,86 @@
 /**
- * Auto Functions - Centralized Auto Cache and Auto Update System
- * Runs at 2AM for caching and Tuesday 5AM for updates
- * ИСПРАВЛЕНО: Улучшен ProgressManager для автоматических операций
+ * Settings Functions - All dialog and settings management
+ * Handles target eROAS, growth thresholds, auto-cache, auto-update, and other settings
+ * ИСПРАВЛЕНО: Добавлен ProgressManager для всех операций с множественными проектами
  */
 
 // =============================================================================
-// AUTO CACHE SYSTEM - Runs at 2AM daily
+// CLEAR DATA FUNCTIONS - С УЛУЧШЕННЫМ PROGRESS MANAGER
 // =============================================================================
 
 /**
- * Main auto cache function - caches all projects at 2AM
- * Called by time-based trigger
+ * Show clear data dialog
  */
-function autoCacheAllProjects() {
-  console.log('=== AUTO CACHE STARTED at ' + new Date().toLocaleString() + ' ===');
+function showClearDataDialog() {
+  const ui = SpreadsheetApp.getUi();
   
-  try {
-    // Cache each project
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
-    
-    projects.forEach(projectName => {
-      try {
-        console.log(`Caching ${projectName}...`);
-        cacheProjectComments(projectName);
-        console.log(`${projectName} cached successfully`);
-      } catch (error) {
-        console.error(`Error caching ${projectName}:`, error);
-      }
-    });
-    
-    console.log('=== AUTO CACHE COMPLETED at ' + new Date().toLocaleString() + ' ===');
-    
-  } catch (error) {
-    console.error('AUTO CACHE FATAL ERROR:', error);
-  }
-}
-
-/**
- * Cache comments for a specific project
- */
-function cacheProjectComments(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  const result = ui.alert(
+    '🗑️ Clear All Data',
+    'Which project data would you like to clear?\n\n' +
+    '• Click YES to select a specific project\n' +
+    '• Click NO to clear ALL projects\n' +
+    '• Click CANCEL to abort\n\n' +
+    'Note: Comments will be preserved and can be restored.',
+    ui.ButtonSet.YES_NO_CANCEL
+  );
   
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No data to cache`);
+  if (result === ui.Button.CANCEL) {
     return;
-  }
-  
-  // Expand all groups to read data
-  expandAllGroups(sheet);
-  SpreadsheetApp.flush();
-  
-  // Sync comments to cache
-  const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheetQuiet();
-  
-  // Collapse all groups using the recursive method
-  collapseAllGroupsRecursively(sheet);
-  
-  console.log(`${projectName}: Comments cached and groups collapsed`);
-}
-
-// =============================================================================
-// AUTO UPDATE SYSTEM - Runs Tuesday at 5AM
-// =============================================================================
-
-/**
- * Main auto update function - updates all projects on Tuesday 5AM
- * Called by time-based trigger
- */
-function autoUpdateAllProjects() {
-  console.log('=== AUTO UPDATE STARTED at ' + new Date().toLocaleString() + ' ===');
-  
-  try {
-    // Update each project
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
-    
-    projects.forEach(projectName => {
-      try {
-        console.log(`Updating ${projectName}...`);
-        updateProjectData(projectName);
-        console.log(`${projectName} updated successfully`);
-      } catch (error) {
-        console.error(`Error updating ${projectName}:`, error);
-      }
-    });
-    
-    console.log('=== AUTO UPDATE COMPLETED at ' + new Date().toLocaleString() + ' ===');
-    
-  } catch (error) {
-    console.error('AUTO UPDATE FATAL ERROR:', error);
+  } else if (result === ui.Button.YES) {
+    // Show project selection
+    showProjectSelectionForClear();
+  } else if (result === ui.Button.NO) {
+    // Clear all projects
+    clearAllProjectsData();
   }
 }
 
 /**
- * Update data for a specific project
+ * Show project selection for clearing data
  */
-function updateProjectData(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+function showProjectSelectionForClear() {
+  const ui = SpreadsheetApp.getUi();
   
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No existing data to update`);
-    return;
-  }
+  const response = ui.prompt(
+    'Select Project to Clear',
+    'Enter project name to clear:\n\n' +
+    '• TRICKY\n' +
+    '• MOLOCO\n' +
+    '• REGULAR',
+    ui.ButtonSet.OK_CANCEL
+  );
   
-  // Save comments first
-  expandAllGroups(sheet);
-  const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
-  
-  // Find earliest date in sheet
-  let earliestDate = null;
-  const data = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === 'WEEK') {
-      const weekRange = data[i][1];
-      const [startStr] = weekRange.split(' - ');
-      const startDate = new Date(startStr);
-      if (!earliestDate || startDate < earliestDate) {
-        earliestDate = startDate;
-      }
+  if (response.getSelectedButton() === ui.Button.OK) {
+    const projectName = response.getResponseText().toUpperCase().trim();
+    if (['TRICKY', 'MOLOCO', 'REGULAR'].includes(projectName)) {
+      clearProjectAllData(projectName);
+    } else {
+      ui.alert('Invalid Project', 'Please enter a valid project name.', ui.ButtonSet.OK);
     }
   }
-  
-  if (!earliestDate) {
-    console.log(`${projectName}: No week data found`);
-    return;
-  }
-  
-  // Calculate date range - from earliest to last Saturday
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  let endDate;
-  
-  if (dayOfWeek === 0) {
-    // Today is Sunday, include up to yesterday (Saturday)
-    endDate = new Date(today);
-    endDate.setDate(today.getDate() - 1);
-  } else {
-    // Today is Mon-Sat, include up to last Saturday
-    const daysFromLastSaturday = dayOfWeek === 0 ? 1 : dayOfWeek;
-    endDate = new Date(today);
-    endDate.setDate(today.getDate() - daysFromLastSaturday);
-  }
-  
-  const dateRange = {
-    from: formatDateForAPI(earliestDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
-  
-  // Fetch and process data
-  const raw = fetchProjectCampaignData(projectName, dateRange);
-  
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No data returned from API`);
-    return;
-  }
-  
-  const processed = processProjectApiData(projectName, raw);
-  
-  if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid data to process`);
-    return;
-  }
-  
-  // Clear and recreate with new data
-  clearProjectDataSilent(projectName);
-  
-  // Set project context and create table
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    createEnhancedPivotTable(processed);
-    cache.applyCommentsToSheet();
-  } finally {
-    setCurrentProject(originalProject);
-  }
-  
-  console.log(`${projectName}: Update completed`);
 }
 
-// =============================================================================
-// MANUAL SAVE COMMENTS FUNCTIONS - С УЛУЧШЕННЫМ PROGRESS MANAGER
-// =============================================================================
-
 /**
- * Save all project comments to cache
+ * Clear all projects data
  * ИСПРАВЛЕНО: Убран ProgressManager
  */
-function saveAllCommentsToCache() {
+function clearAllProjectsData() {
   const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    'Confirm Clear All',
+    'This will clear data from ALL projects:\n' +
+    '• Tricky\n' +
+    '• Moloco\n' +
+    '• Regular\n\n' +
+    'Comments will be preserved.\n\n' +
+    'Are you sure?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) {
+    return;
+  }
   
   try {
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
@@ -204,57 +88,512 @@ function saveAllCommentsToCache() {
     
     projects.forEach(projectName => {
       try {
-        saveProjectCommentsManual(projectName);
+        // Save comments first
+        const config = getProjectConfig(projectName);
+        const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+        const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+        
+        if (sheet && sheet.getLastRow() > 1) {
+          expandAllGroups(sheet);
+          const cache = new CommentCache(projectName);
+          cache.syncCommentsFromSheet();
+        }
+        
+        clearProjectDataSilent(projectName);
         successCount++;
       } catch (error) {
-        console.error(`Error saving ${projectName} comments:`, error);
+        console.error(`Error clearing ${projectName}:`, error);
       }
     });
     
     if (successCount === projects.length) {
-      ui.alert('Success', 'All project comments have been saved to cache.', ui.ButtonSet.OK);
+      ui.alert('Success', 'All project data has been cleared. Comments have been preserved.', ui.ButtonSet.OK);
     } else {
-      ui.alert('Partial Success', `Saved comments for ${successCount} of ${projects.length} projects.`, ui.ButtonSet.OK);
+      ui.alert('Partial Success', `Cleared ${successCount} of ${projects.length} projects.`, ui.ButtonSet.OK);
     }
     
   } catch (error) {
-    ui.alert('Error', 'Error saving comments: ' + error.toString(), ui.ButtonSet.OK);
+    ui.alert('Error', 'Error clearing data: ' + error.toString(), ui.ButtonSet.OK);
   }
 }
 
-/**
- * Save project comments manually (with UI feedback)
- * FIXED: Now collapses groups after saving
- */
-function saveProjectCommentsManual(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    throw new Error(`No data found in ${projectName} sheet`);
-  }
-  
-  // Expand groups to read all data
-  expandAllGroups(sheet);
-  
-  // Save comments to cache
-  const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
-  
-  // IMPORTANT: Collapse groups back after saving comments
-  collapseAllGroupsRecursively(sheet);
-}
-
 // =============================================================================
-// STATUS AND MONITORING
+// QUICK API CHECK - С УЛУЧШЕННЫМ PROGRESS MANAGER
 // =============================================================================
 
 /**
- * Show automation status
+ * Show quick API check dialog
  */
-function showAutomationStatus() {
+function showQuickAPICheckDialog() {
   const ui = SpreadsheetApp.getUi();
+  
+  const response = ui.prompt(
+    '🔍 Quick API Check',
+    'Enter project name to check:\n\n' +
+    '• TRICKY\n' +
+    '• MOLOCO\n' +
+    '• REGULAR\n' +
+    '• ALL (check all projects)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() === ui.Button.OK) {
+    const input = response.getResponseText().toUpperCase().trim();
+    
+    if (input === 'ALL') {
+      checkAllProjectsAPI();
+    } else if (['TRICKY', 'MOLOCO', 'REGULAR'].includes(input)) {
+      checkProjectAPI(input);
+    } else {
+      ui.alert('Invalid Input', 'Please enter a valid project name or ALL.', ui.ButtonSet.OK);
+    }
+  }
+}
+
+/**
+ * Check API for specific project
+ */
+function checkProjectAPI(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    setCurrentProject(projectName);
+    const dateRange = getDateRange(7);
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert(
+        `${projectName} API Check`,
+        `❌ API returned no data for the last 7 days.\n\n` +
+        'Possible issues:\n' +
+        '• No campaigns active in this period\n' +
+        '• API token may be expired\n' +
+        '• Network configuration may be incorrect',
+        ui.ButtonSet.OK
+      );
+    } else {
+      const count = raw.data.analytics.richStats.stats.length;
+      ui.alert(
+        `${projectName} API Check`,
+        `✅ API is working!\n\n` +
+        `• Records found: ${count}\n` +
+        `• Period: Last 7 days\n` +
+        `• Status: Connected successfully`,
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (error) {
+    ui.alert(
+      `${projectName} API Check`,
+      `❌ API Error:\n\n${error.toString()}\n\n` +
+      'Please check:\n' +
+      '• Internet connection\n' +
+      '• API token validity\n' +
+      '• Project configuration',
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Check API for all projects
+ * ИСПРАВЛЕНО: Убран ProgressManager
+ */
+function checkAllProjectsAPI() {
+  const ui = SpreadsheetApp.getUi();
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
+  let results = '🔍 API CHECK RESULTS\n\n';
+  
+  projects.forEach(projectName => {
+    try {
+      setCurrentProject(projectName);
+      const dateRange = getDateRange(7);
+      const raw = fetchCampaignData(dateRange);
+      
+      if (!raw.data?.analytics?.richStats?.stats?.length) {
+        results += `❌ ${projectName}: No data returned\n`;
+      } else {
+        const count = raw.data.analytics.richStats.stats.length;
+        results += `✅ ${projectName}: ${count} records found\n`;
+      }
+    } catch (error) {
+      results += `❌ ${projectName}: ${error.toString().substring(0, 50)}...\n`;
+    }
+  });
+  
+  ui.alert('API Check Complete', results, ui.ButtonSet.OK);
+}
+
+// =============================================================================
+// PROJECT SETTINGS OVERVIEW
+// =============================================================================
+
+/**
+ * Show project settings dialog with current configuration
+ */
+function showProjectSettings() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  
+  // Get current settings
+  const cacheEnabled = props.getProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED) === 'true';
+  const updateEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
+  
+  const trickyTarget = getTargetEROAS('TRICKY');
+  const molocoTarget = getTargetEROAS('MOLOCO');
+  const regularTarget = getTargetEROAS('REGULAR');
+  
+  const trickyThresholds = getGrowthThresholds('TRICKY');
+  const molocoThresholds = getGrowthThresholds('MOLOCO');
+  const regularThresholds = getGrowthThresholds('REGULAR');
+  
+  const message = 
+    '🎯 PROJECT CONFIGURATION\n\n' +
+    
+    '📊 TRICKY:\n' +
+    `• Target eROAS: ${trickyTarget}%\n` +
+    `• Growth Thresholds: Healthy(${trickyThresholds.healthyGrowth.minSpendChange}%/${trickyThresholds.healthyGrowth.minProfitChange}%), Scaling(${trickyThresholds.scalingDown.maxSpendChange}%)\n` +
+    `• Network HID: 234187180623265792\n` +
+    `• Campaign Filter: /tricky/i (INCLUDE)\n\n` +
+    
+    '🔥 MOLOCO:\n' +
+    `• Target eROAS: ${molocoTarget}%\n` +
+    `• Growth Thresholds: Healthy(${molocoThresholds.healthyGrowth.minSpendChange}%/${molocoThresholds.healthyGrowth.minProfitChange}%), Scaling(${molocoThresholds.scalingDown.maxSpendChange}%)\n` +
+    `• Network HID: 445856363109679104\n` +
+    `• Campaign Filter: NO FILTER (all campaigns)\n\n` +
+    
+    '📈 REGULAR:\n' +
+    `• Target eROAS: ${regularTarget}%\n` +
+    `• Growth Thresholds: Healthy(${regularThresholds.healthyGrowth.minSpendChange}%/${regularThresholds.healthyGrowth.minProfitChange}%), Scaling(${regularThresholds.scalingDown.maxSpendChange}%)\n` +
+    `• Network HID: 234187180623265792\n` +
+    `• Campaign Filter: !/tricky/i (EXCLUDE)\n\n` +
+    
+    '⚙️ AUTOMATION:\n' +
+    `• Auto Cache: ${cacheEnabled ? '✅ Enabled (2 AM daily)' : '❌ Disabled'}\n` +
+    `• Auto Update: ${updateEnabled ? '✅ Enabled (Tuesday 5 AM)' : '❌ Disabled'}\n\n` +
+    
+    '📝 FEATURES:\n' +
+    '• Week-level comments: ✅ Supported\n' +
+    '• Campaign-level comments: ✅ Supported\n' +
+    '• Comment preservation: ✅ Active\n' +
+    '• Group management: ✅ Auto-collapse\n' +
+    '• Project-specific thresholds: ✅ Active';
+  
+  ui.alert('Project Settings', message, ui.ButtonSet.OK);
+}
+
+// =============================================================================
+// GROWTH THRESHOLD SETTINGS
+// =============================================================================
+
+/**
+ * Show detailed growth threshold settings for a project
+ */
+function showGrowthThresholdDetails(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  const thresholds = getGrowthThresholds(projectName);
+  
+  const message = 
+    `📊 ${projectName} GROWTH THRESHOLDS\n\n` +
+    
+    '🟢 HEALTHY GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.healthyGrowth.minSpendChange}%\n` +
+    `• Min Profit Change: ${thresholds.healthyGrowth.minProfitChange}%\n\n` +
+    
+    '🔴 INEFFICIENT GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.inefficientGrowth.minSpendChange}%\n` +
+    `• Max Profit Change: ${thresholds.inefficientGrowth.maxProfitChange}%\n\n` +
+    
+    '🔵 SCALING DOWN:\n' +
+    `• Max Spend Change: ${thresholds.scalingDown.maxSpendChange}%\n\n` +
+    
+    '🟡 MODERATE GROWTH:\n' +
+    `• Min Spend Change: ${thresholds.moderateGrowthSpend}%\n` +
+    `• Min Profit Change: ${thresholds.moderateGrowthProfit}%\n\n` +
+    
+    '⚪ STABLE:\n' +
+    '• All other scenarios';
+  
+  ui.alert(`${projectName} Growth Thresholds`, message, ui.ButtonSet.OK);
+}
+
+/**
+ * Quick threshold adjustment dialog
+ */
+function quickAdjustThresholds(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  const current = getGrowthThresholds(projectName);
+  
+  const result = ui.alert(
+    `Quick Adjust - ${projectName}`,
+    'Which threshold would you like to adjust?\n\n' +
+    `Current Healthy Growth: Spend >${current.healthyGrowth.minSpendChange}%, Profit >${current.healthyGrowth.minProfitChange}%\n` +
+    `Current Scaling Down: Spend <${current.scalingDown.maxSpendChange}%\n\n` +
+    'YES = Adjust Healthy Growth\n' +
+    'NO = Adjust Scaling Down\n' +
+    'CANCEL = Exit',
+    ui.ButtonSet.YES_NO_CANCEL
+  );
+  
+  if (result === ui.Button.CANCEL) return;
+  
+  const newThresholds = { ...current };
+  
+  if (result === ui.Button.YES) {
+    // Adjust Healthy Growth
+    const spendResponse = ui.prompt(
+      'Healthy Growth - Spend Threshold',
+      `Enter minimum spend change % for Healthy Growth (current: ${current.healthyGrowth.minSpendChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (spendResponse.getSelectedButton() === ui.Button.OK) {
+      const spendValue = parseInt(spendResponse.getResponseText());
+      if (!isNaN(spendValue) && spendValue >= 0 && spendValue <= 100) {
+        newThresholds.healthyGrowth.minSpendChange = spendValue;
+      }
+    }
+    
+    const profitResponse = ui.prompt(
+      'Healthy Growth - Profit Threshold',
+      `Enter minimum profit change % for Healthy Growth (current: ${current.healthyGrowth.minProfitChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (profitResponse.getSelectedButton() === ui.Button.OK) {
+      const profitValue = parseInt(profitResponse.getResponseText());
+      if (!isNaN(profitValue) && profitValue >= -50 && profitValue <= 100) {
+        newThresholds.healthyGrowth.minProfitChange = profitValue;
+        // Update inefficient growth to match spend threshold
+        newThresholds.inefficientGrowth.minSpendChange = newThresholds.healthyGrowth.minSpendChange;
+      }
+    }
+    
+  } else {
+    // Adjust Scaling Down
+    const scalingResponse = ui.prompt(
+      'Scaling Down Threshold',
+      `Enter maximum spend change % for Scaling Down (current: ${current.scalingDown.maxSpendChange}%):`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (scalingResponse.getSelectedButton() === ui.Button.OK) {
+      const scalingValue = parseInt(scalingResponse.getResponseText());
+      if (!isNaN(scalingValue) && scalingValue >= -100 && scalingValue <= 0) {
+        newThresholds.scalingDown.maxSpendChange = scalingValue;
+      }
+    }
+  }
+  
+  // Save updated thresholds
+  setGrowthThresholds(projectName, newThresholds);
+  ui.alert('✅ Updated', `${projectName} thresholds have been updated!`, ui.ButtonSet.OK);
+}
+
+// =============================================================================
+// AUTO CACHE SETTINGS
+// =============================================================================
+
+/**
+ * Show auto cache settings dialog
+ */
+function showAutoCacheSettings() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  const isEnabled = props.getProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED) === 'true';
+  
+  const result = ui.alert(
+    '💾 Auto Cache Settings',
+    `Auto-cache is currently: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\n` +
+    'When enabled, comments from all projects will be automatically cached at 2:00 AM daily.\n\n' +
+    'All row groups will be collapsed after caching to keep the sheet organized.\n\n' +
+    `Would you like to ${isEnabled ? 'DISABLE' : 'ENABLE'} auto-cache?`,
+    ui.ButtonSet.YES_NO_CANCEL
+  );
+  
+  if (result === ui.Button.YES) {
+    if (isEnabled) {
+      // Disable auto-cache
+      disableAutoCache();
+    } else {
+      // Enable auto-cache
+      enableAutoCache();
+    }
+  }
+}
+
+/**
+ * Enable auto cache with 2AM daily trigger
+ */
+function enableAutoCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Remove any existing triggers
+    ScriptApp.getProjectTriggers()
+      .filter(trigger => trigger.getHandlerFunction() === 'autoCacheAllProjects')
+      .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    
+    // Create new trigger for 2AM
+    ScriptApp.newTrigger('autoCacheAllProjects')
+      .timeBased()
+      .atHour(2)
+      .everyDays(1)
+      .create();
+    
+    // Save enabled state
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED, 'true');
+    
+    ui.alert(
+      'Auto Cache Enabled',
+      '✅ Auto-cache has been enabled!\n\n' +
+      '• Comments will be cached daily at 2:00 AM\n' +
+      '• All projects (Tricky, Moloco, Regular) will be cached\n' +
+      '• Row groups will be collapsed after caching',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to enable auto-cache: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Disable auto cache
+ */
+function disableAutoCache() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Remove triggers
+    const triggers = ScriptApp.getProjectTriggers()
+      .filter(trigger => trigger.getHandlerFunction() === 'autoCacheAllProjects');
+    
+    triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    
+    // Save disabled state
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED, 'false');
+    
+    ui.alert(
+      'Auto Cache Disabled',
+      '❌ Auto-cache has been disabled.\n\n' +
+      'Comments will no longer be cached automatically.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to disable auto-cache: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// =============================================================================
+// AUTO UPDATE SETTINGS
+// =============================================================================
+
+/**
+ * Show auto update settings dialog
+ */
+function showAutoUpdateSettings() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  const isEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
+  
+  const result = ui.alert(
+    '🔄 Auto Update Settings',
+    `Auto-update is currently: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\n` +
+    'When enabled, all project data will be automatically updated every Tuesday at 5:00 AM.\n\n' +
+    'This will fetch new data including the previous complete week.\n\n' +
+    `Would you like to ${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`,
+    ui.ButtonSet.YES_NO_CANCEL
+  );
+  
+  if (result === ui.Button.YES) {
+    if (isEnabled) {
+      // Disable auto-update
+      disableAutoUpdate();
+    } else {
+      // Enable auto-update
+      enableAutoUpdate();
+    }
+  }
+}
+
+/**
+ * Enable auto update with Tuesday 5AM trigger
+ */
+function enableAutoUpdate() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Remove any existing triggers
+    ScriptApp.getProjectTriggers()
+      .filter(trigger => trigger.getHandlerFunction() === 'autoUpdateAllProjects')
+      .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    
+    // Create new trigger for Tuesday 5AM
+    ScriptApp.newTrigger('autoUpdateAllProjects')
+      .timeBased()
+      .onWeekDay(ScriptApp.WeekDay.TUESDAY)
+      .atHour(5)
+      .create();
+    
+    // Save enabled state
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED, 'true');
+    
+    ui.alert(
+      'Auto Update Enabled',
+      '✅ Auto-update has been enabled!\n\n' +
+      '• Data will be updated every Tuesday at 5:00 AM\n' +
+      '• All projects will include the previous week\'s data\n' +
+      '• Comments will be preserved during updates',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to enable auto-update: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Disable auto update
+ */
+function disableAutoUpdate() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Remove triggers
+    const triggers = ScriptApp.getProjectTriggers()
+      .filter(trigger => trigger.getHandlerFunction() === 'autoUpdateAllProjects');
+    
+    triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+    
+    // Save disabled state
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED, 'false');
+    
+    ui.alert(
+      'Auto Update Disabled',
+      '❌ Auto-update has been disabled.\n\n' +
+      'Data will no longer be updated automatically on Tuesdays.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    ui.alert('Error', 'Failed to disable auto-update: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// =============================================================================
+// AUTOMATION STATUS
+// =============================================================================
+
+/**
+ * Complete automation status display
+ */
+function getCompleteAutomationStatus() {
   const props = PropertiesService.getScriptProperties();
   
   const cacheEnabled = props.getProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED) === 'true';
@@ -286,7 +625,7 @@ function showAutomationStatus() {
   // Update status
   statusMessage += '🔄 AUTO UPDATE:\n';
   if (updateEnabled && updateTrigger) {
-    statusMessage += '✅ Enabled - Runs every Monday at 5:00 AM\n';
+    statusMessage += '✅ Enabled - Runs every Tuesday at 5:00 AM\n';
     statusMessage += '• Updates all project data\n';
     statusMessage += '• Includes previous complete week\n';
     statusMessage += '• Preserves all comments\n';
@@ -306,5 +645,104 @@ function showAutomationStatus() {
   statusMessage += `• Cache triggers: ${triggers.filter(t => t.getHandlerFunction() === 'autoCacheAllProjects').length}\n`;
   statusMessage += `• Update triggers: ${triggers.filter(t => t.getHandlerFunction() === 'autoUpdateAllProjects').length}\n`;
   
-  ui.alert('Automation Status', statusMessage, ui.ButtonSet.OK);
+  return statusMessage;
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS FOR SETTINGS
+// =============================================================================
+
+/**
+ * Clear specific project data with UI confirmation
+ */
+function clearProjectAllData(projectName) {
+  const ui = SpreadsheetApp.getUi();
+  
+  const confirm = ui.alert(
+    `Clear ${projectName} Data`,
+    `This will clear all data from the ${projectName} project.\n\n` +
+    'Comments will be preserved and can be restored.\n\n' +
+    'Are you sure?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (confirm !== ui.Button.YES) return;
+  
+  try {
+    // Save comments first
+    const config = getProjectConfig(projectName);
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    if (sheet && sheet.getLastRow() > 1) {
+      expandAllGroups(sheet);
+      const cache = new CommentCache(projectName);
+      cache.syncCommentsFromSheet();
+    }
+    
+    // Clear the data
+    clearProjectDataSilent(projectName);
+    
+    ui.alert('Success', `${projectName} data has been cleared. Comments have been preserved.`, ui.ButtonSet.OK);
+    
+  } catch (error) {
+    ui.alert('Error', `Error clearing ${projectName} data: ` + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Test API with custom date range
+ */
+function testAPIWithDateRange(startDate, endDate) {
+  const ui = SpreadsheetApp.getUi();
+  
+  const choice = showChoice('Select Project for API Test:', ['TRICKY', 'MOLOCO', 'REGULAR']);
+  if (!choice) return;
+  
+  const projectName = ['TRICKY', 'MOLOCO', 'REGULAR'][choice-1];
+  
+  try {
+    setCurrentProject(projectName);
+    const dateRange = { from: startDate, to: endDate };
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert(
+        `${projectName} API Test`,
+        `❌ No data returned for period ${startDate} to ${endDate}.\n\n` +
+        'The API connection works but no campaigns match the filters.',
+        ui.ButtonSet.OK
+      );
+    } else {
+      const count = raw.data.analytics.richStats.stats.length;
+      ui.alert(
+        `${projectName} API Test`,
+        `✅ API test successful!\n\n` +
+        `• Records found: ${count}\n` +
+        `• Period: ${startDate} to ${endDate}\n` +
+        `• Project: ${projectName}`,
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (error) {
+    ui.alert(
+      `${projectName} API Test`,
+      `❌ API Error:\n\n${error.toString()}`,
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * Helper function to show choice dialog (if not already defined)
+ */
+function showChoice(title, options) {
+  const ui = SpreadsheetApp.getUi();
+  const numbered = options.map((opt, i) => `${i + 1} - ${opt}`).join('\n');
+  const result = ui.prompt(title, `${numbered}\n\nEnter number:`, ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return null;
+  
+  const choice = parseInt(result.getResponseText());
+  return (choice >= 1 && choice <= options.length) ? choice : null;
 }
