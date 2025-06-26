@@ -268,6 +268,7 @@ function getGraphQLQuery() {
 /**
  * Process API data and group by apps, then weeks
  * Skip current week data as it's incomplete
+ * ИСПРАВЛЕНО: Добавлен фильтр по спенду > 0
  */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
@@ -323,6 +324,11 @@ function processApiData(rawData) {
           rrD1: 0,
           rrD7: 0
         };
+      }
+
+      // ИСПРАВЛЕНО: Пропускаем кампании с нулевым или отрицательным спендом
+      if (metrics.spend <= 0) {
+        return;
       }
 
       const sunday = getSundayOfWeek(new Date(date));
