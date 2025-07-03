@@ -174,16 +174,6 @@ function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJEC
 
 function generateReport(days) {
   try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (sheet && sheet.getLastRow() > 1) {
-      expandAllGroups(sheet);
-      const cache = new CommentCache();
-      cache.syncCommentsFromSheet();
-    }
-    
     const dateRange = getDateRange(days);
     const raw = fetchCampaignData(dateRange);
     
@@ -198,7 +188,7 @@ function generateReport(days) {
       return;
     }
     
-    clearAllDataSilent();
+    clearAllDataSilent(); // Теперь сама кеширует комментарии
     createEnhancedPivotTable(processed);
     
     const cache = new CommentCache();
@@ -213,16 +203,6 @@ function generateReportForDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
   
   try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (sheet && sheet.getLastRow() > 1) {
-      expandAllGroups(sheet);
-      const cache = new CommentCache();
-      cache.syncCommentsFromSheet();
-    }
-    
     const dateRange = { from: startDate, to: endDate };
     const raw = fetchCampaignData(dateRange);
     
@@ -237,7 +217,7 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    clearAllDataSilent();
+    clearAllDataSilent(); // Теперь сама кеширует комментарии
     createEnhancedPivotTable(processed);
     
     const cache = new CommentCache();
@@ -262,10 +242,6 @@ function updateAllDataToCurrent() {
   }
   
   try {
-    expandAllGroups(sheet);
-    const cache = new CommentCache();
-    cache.syncCommentsFromSheet();
-    
     let earliestDate = null;
     const data = sheet.getDataRange().getValues();
     
@@ -306,8 +282,10 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    clearAllDataSilent();
+    clearAllDataSilent(); // Теперь сама кеширует комментарии
     createEnhancedPivotTable(processed);
+    
+    const cache = new CommentCache();
     cache.applyCommentsToSheet();
     
     ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);

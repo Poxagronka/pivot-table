@@ -30,14 +30,12 @@ function cacheProjectComments(projectName) {
     return;
   }
   
-  expandAllGroups(sheet);
-  SpreadsheetApp.flush();
-  
+  // ОПТИМИЗИРОВАНО: Для кеширования комментариев НЕ нужно раскрывать группы!
+  // getDataRange().getValues() читает все данные включая свернутые строки
   const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheetQuiet();
+  cache.syncCommentsFromSheet();
   
-  collapseAllGroupsRecursively(sheet);
-  console.log(`${projectName}: Comments cached and groups collapsed`);
+  console.log(`${projectName}: Comments cached (groups unchanged)`);
 }
 
 // AUTO UPDATE SYSTEM
@@ -67,10 +65,6 @@ function updateProjectData(projectName) {
     console.log(`${projectName}: No existing data to update`);
     return;
   }
-  
-  expandAllGroups(sheet);
-  const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
   
   let earliestDate = null;
   const data = sheet.getDataRange().getValues();
@@ -120,12 +114,13 @@ function updateProjectData(projectName) {
     return;
   }
   
-  clearProjectDataSilent(projectName);
+  clearProjectDataSilent(projectName); // Теперь сама кеширует комментарии
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   try {
     createEnhancedPivotTable(processed);
+    const cache = new CommentCache(projectName);
     cache.applyCommentsToSheet();
   } finally {
     setCurrentProject(originalProject);
@@ -169,10 +164,10 @@ function saveProjectCommentsManual(projectName) {
     throw new Error(`No data found in ${projectName} sheet`);
   }
   
-  expandAllGroups(sheet);
+  // ОПТИМИЗИРОВАНО: Для кеширования комментариев НЕ нужно раскрывать группы!
+  // getDataRange().getValues() читает все данные включая свернутые строки
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
-  collapseAllGroupsRecursively(sheet);
 }
 
 // STATUS MONITORING

@@ -36,17 +36,7 @@ function clearAllProjectsData() {
     
     projects.forEach(proj => {
       try {
-        const config = getProjectConfig(proj);
-        const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-        const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-        
-        if (sheet && sheet.getLastRow() > 1) {
-          expandAllGroups(sheet);
-          const cache = new CommentCache(proj);
-          cache.syncCommentsFromSheet();
-        }
-        
-        clearProjectDataSilent(proj);
+        clearProjectDataSilent(proj); // Теперь сама кеширует комментарии
         successCount++;
       } catch (e) {
         console.error(`Error clearing ${proj}:`, e);
@@ -65,17 +55,7 @@ function clearProjectAllData(projectName) {
   if (ui.alert(`Clear ${projectName} Data`, `Clear all ${projectName} data?\n\nComments will be preserved.`, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
-    const config = getProjectConfig(projectName);
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    if (sheet && sheet.getLastRow() > 1) {
-      expandAllGroups(sheet);
-      const cache = new CommentCache(projectName);
-      cache.syncCommentsFromSheet();
-    }
-    
-    clearProjectDataSilent(projectName);
+    clearProjectDataSilent(projectName); // Теперь сама кеширует комментарии
     ui.alert('Success', `${projectName} data cleared. Comments preserved.`, ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', `Error clearing ${projectName}: ${e.toString()}`, ui.ButtonSet.OK);

@@ -90,9 +90,16 @@ function clearAllDataSilent() {
   try {
     const config = getCurrentConfig();
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    // ВАЖНО: Кешируем комментарии перед удалением листа
+    if (oldSheet && oldSheet.getLastRow() > 1) {
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+    }
+    
     const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
     const newSheet = spreadsheet.insertSheet(tempSheetName);
-    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (oldSheet) spreadsheet.deleteSheet(oldSheet);
     newSheet.setName(config.SHEET_NAME);
   } catch (e) {
@@ -105,9 +112,16 @@ function clearProjectDataSilent(projectName) {
   try {
     const config = getProjectConfig(projectName);
     const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    // ВАЖНО: Кешируем комментарии перед удалением листа
+    if (oldSheet && oldSheet.getLastRow() > 1) {
+      const cache = new CommentCache(projectName);
+      cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+    }
+    
     const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
     const newSheet = spreadsheet.insertSheet(tempSheetName);
-    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (oldSheet) spreadsheet.deleteSheet(oldSheet);
     newSheet.setName(config.SHEET_NAME);
   } catch (e) {

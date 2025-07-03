@@ -102,14 +102,14 @@ class CommentCache {
 
   /**
    * Sync comments from the main sheet to cache
+   * ОПТИМИЗИРОВАНО: Не раскрывает группы - getDataRange читает все данные
    */
   syncCommentsFromSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
     
-    // Expand all groups to ensure we can read all data
-    expandAllGroups(sheet);
+    // УБРАНО: expandAllGroups(sheet) - не нужно!
     
     const data = sheet.getDataRange().getValues();
     let currentApp = '';
@@ -201,44 +201,12 @@ class CommentCache {
   }
 
   /**
-   * Sync comments from the main sheet to cache (quiet version without expanding groups)
-   * Used by auto-cache to avoid interfering with user's group state
+   * Sync comments from the main sheet to cache (quiet version)
+   * ПЕРЕИМЕНОВАНО: теперь идентична обычной версии, так как раскрытие групп убрано
    */
   syncCommentsFromSheetQuiet() {
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    // DON'T expand groups - assume they're already expanded by caller
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    let currentWeek = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const campaignId = data[i][2]; // ID column
-      const comment = data[i][15]; // Comments column
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-        currentWeek = '';
-      } else if (level === 'WEEK' && currentApp) {
-        currentWeek = nameOrRange;
-        if (comment) {
-          // Save week-level comment
-          this.saveComment(currentApp, currentWeek, comment);
-        }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-        // Save campaign-level comment
-        const sourceApp = nameOrRange; // Source App name
-        const campaignIdValue = campaignId && typeof campaignId === 'string' && campaignId.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(campaignId) 
-          : campaignId;
-        
-        this.saveComment(currentApp, currentWeek, comment, campaignIdValue, sourceApp);
-      }
-    }
+    // Теперь идентична syncCommentsFromSheet(), так как мы убрали expandAllGroups
+    this.syncCommentsFromSheet();
   }
 }
 
@@ -393,7 +361,7 @@ function identifyGroups(data) {
 }
 
 /**
- * Expand all groups in the sheet - used before caching
+ * Expand all groups in the sheet - used ONLY when user explicitly needs to see data
  */
 function expandAllGroups(sheet) {
   try {
