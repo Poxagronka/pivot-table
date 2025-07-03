@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral
+ * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + GitHub ссылка
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral'];
@@ -17,7 +17,19 @@ function onOpen() {
       .addItem(props.getProperty('AUTO_UPDATE_ENABLED') === 'true' ? '✅ Auto-Update ON → Turn OFF' : '❌ Auto-Update OFF → Turn ON', 'toggleAutoUpdate')
       .addSeparator()
       .addItem('⚙️ Settings & Tools...', 'smartSettingsHub')
+      .addItem('🐙 GitHub Repository', 'openGitHubRepo')
       .addToUi();
+}
+
+function openGitHubRepo() {
+  var ui = SpreadsheetApp.getUi();
+  var githubUrl = 'https://github.com/Poxagronka/pivot-table';
+  
+  var htmlOutput = HtmlService.createHtmlOutput(
+    '<script>window.open("' + githubUrl + '", "_blank"); google.script.host.close();</script>'
+  ).setWidth(400).setHeight(300);
+  
+  ui.showModalDialog(htmlOutput, 'Opening GitHub Repository...');
 }
 
 function smartReportWizard() {
