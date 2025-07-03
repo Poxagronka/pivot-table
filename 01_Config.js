@@ -1,5 +1,5 @@
 /**
- * Configuration file - ИСПРАВЛЕНО: добавлен APPLOVIN
+ * Configuration file - ИСПРАВЛЕНО: добавлен APPLOVIN тест
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
