@@ -1,5 +1,5 @@
 /**
- * Debug Functions - Сокращенная версия для всех проектов - ОБНОВЛЕНО: добавлен Applovin
+ * Debug Functions - Сокращенная версия для всех проектов - ОБНОВЛЕНО: добавлен Mintegral
  */
 
 function debugReportGeneration() {
@@ -415,7 +415,7 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         if (campaignName) {
           uniqueCampaigns.add(campaignName);
           
-          if (projectName === 'MOLOCO') {
+          if (projectName === 'MOLOCO' || projectName === 'MINTEGRAL') {
             if (campaignName.startsWith('APD_')) {
               campaignPatterns.add(campaignName);
             }
@@ -449,15 +449,15 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     }
     
     // Project-specific analysis
-    if (projectName === 'MOLOCO') {
-      logDebug(debugSheet, 'MOLOCO: Фильтр кампаний ОТКЛЮЧЕН (берем все кампании)', 'INFO');
+    if (projectName === 'MOLOCO' || projectName === 'MINTEGRAL') {
+      logDebug(debugSheet, `${projectName}: Фильтр кампаний ОТКЛЮЧЕН (берем все кампании)`, 'INFO');
       logDebug(debugSheet, '- APD_ кампаний найдено: ' + campaignPatterns.size, 'INFO');
       logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ')}`, 'INFO');
       
       if (campaignPatterns.size > 0) {
         const examples = Array.from(campaignPatterns).slice(0, 3);
         logDebug(debugSheet, 'Примеры APD_ кампаний:', 'INFO', examples.join('\n'));
-        logDebug(debugSheet, '✅ MOLOCO данные корректны!', 'SUCCESS');
+        logDebug(debugSheet, `✅ ${projectName} данные корректны!`, 'SUCCESS');
       } else {
         logDebug(debugSheet, 'ВНИМАНИЕ: Нет APD_ кампаний в данных', 'WARNING');
       }

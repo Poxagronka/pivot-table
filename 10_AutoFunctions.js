@@ -1,12 +1,12 @@
 /**
- * Auto Functions - Сокращенная версия - ОБНОВЛЕНО: добавлен Applovin
+ * Auto Functions - ОБНОВЛЕНО: добавлен Mintegral
  */
 
 // AUTO CACHE SYSTEM
 function autoCacheAllProjects() {
   console.log('=== AUTO CACHE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].forEach(proj => {
       try {
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
@@ -44,7 +44,7 @@ function cacheProjectComments(projectName) {
 function autoUpdateAllProjects() {
   console.log('=== AUTO UPDATE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].forEach(proj => {
       try {
         console.log(`Updating ${proj}...`);
         updateProjectData(proj);
@@ -138,7 +138,7 @@ function updateProjectData(projectName) {
 function saveAllCommentsToCache() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'];
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'];
     let successCount = 0;
     
     projects.forEach(proj => {

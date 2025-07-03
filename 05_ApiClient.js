@@ -1,5 +1,5 @@
 /**
- * API Client - Multi Project Support - ОБНОВЛЕНО: добавлен Applovin
+ * API Client - Multi Project Support - ОБНОВЛЕНО: новая логика GEO для проектов кроме Tricky/Regular
  * Handles all API communication and data fetching
  */
 
@@ -22,7 +22,7 @@ function fetchCampaignData(dateRange) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular/Google_Ads/Applovin - exclude campaigns)
+      // Negative filter (for Regular/Google_Ads/Applovin/Mintegral - exclude campaigns)
       const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
@@ -117,7 +117,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular/Google_Ads/Applovin - exclude campaigns)
+      // Negative filter (for Regular/Google_Ads/Applovin/Mintegral - exclude campaigns)
       const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
@@ -268,7 +268,7 @@ function getGraphQLQuery() {
 /**
  * Process API data and group by apps, then weeks
  * Skip current week data as it's incomplete
- * ИСПРАВЛЕНО: Добавлен фильтр по спенду > 0 и поддержка Applovin
+ * ИСПРАВЛЕНО: Добавлен фильтр по спенду > 0 и поддержка всех проектов
  */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
@@ -357,7 +357,7 @@ function processApiData(rawData) {
       let campaignId = 'Unknown';
       
       if (campaign) {
-        // For UaCampaign objects (Tricky/Regular/Google_Ads/Applovin)
+        // For UaCampaign objects (Tricky/Regular/Google_Ads/Applovin/Mintegral)
         if (campaign.campaignName) {
           campaignName = campaign.campaignName;
           campaignId = campaign.campaignId || campaign.id || 'Unknown';
@@ -411,25 +411,60 @@ function processProjectApiData(projectName, rawData) {
 
 /**
  * Extract geo information from campaign name
+ * ОБНОВЛЕНО: Разная логика для разных проектов
  */
 function extractGeoFromCampaign(campaignName) {
-  const geoMap = {
-    '| USA |': 'USA',
-    '| MEX |': 'MEX',
-    '| AUS |': 'AUS',
-    '| DEU |': 'DEU',
-    '| JPN |': 'JPN',
-    '| KOR |': 'KOR',
-    '| BRA |': 'BRA',
-    '| CAN |': 'CAN',
-    '| GBR |': 'GBR'
-  };
+  if (!campaignName) return 'OTHER';
+  
+  // Для Tricky и Regular - используем старую логику
+  if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
+    const geoMap = {
+      '| USA |': 'USA',
+      '| MEX |': 'MEX',
+      '| AUS |': 'AUS',
+      '| DEU |': 'DEU',
+      '| JPN |': 'JPN',
+      '| KOR |': 'KOR',
+      '| BRA |': 'BRA',
+      '| CAN |': 'CAN',
+      '| GBR |': 'GBR'
+    };
 
-  for (const [pattern, geo] of Object.entries(geoMap)) {
-    if (campaignName.includes(pattern)) {
-      return geo;
+    for (const [pattern, geo] of Object.entries(geoMap)) {
+      if (campaignName.includes(pattern)) {
+        return geo;
+      }
+    }
+    return 'OTHER';
+  } 
+  
+  // Для остальных проектов - новая логика поиска GEO в названии
+  // Порядок важен! От более специфичных к менее специфичным
+  const geoPatterns = [
+    'WW_ru', 'WW_es', 'WW_de', 'WW_pt',  // Сначала более специфичные WW_
+    'Asia T1', 'T2-ES', 'T1-EN',         // Затем составные
+    'LatAm', 'TopGeo', 'Europe',         // Затем регионы
+    'US', 'RU', 'UK', 'GE', 'FR', 'PT', 'ES', 'DE', 'T1', 'WW'  // Последними простые коды
+  ];
+  
+  // Ищем паттерны в названии кампании (регистронезависимо)
+  const upperCampaignName = campaignName.toUpperCase();
+  
+  for (const pattern of geoPatterns) {
+    const upperPattern = pattern.toUpperCase();
+    
+    // Ищем точное совпадение как отдельное слово или разделенное подчеркиванием/дефисом
+    if (upperCampaignName.includes('_' + upperPattern + '_') ||
+        upperCampaignName.includes('-' + upperPattern + '-') ||
+        upperCampaignName.includes('_' + upperPattern) ||
+        upperCampaignName.includes('-' + upperPattern) ||
+        upperCampaignName.includes(upperPattern + '_') ||
+        upperCampaignName.includes(upperPattern + '-') ||
+        upperCampaignName === upperPattern) {
+      return pattern;
     }
   }
+  
   return 'OTHER';
 }
 
@@ -444,8 +479,8 @@ function extractSourceApp(campaignName) {
       return campaignName;
     }
     
-    // Handle Regular, Google_Ads, and Applovin campaigns: DO NOT modify campaign names - return as is
-    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+    // Handle Regular, Google_Ads, Applovin, and Mintegral campaigns: DO NOT modify campaign names - return as is
+    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'MINTEGRAL') {
       return campaignName;
     }
     
@@ -491,7 +526,13 @@ function extractProjectSourceApp(projectName, campaignName) {
  * Project-specific geo extraction (for future use)
  */
 function extractProjectGeoFromCampaign(projectName, campaignName) {
-  // For now, use the same logic for all projects
-  // In the future, different projects might have different geo patterns
-  return extractGeoFromCampaign(campaignName);
+  // Set project context for extraction
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    return extractGeoFromCampaign(campaignName);
+  } finally {
+    setCurrentProject(originalProject);
+  }
 }

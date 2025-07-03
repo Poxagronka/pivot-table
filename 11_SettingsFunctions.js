@@ -1,5 +1,5 @@
 /**
- * Settings Functions - Сокращенная версия всех настроек - ОБНОВЛЕНО: добавлен Applovin
+ * Settings Functions - ОБНОВЛЕНО: добавлен Mintegral
  */
 
 // CLEAR DATA
@@ -14,11 +14,11 @@ function showClearDataDialog() {
 
 function showProjectSelectionForClear() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt('Select Project to Clear', 'Enter project name:\n• TRICKY\n• MOLOCO\n• REGULAR\n• GOOGLE_ADS\n• APPLOVIN', ui.ButtonSet.OK_CANCEL);
+  const response = ui.prompt('Select Project to Clear', 'Enter project name:\n• TRICKY\n• MOLOCO\n• REGULAR\n• GOOGLE_ADS\n• APPLOVIN\n• MINTEGRAL', ui.ButtonSet.OK_CANCEL);
   
   if (response.getSelectedButton() === ui.Button.OK) {
     const projectName = response.getResponseText().toUpperCase().trim();
-    if (['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'].includes(projectName)) {
+    if (['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].includes(projectName)) {
       clearProjectAllData(projectName);
     } else {
       ui.alert('Invalid Project', 'Please enter a valid project name.', ui.ButtonSet.OK);
@@ -28,10 +28,10 @@ function showProjectSelectionForClear() {
 
 function clearAllProjectsData() {
   const ui = SpreadsheetApp.getUi();
-  if (ui.alert('Confirm Clear All', 'Clear data from ALL projects:\n• Tricky\n• Moloco\n• Regular\n• Google_Ads\n• Applovin\n\nComments preserved. Continue?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  if (ui.alert('Confirm Clear All', 'Clear data from ALL projects:\n• Tricky\n• Moloco\n• Regular\n• Google_Ads\n• Applovin\n• Mintegral\n\nComments preserved. Continue?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'];
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'];
     let successCount = 0;
     
     projects.forEach(proj => {
@@ -85,12 +85,12 @@ function clearProjectAllData(projectName) {
 // API CHECK
 function showQuickAPICheckDialog() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt('🔍 Quick API Check', 'Enter:\n• TRICKY\n• MOLOCO\n• REGULAR\n• GOOGLE_ADS\n• APPLOVIN\n• ALL (check all)', ui.ButtonSet.OK_CANCEL);
+  const response = ui.prompt('🔍 Quick API Check', 'Enter:\n• TRICKY\n• MOLOCO\n• REGULAR\n• GOOGLE_ADS\n• APPLOVIN\n• MINTEGRAL\n• ALL (check all)', ui.ButtonSet.OK_CANCEL);
   
   if (response.getSelectedButton() === ui.Button.OK) {
     const input = response.getResponseText().toUpperCase().trim();
     if (input === 'ALL') checkAllProjectsAPI();
-    else if (['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'].includes(input)) checkProjectAPI(input);
+    else if (['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].includes(input)) checkProjectAPI(input);
     else ui.alert('Invalid Input', 'Please enter a valid project name or ALL.', ui.ButtonSet.OK);
   }
 }
@@ -115,7 +115,7 @@ function checkProjectAPI(projectName) {
 
 function checkAllProjectsAPI() {
   const ui = SpreadsheetApp.getUi();
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'];
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'];
   let results = '🔍 API CHECK RESULTS\n\n';
   
   projects.forEach(proj => {
@@ -140,10 +140,10 @@ function checkAllProjectsAPI() {
 
 function testAPIWithDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
-  const choice = showChoice('Select Project for API Test:', ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN']);
+  const choice = showChoice('Select Project for API Test:', ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL']);
   if (!choice) return;
   
-  const projectName = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'][choice-1];
+  const projectName = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'][choice-1];
   
   try {
     setCurrentProject(projectName);
@@ -169,7 +169,7 @@ function showProjectSettings() {
   const cacheEnabled = props.getProperty(PROPERTY_KEYS.AUTO_CACHE_ENABLED) === 'true';
   const updateEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
   
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN'];
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'];
   let message = '🎯 PROJECT CONFIGURATION\n\n';
   
   projects.forEach(proj => {
@@ -199,11 +199,12 @@ function showGrowthThresholdDetails(projectName) {
   const t = getGrowthThresholds(projectName);
   
   const message = `📊 ${projectName} GROWTH THRESHOLDS\n\n` +
-    `🟢 HEALTHY: Spend >${t.healthyGrowth.minSpendChange}%, Profit >${t.healthyGrowth.minProfitChange}%\n` +
-    `🔴 INEFFICIENT: Max Profit <${t.inefficientGrowth.maxProfitChange}%\n` +
-    `🔵 SCALING DOWN: Max Spend <${t.scalingDown.maxSpendChange}%\n` +
-    `🟡 MODERATE: Spend >${t.moderateGrowthSpend}%, Profit >${t.moderateGrowthProfit}%\n` +
-    `⚪ STABLE: All other scenarios`;
+    `🟢 ПОЗИТИВНЫЕ: Healthy Growth (Spend ≥${t.healthyGrowth.minSpendChange}% AND Profit ≥${t.healthyGrowth.minProfitChange}%), Efficiency Improvement (спенд падает, профит растет), переход из убытка в прибыль\n` +
+    `🔴 КРИТИЧЕСКИЕ: Inefficient Growth (Profit ≤${t.inefficientGrowth.maxProfitChange}%), переход из прибыли в убыток\n` +
+    `🟠 ПРЕДУПРЕЖДАЮЩИЕ: Declining Efficiency (спенд растет/стабилен, профит падает умеренно)\n` +
+    `🔵 СОКРАЩЕНИЕ: Scaling Down (Spend ≤${t.scalingDown.maxSpendChange}%) - Efficient/Moderate/Problematic\n` +
+    `🟡 УМЕРЕННЫЕ: Moderate Growth/Decline, Minimal Growth, различные паттерны\n` +
+    `⚪ СТАБИЛЬНЫЕ: Минимальные изменения в любую сторону`;
   
   ui.alert(`${projectName} Growth Thresholds`, message, ui.ButtonSet.OK);
 }

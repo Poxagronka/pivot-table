@@ -1,8 +1,8 @@
 /**
- * Menu Functions - СОКРАЩЕННАЯ ВЕРСИЯ - ОБНОВЛЕНО: добавлен Applovin
+ * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral
  */
 
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin'];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral'];
 var MENU_DAYS = [30, 60, 90];
 
 function onOpen() {
@@ -117,12 +117,13 @@ function targetSettingsWizard() {
       ui.alert('✅ Updated', 'All targets have been saved', ui.ButtonSet.OK);
     }
   } else if (choice === 4) {
-    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
+    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%\nMintegral: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
       setTargetEROAS('TRICKY', 160);
       setTargetEROAS('MOLOCO', 140);
       setTargetEROAS('REGULAR', 140);
       setTargetEROAS('GOOGLE_ADS', 140);
       setTargetEROAS('APPLOVIN', 140);
+      setTargetEROAS('MINTEGRAL', 140);
       ui.alert('✅ Reset', 'All targets reset to defaults', ui.ButtonSet.OK);
     }
   }

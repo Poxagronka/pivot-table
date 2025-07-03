@@ -1,6 +1,6 @@
 /**
  * Sheet Formatting and Table Creation - Multi Project Support
- * ОБНОВЛЕНО: Добавлена поддержка Applovin (использует формат Google Ads)
+ * ОБНОВЛЕНО: Убраны ссылки для проектов кроме Tricky и Regular
  */
 
 /**
@@ -411,7 +411,13 @@ function calculateWeekTotals(campaigns) {
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
   // Sort campaigns by spend (highest first)
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
-    const link = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+    // ИСПРАВЛЕНО: Ссылки только для TRICKY и REGULAR
+    let campaignIdValue;
+    if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
+      campaignIdValue = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+    } else {
+      campaignIdValue = campaign.campaignId;
+    }
     
     // Получаем WoW данные для кампании по campaignId
     const key = `${campaign.campaignId}_${weekKey}`;
@@ -423,7 +429,7 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
     
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    const campaignRow = createCampaignRow(campaign, link, spendPct, profitPct, growthStatus);
+    const campaignRow = createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus);
     tableData.push(campaignRow);
   });
 }
@@ -431,12 +437,12 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
 /**
  * Create campaign row based on project type
  */
-function createCampaignRow(campaign, link, spendPct, profitPct, growthStatus) {
+function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
       'CAMPAIGN',
       campaign.sourceApp,
-      link,
+      campaignIdValue,
       campaign.geo,
       campaign.spend.toFixed(2),
       spendPct,
@@ -455,7 +461,7 @@ function createCampaignRow(campaign, link, spendPct, profitPct, growthStatus) {
     return [
       'CAMPAIGN',
       campaign.sourceApp,
-      link,
+      campaignIdValue,
       campaign.geo,
       campaign.spend.toFixed(2),
       spendPct,
