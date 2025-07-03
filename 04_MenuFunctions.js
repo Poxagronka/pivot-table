@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + GitHub ссылка
+ * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + управление токеном + GitHub ссылка
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral'];
@@ -10,8 +10,13 @@ function onOpen() {
   var menu = ui.createMenu('📊 Campaign Report');
   var props = PropertiesService.getScriptProperties();
   
+  // Token status indicator
+  var tokenStatus = isBearerTokenConfigured() ? '🔐✅' : '🔐❌';
+  
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
       .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
+      .addSeparator()
+      .addItem(tokenStatus + ' Bearer Token...', 'showTokenSettings')
       .addSeparator()
       .addItem(props.getProperty('AUTO_CACHE_ENABLED') === 'true' ? '✅ Auto-Cache ON → Turn OFF' : '❌ Auto-Cache OFF → Turn ON', 'toggleAutoCache')
       .addItem(props.getProperty('AUTO_UPDATE_ENABLED') === 'true' ? '✅ Auto-Update ON → Turn OFF' : '❌ Auto-Update OFF → Turn ON', 'toggleAutoUpdate')
@@ -34,6 +39,18 @@ function openGitHubRepo() {
 
 function smartReportWizard() {
   var ui = SpreadsheetApp.getUi();
+  
+  // Check token first
+  if (!isBearerTokenConfigured()) {
+    if (ui.alert('🔐 Token Required', 'Bearer token is not configured. Set it now?', ui.ButtonSet.YES_NO) === ui.Button.YES) {
+      updateBearerToken();
+      return;
+    } else {
+      ui.alert('❌ Cannot Generate Reports', 'Bearer token is required for API access.', ui.ButtonSet.OK);
+      return;
+    }
+  }
+  
   var scope = showChoice('📈 Generate Report - Step 1/3', ['All Projects Together', 'Single Project', 'Custom Selection']);
   if (!scope) return;
   
@@ -75,18 +92,107 @@ function smartReportWizard() {
 }
 
 function smartSettingsHub() {
-  var action = showChoice('⚙️ Settings & Tools', ['🎯 Target eROAS Settings', '📊 Growth Status Thresholds', '📋 View Project Overview', '💬 Comments Management', '🗑️ Clear Data', '🔍 API Health Check', '🐛 Debug Tools', '📊 View System Status']);
+  var action = showChoice('⚙️ Settings & Tools', [
+    '🔐 Bearer Token Settings',
+    '🎯 Target eROAS Settings', 
+    '📊 Growth Status Thresholds', 
+    '📋 View Project Overview', 
+    '💬 Comments Management', 
+    '🗑️ Clear Data', 
+    '🔍 API Health Check', 
+    '🐛 Debug Tools', 
+    '📊 View System Status'
+  ]);
   if (!action) return;
   
   switch(action) {
-    case 1: targetSettingsWizard(); break;
-    case 2: growthThresholdsWizard(); break;
-    case 3: projectOverviewWizard(); break;
-    case 4: commentsWizard(); break;
-    case 5: clearDataWizard(); break;
-    case 6: apiCheckWizard(); break;
-    case 7: debugWizard(); break;
-    case 8: showAutomationStatus(); break;
+    case 1: showTokenSettings(); break;
+    case 2: targetSettingsWizard(); break;
+    case 3: growthThresholdsWizard(); break;
+    case 4: projectOverviewWizard(); break;
+    case 5: commentsWizard(); break;
+    case 6: clearDataWizard(); break;
+    case 7: apiCheckWizard(); break;
+    case 8: debugWizard(); break;
+    case 9: showAutomationStatus(); break;
+  }
+}
+
+// TOKEN MANAGEMENT
+function showTokenSettings() {
+  var ui = SpreadsheetApp.getUi();
+  var isConfigured = isBearerTokenConfigured();
+  
+  var message = '🔐 BEARER TOKEN SETTINGS\n\n';
+  if (isConfigured) {
+    message += '✅ Token: Configured\n• Length: ' + getBearerToken().length + ' chars\n• Status: Valid\n\n';
+    message += 'Options:\n1. Update Token\n2. Clear Token\n3. Test Token\n4. Cancel';
+    
+    var choice = showChoice('Token Settings', ['Update Token', 'Clear Token', 'Test Token']);
+    if (!choice) return;
+    
+    if (choice === 1) {
+      updateBearerToken();
+    } else if (choice === 2) {
+      if (ui.alert('Clear Token?', 'This will remove the bearer token. All API calls will fail until you set a new token.\n\nContinue?', ui.ButtonSet.YES_NO) === ui.Button.YES) {
+        clearBearerToken();
+        ui.alert('✅ Token Cleared', 'Bearer token has been removed.', ui.ButtonSet.OK);
+      }
+    } else if (choice === 3) {
+      testBearerToken();
+    }
+  } else {
+    message += '❌ Token: NOT CONFIGURED\n• All API calls will fail\n• Please set token to use the system\n\n';
+    message += 'Set Bearer Token now?';
+    
+    if (ui.alert('Token Required', message, ui.ButtonSet.YES_NO) === ui.Button.YES) {
+      updateBearerToken();
+    }
+  }
+}
+
+function updateBearerToken() {
+  var ui = SpreadsheetApp.getUi();
+  var current = isBearerTokenConfigured() ? 'Current token length: ' + getBearerToken().length + ' chars\n\n' : '';
+  
+  var result = ui.prompt('🔐 Set Bearer Token', 
+    current + 'Enter your Appodeal API Bearer Token:\n\n• Get it from app.appodeal.com\n• Token should start with "eyJ"\n• Must be at least 50 characters', 
+    ui.ButtonSet.OK_CANCEL);
+  
+  if (result.getSelectedButton() === ui.Button.OK) {
+    var token = result.getResponseText().trim();
+    
+    try {
+      setBearerToken(token);
+      ui.alert('✅ Token Saved', 'Bearer token has been successfully saved and is ready to use.', ui.ButtonSet.OK);
+    } catch (e) {
+      ui.alert('❌ Invalid Token', 'Error: ' + e.toString() + '\n\nPlease check:\n• Token is complete\n• No extra spaces\n• Minimum 50 characters', ui.ButtonSet.OK);
+    }
+  }
+}
+
+function testBearerToken() {
+  var ui = SpreadsheetApp.getUi();
+  
+  if (!isBearerTokenConfigured()) {
+    ui.alert('❌ No Token', 'Bearer token is not configured. Please set it first.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  try {
+    // Test with a simple API call
+    setCurrentProject('TRICKY');
+    var dateRange = getDateRange(7);
+    var raw = fetchCampaignData(dateRange);
+    
+    if (raw && raw.data) {
+      var recordCount = raw.data.analytics?.richStats?.stats?.length || 0;
+      ui.alert('✅ Token Valid', 'Bearer token is working correctly!\n\n• API connection: Success\n• Test records: ' + recordCount + '\n• Token length: ' + getBearerToken().length + ' chars', ui.ButtonSet.OK);
+    } else {
+      ui.alert('⚠️ Token Issues', 'Token accepted but no data returned.\n\nPossible causes:\n• Token has limited permissions\n• No recent campaign data\n• Network configuration issues', ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('❌ Token Failed', 'Bearer token test failed:\n\n' + e.toString() + '\n\nPlease check:\n• Token is current and valid\n• Has proper API permissions\n• Network connectivity', ui.ButtonSet.OK);
   }
 }
 
@@ -160,6 +266,30 @@ function projectOverviewWizard() {
   } else if (choice === 4) {
     ui.alert('Export Settings', 'Settings export feature coming soon!', ui.ButtonSet.OK);
   }
+}
+
+function getProjectStatusOverview(projectName) {
+  var target = getTargetEROAS(projectName);
+  var thresholds = getGrowthThresholds(projectName);
+  var config = getProjectConfig(projectName);
+  var apiConfig = getProjectApiConfig(projectName);
+  
+  var tokenStatus = isBearerTokenConfigured() ? '✅ Configured' : '❌ Missing';
+  
+  var overview = '📋 ' + projectName + ' OVERVIEW\n\n';
+  overview += '🔐 Bearer Token: ' + tokenStatus + '\n';
+  overview += '🎯 Target eROAS: ' + target + '%\n';
+  overview += '📊 Sheet: ' + config.SHEET_NAME + '\n';
+  overview += '🌐 Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') + '\n';
+  overview += '🔍 Campaign Filter: ' + (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH || 'NO FILTER') + '\n';
+  overview += '👥 Users: ' + apiConfig.FILTERS.USER.length + ' configured\n\n';
+  
+  overview += '📈 GROWTH THRESHOLDS:\n';
+  overview += '🟢 Healthy: Spend >' + thresholds.healthyGrowth.minSpendChange + '%, Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n';
+  overview += '🔴 Inefficient: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '%\n';
+  overview += '🔵 Scaling: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n';
+  
+  return overview;
 }
 
 function growthThresholdsWizard() {
@@ -272,7 +402,8 @@ function resetAllThresholdsToDefaults() {
 
 function showAllProjectsOverview() {
   var ui = SpreadsheetApp.getUi();
-  var message = '📋 ALL PROJECTS OVERVIEW\n\n';
+  var tokenStatus = isBearerTokenConfigured() ? '✅ Configured' : '❌ Missing';
+  var message = '📋 ALL PROJECTS OVERVIEW\n\n🔐 Bearer Token: ' + tokenStatus + '\n\n';
   for (var i = 0; i < MENU_PROJECTS.length; i++) {
     var project = MENU_PROJECTS[i];
     var projectName = project.toUpperCase();

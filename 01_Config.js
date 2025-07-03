@@ -1,11 +1,11 @@
 /**
- * Configuration file - ОБНОВЛЕНО: добавлен MINTEGRAL
+ * Configuration file - ИСПРАВЛЕНО: токен спрятан в Properties без ошибок при инициализации
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
-var SHARED_BEARER_TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJBcHBvZGVhbCIsImF1ZCI6WyJBcHBvZGVhbCJdLCJhZG1pbiI6dHJ1ZSwic3ViIjoyMzU4MzcsInR5cCI6ImFjY2VzcyIsImV4cCI6IjE4OTQ3MzY4MjAifQ.2TSLNElXLvfBxsOAJ4pYk106cSblF9kwkBreA-0Gs5DdRB3WFjo2aZzPKkxUYf8A95lbSpN55t41LJcWzatSCA';
 
 var PROPERTY_KEYS = {
+  BEARER_TOKEN: 'BEARER_TOKEN',
   TARGET_EROAS_TRICKY: 'TARGET_EROAS_TRICKY',
   TARGET_EROAS_MOLOCO: 'TARGET_EROAS_MOLOCO',
   TARGET_EROAS_REGULAR: 'TARGET_EROAS_REGULAR',
@@ -61,6 +61,40 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   MINTEGRAL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
+// TOKEN MANAGEMENT - ИСПРАВЛЕНО: без ошибок при инициализации
+function getBearerToken() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty(PROPERTY_KEYS.BEARER_TOKEN);
+  return token || '';
+}
+
+function getBearerTokenStrict() {
+  var token = getBearerToken();
+  if (!token || token.length < 50) {
+    throw new Error('Bearer token not configured. Please set it using Settings menu.');
+  }
+  return token;
+}
+
+function setBearerToken(token) {
+  if (!token || token.length < 50) {
+    throw new Error('Invalid token provided. Token must be at least 50 characters long.');
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty(PROPERTY_KEYS.BEARER_TOKEN, token);
+}
+
+function isBearerTokenConfigured() {
+  var token = getBearerToken();
+  return token && token.length > 50;
+}
+
+function clearBearerToken() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty(PROPERTY_KEYS.BEARER_TOKEN);
+}
+
+// TARGET EROAS MANAGEMENT
 function getTargetEROAS(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'TARGET_EROAS_' + projectName;
@@ -74,6 +108,7 @@ function setTargetEROAS(projectName, value) {
   props.setProperty(key, value.toString());
 }
 
+// GROWTH THRESHOLDS MANAGEMENT
 function getGrowthThresholds(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'GROWTH_THRESHOLDS_' + projectName;
@@ -103,6 +138,7 @@ function resetGrowthThresholds(projectName) {
   props.deleteProperty(key);
 }
 
+// PROJECT GETTER FUNCTIONS
 function getTrickyTargetEROAS() { return getTargetEROAS('TRICKY'); }
 function getMolocoTargetEROAS() { return getTargetEROAS('MOLOCO'); }
 function getRegularTargetEROAS() { return getTargetEROAS('REGULAR'); }
@@ -117,13 +153,14 @@ function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS
 function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
 function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
 
+// PROJECT CONFIGURATIONS
 var PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getTrickyTargetEROAS,
     GROWTH_THRESHOLDS: getTrickyGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -156,7 +193,7 @@ var PROJECTS = {
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getMolocoTargetEROAS,
     GROWTH_THRESHOLDS: getMolocoGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -189,7 +226,7 @@ var PROJECTS = {
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getRegularTargetEROAS,
     GROWTH_THRESHOLDS: getRegularGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -222,7 +259,7 @@ var PROJECTS = {
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getGoogleAdsTargetEROAS,
     GROWTH_THRESHOLDS: getGoogleAdsGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Google_Ads',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -255,7 +292,7 @@ var PROJECTS = {
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getApplovinTargetEROAS,
     GROWTH_THRESHOLDS: getApplovinGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -288,7 +325,7 @@ var PROJECTS = {
     API_URL: 'https://app.appodeal.com/graphql',
     TARGET_EROAS: getMintegralTargetEROAS,
     GROWTH_THRESHOLDS: getMintegralGrowthThresholds,
-    BEARER_TOKEN: SHARED_BEARER_TOKEN,
+    BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Mintegral',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
@@ -319,6 +356,7 @@ var PROJECTS = {
 
 var CURRENT_PROJECT = 'TRICKY';
 
+// DYNAMIC CONFIG GETTERS
 function getCurrentConfig() {
   return {
     SHEET_ID: MAIN_SHEET_ID,
@@ -326,7 +364,7 @@ function getCurrentConfig() {
     API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
     TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS(),
     GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN,
+    BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET
   };
 }
@@ -345,7 +383,7 @@ function getProjectConfig(projectName) {
     API_URL: PROJECTS[projectName].API_URL,
     TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS(),
     GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN,
+    BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET
   };
 }
@@ -364,9 +402,7 @@ function setCurrentProject(projectName) {
   CURRENT_PROJECT = projectName;
 }
 
-var CONFIG = getCurrentConfig();
-var API_CONFIG = getCurrentApiConfig();
-
+// TABLE CONFIGURATION
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -381,6 +417,7 @@ var TABLE_CONFIG = {
   ]
 };
 
+// COLOR SCHEME
 var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
