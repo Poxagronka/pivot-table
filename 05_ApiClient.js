@@ -1,6 +1,5 @@
 /**
- * API Client - Multi Project Support - ИСПРАВЛЕНО: возврат к старой структуре для TRICKY + Apps Database
- * Handles all API communication and data fetching
+ * API Client - ИСПРАВЛЕНО: убрана SOURCE_APP группировка из API, группировка только через Apps Database
  */
 
 /**
@@ -266,9 +265,8 @@ function getGraphQLQuery() {
 }
 
 /**
- * Process API data and group by apps, then weeks, then source apps (for TRICKY only using Apps Database)
- * Skip current week data as it's incomplete
- * ИСПРАВЛЕНО: возврат к старой структуре API + группировка через Apps Database
+ * Process API data - ИСПРАВЛЕНО: все проекты используют одинаковую структуру API
+ * TRICKY группирует по bundle ID через Apps Database локально
  */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
@@ -278,7 +276,7 @@ function processApiData(rawData) {
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
 
-  // Initialize Apps Database for TRICKY project
+  // Initialize Apps Database only for TRICKY project
   let appsDb = null;
   if (CURRENT_PROJECT === 'TRICKY') {
     appsDb = new AppsDatabase('TRICKY');
@@ -296,7 +294,7 @@ function processApiData(rawData) {
         return;
       }
 
-      // All projects now use same structure: date[0], campaign[1], app[2], metrics[3+]
+      // ВСЕ ПРОЕКТЫ теперь используют одинаковую структуру: date[0], campaign[1], app[2], metrics[3+]
       const campaign = row[1];
       const app = row[2];
       const metricsStartIndex = 3;
@@ -391,7 +389,7 @@ function processApiData(rawData) {
         isAutomated: campaign.isAutomated || false
       };
 
-      // For TRICKY project, group by bundle ID using Apps Database
+      // Для TRICKY проекта - группируем по bundle ID используя Apps Database
       if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
         const bundleId = extractBundleIdFromCampaign(campaignName);
         const sourceAppKey = bundleId || 'unknown';
@@ -409,7 +407,7 @@ function processApiData(rawData) {
         
         appData[appKey].weeks[weekKey].sourceApps[sourceAppKey].campaigns.push(campaignData);
       } else {
-        // For other projects, add directly to week
+        // Для остальных проектов - добавляем напрямую к неделе
         appData[appKey].weeks[weekKey].campaigns.push(campaignData);
       }
 

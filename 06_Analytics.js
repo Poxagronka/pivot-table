@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ИСПРАВЛЕНО: аналитика для TRICKY с Apps Database
+ * Analytics Functions - ИСПРАВЛЕНО: правильная аналитика для TRICKY с Apps Database группировкой
  */
 
 function calculateWoWMetrics(appData) {
@@ -21,7 +21,7 @@ function calculateWoWMetrics(appData) {
         let allCampaigns = [];
         
         if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          // For TRICKY: collect all campaigns from all source apps
+          // For TRICKY: collect all campaigns from all source apps (grouped by Apps Database)
           Object.values(week.sourceApps).forEach(sourceApp => {
             allCampaigns.push(...sourceApp.campaigns);
             
@@ -145,7 +145,7 @@ function calculateWoWMetrics(appData) {
       });
     });
 
-    // Calculate source app WoW (for TRICKY only) - key by bundle ID + week
+    // Calculate source app WoW (only for TRICKY with Apps Database grouping)
     const sourceAppWoW = {};
     if (CURRENT_PROJECT === 'TRICKY') {
       Object.keys(sourceAppData).forEach(bundleId => {

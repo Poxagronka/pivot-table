@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + управление токеном + GitHub ссылка
+ * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + управление токеном + GitHub ссылка + Apps Database
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral'];
@@ -98,6 +98,7 @@ function smartSettingsHub() {
     '📊 Growth Status Thresholds', 
     '📋 View Project Overview', 
     '💬 Comments Management', 
+    '📱 Apps Database (TRICKY)', 
     '🗑️ Clear Data', 
     '🔍 API Health Check', 
     '🐛 Debug Tools', 
@@ -111,10 +112,165 @@ function smartSettingsHub() {
     case 3: growthThresholdsWizard(); break;
     case 4: projectOverviewWizard(); break;
     case 5: commentsWizard(); break;
-    case 6: clearDataWizard(); break;
-    case 7: apiCheckWizard(); break;
-    case 8: debugWizard(); break;
-    case 9: showAutomationStatus(); break;
+    case 6: appsDbWizard(); break;
+    case 7: clearDataWizard(); break;
+    case 8: apiCheckWizard(); break;
+    case 9: debugWizard(); break;
+    case 10: showAutomationStatus(); break;
+  }
+}
+
+// APPS DATABASE WIZARD
+function appsDbWizard() {
+  var ui = SpreadsheetApp.getUi();
+  
+  if (CURRENT_PROJECT !== 'TRICKY') {
+    var switchResult = ui.alert('Apps Database - TRICKY Only', 
+      'Apps Database is only used for TRICKY project.\n\nSwitch to TRICKY project now?', 
+      ui.ButtonSet.YES_NO);
+    
+    if (switchResult !== ui.Button.YES) return;
+    setCurrentProject('TRICKY');
+  }
+  
+  var action = showChoice('📱 Apps Database Management', [
+    'View Cache Status',
+    'Refresh Apps Database', 
+    'View Sample Data',
+    'Clear Cache',
+    'Debug Update Process'
+  ]);
+  if (!action) return;
+  
+  switch(action) {
+    case 1: showAppsDbStatus(); break;
+    case 2: refreshAppsDatabase(); break;
+    case 3: showAppsDbSample(); break;
+    case 4: clearAppsDbCache(); break;
+    case 5: debugAppsDatabase(); break;
+  }
+}
+
+function showAppsDbStatus() {
+  var ui = SpreadsheetApp.getUi();
+  
+  try {
+    var appsDb = new AppsDatabase('TRICKY');
+    var cache = appsDb.loadFromCache();
+    var appCount = Object.keys(cache).length;
+    
+    var message = '📱 APPS DATABASE STATUS\n\n';
+    message += '• Total Apps: ' + appCount + '\n';
+    
+    if (appCount > 0) {
+      var bundleIds = Object.keys(cache);
+      var sampleApp = cache[bundleIds[0]];
+      message += '• Last Updated: ' + (sampleApp.lastUpdated || 'Unknown') + '\n';
+      message += '• Cache Sheet: ' + (appsDb.cacheSheet ? 'Found' : 'Missing') + '\n';
+      
+      var shouldUpdate = appsDb.shouldUpdateCache();
+      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>24h old)' : 'NO') + '\n\n';
+      
+      message += 'SAMPLE ENTRIES:\n';
+      var sampleCount = Math.min(3, bundleIds.length);
+      for (var i = 0; i < sampleCount; i++) {
+        var bundleId = bundleIds[i];
+        var app = cache[bundleId];
+        message += '• ' + bundleId + ' → ' + app.publisher + ' ' + app.appName + '\n';
+      }
+      
+      message += '\n💡 TIP: Use "Debug Update Process" for detailed logs';
+    } else {
+      message += '• Status: Empty cache\n';
+      message += '• Action Required: Refresh database\n';
+      message += '• Debug Tip: Use "Debug Update Process" for detailed logs\n';
+      
+      // Additional diagnostic info
+      message += '\n🔍 DIAGNOSTIC INFO:\n';
+      try {
+        var externalSpreadsheet = SpreadsheetApp.openById(APPS_DATABASE_ID);
+        var externalSheet = externalSpreadsheet.getSheetByName(APPS_DATABASE_SHEET);
+        if (externalSheet) {
+          var dataCount = externalSheet.getLastRow() - 1;
+          message += '• External table rows: ' + dataCount + '\n';
+          
+          var headers = externalSheet.getRange(1, 1, 1, externalSheet.getLastColumn()).getValues()[0];
+          var linkAppCol = -1;
+          for (var j = 0; j < headers.length; j++) {
+            if (headers[j].toString().toLowerCase() === 'link app') {
+              linkAppCol = j;
+              break;
+            }
+          }
+          message += '• Link App column: ' + (linkAppCol !== -1 ? 'Found' : 'NOT FOUND') + '\n';
+        } else {
+          message += '• External sheet: NOT FOUND\n';
+        }
+      } catch (e) {
+        message += '• External table: ERROR (' + e.toString().substring(0, 50) + '...)\n';
+      }
+    }
+    
+    ui.alert('Apps Database Status', message, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Error checking Apps Database status: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function showAppsDbSample() {
+  var ui = SpreadsheetApp.getUi();
+  
+  try {
+    var appsDb = new AppsDatabase('TRICKY');
+    var cache = appsDb.loadFromCache();
+    var bundleIds = Object.keys(cache);
+    
+    if (bundleIds.length === 0) {
+      ui.alert('No Data', 'Apps Database cache is empty. Please refresh the database first.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    var message = '📱 APPS DATABASE SAMPLE DATA\n\n';
+    var sampleCount = Math.min(10, bundleIds.length);
+    
+    for (var i = 0; i < sampleCount; i++) {
+      var bundleId = bundleIds[i];
+      var app = cache[bundleId];
+      message += bundleId + '\n  → ' + app.publisher + ' ' + app.appName + '\n\n';
+    }
+    
+    if (bundleIds.length > sampleCount) {
+      message += '... and ' + (bundleIds.length - sampleCount) + ' more apps';
+    }
+    
+    ui.alert('Apps Database Sample', message, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Error showing sample data: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function clearAppsDbCache() {
+  var ui = SpreadsheetApp.getUi();
+  
+  var result = ui.alert('Clear Apps Database Cache', 
+    'This will clear all cached app data for TRICKY project.\n\nThe cache will be automatically rebuilt on next refresh.\n\nContinue?', 
+    ui.ButtonSet.YES_NO);
+  
+  if (result !== ui.Button.YES) return;
+  
+  try {
+    var appsDb = new AppsDatabase('TRICKY');
+    if (appsDb.cacheSheet) {
+      // Clear all data except headers
+      if (appsDb.cacheSheet.getLastRow() > 1) {
+        appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
+      }
+      ui.alert('Success', 'Apps Database cache cleared successfully.', ui.ButtonSet.OK);
+    } else {
+      ui.alert('No Cache', 'Apps Database cache sheet not found.', ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('Error', 'Error clearing cache: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
 
@@ -282,9 +438,21 @@ function getProjectStatusOverview(projectName) {
   overview += '📊 Sheet: ' + config.SHEET_NAME + '\n';
   overview += '🌐 Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') + '\n';
   overview += '🔍 Campaign Filter: ' + (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH || 'NO FILTER') + '\n';
-  overview += '👥 Users: ' + apiConfig.FILTERS.USER.length + ' configured\n\n';
+  overview += '👥 Users: ' + apiConfig.FILTERS.USER.length + ' configured\n';
   
-  overview += '📈 GROWTH THRESHOLDS:\n';
+  // Apps Database info for TRICKY
+  if (projectName === 'TRICKY') {
+    try {
+      var appsDb = new AppsDatabase('TRICKY');
+      var cache = appsDb.loadFromCache();
+      var appCount = Object.keys(cache).length;
+      overview += '📱 Apps Database: ' + appCount + ' apps cached\n';
+    } catch (e) {
+      overview += '📱 Apps Database: Error\n';
+    }
+  }
+  
+  overview += '\n📈 GROWTH THRESHOLDS:\n';
   overview += '🟢 Healthy: Spend >' + thresholds.healthyGrowth.minSpendChange + '%, Profit >' + thresholds.healthyGrowth.minProfitChange + '%\n';
   overview += '🔴 Inefficient: Profit <' + thresholds.inefficientGrowth.maxProfitChange + '%\n';
   overview += '🔵 Scaling: Spend <' + thresholds.scalingDown.maxSpendChange + '%\n';

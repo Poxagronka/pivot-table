@@ -1,5 +1,5 @@
 /**
- * Configuration file - ИСПРАВЛЕНО: возврат к старой структуре API для TRICKY
+ * Configuration file - ИСПРАВЛЕНО: убрана SOURCE_APP группировка из API для TRICKY
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
