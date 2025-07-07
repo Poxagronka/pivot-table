@@ -1,11 +1,7 @@
 /**
- * Sheet Formatting and Table Creation - Multi Project Support
- * ИСПРАВЛЕНО: правильная группировка для TRICKY с Apps Database
+ * Sheet Formatting and Table Creation - ИСПРАВЛЕНО: корректная группировка для TRICKY
  */
 
-/**
- * Create enhanced pivot table with week-level WoW analysis
- */
 function createEnhancedPivotTable(appData) {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -13,44 +9,34 @@ function createEnhancedPivotTable(appData) {
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   else sheet.clear();
 
-  // ВАЖНО: Сначала вычисляем WoW метрики
   const wow = calculateWoWMetrics(appData);
-
   const headers = getProjectHeaders();
   const tableData = [headers];
   const formatData = [];
 
-  // Process each app
   const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
   appKeys.forEach(appKey => {
     const app = appData[appKey];
     
-    // APP row
     formatData.push({ row: tableData.length + 1, type: 'APP' });
     const emptyRow = new Array(headers.length).fill('');
     emptyRow[0] = 'APP';
     emptyRow[1] = app.appName;
     tableData.push(emptyRow);
 
-    // Process weeks for this app
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
       const week = app.weeks[weekKey];
       
-      // WEEK row
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
       
-      // For TRICKY project with source app grouping
       if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-        // Calculate week totals from all source apps
         const allCampaigns = [];
         Object.values(week.sourceApps).forEach(sourceApp => {
           allCampaigns.push(...sourceApp.campaigns);
         });
         
         const weekTotals = calculateWeekTotals(allCampaigns);
-        
-        // Get WoW data for week
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
@@ -61,14 +47,10 @@ function createEnhancedPivotTable(appData) {
         const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
         tableData.push(weekRow);
         
-        // Add source app rows and campaigns
         addSourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData);
         
       } else {
-        // For other projects without source app grouping
         const weekTotals = calculateWeekTotals(week.campaigns);
-        
-        // Get WoW data for week
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
@@ -79,27 +61,21 @@ function createEnhancedPivotTable(appData) {
         const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
         tableData.push(weekRow);
         
-        // Add campaign rows directly
         addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData);
       }
     });
   });
 
-  // Write data to sheet
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
-  // Apply formatting and grouping
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData);
   createRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
 }
 
-/**
- * Add source app rows and their campaigns (for TRICKY project)
- */
 function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
-  // Sort source apps by total spend (highest first)
+  // Сортируем по общему spend
   const sourceAppKeys = Object.keys(sourceApps).sort((a, b) => {
     const totalSpendA = sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
     const totalSpendB = sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -108,11 +84,8 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
   
   sourceAppKeys.forEach(sourceAppKey => {
     const sourceApp = sourceApps[sourceAppKey];
-    
-    // Calculate source app totals
     const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
     
-    // Get WoW data for source app using correct key format
     const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
     const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
     
@@ -120,64 +93,34 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
     const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
     const status = sourceAppWoW.growthStatus || '';
     
-    // SOURCE_APP row
     formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
     
     const sourceAppDisplayName = sourceApp.sourceAppName;
     const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
     tableData.push(sourceAppRow);
     
-    // Add campaign rows under this source app
     addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData);
   });
 }
 
-/**
- * Create source app row
- */
 function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
-      'SOURCE_APP',
-      sourceAppDisplayName,
-      '', '',
-      totals.totalSpend.toFixed(2),
-      spendWoW,
-      totals.totalInstalls,
-      totals.avgCpi.toFixed(3),
-      totals.avgRoas.toFixed(2),
-      `${totals.avgRrD1.toFixed(1)}%`,
-      `${totals.avgRrD7.toFixed(1)}%`,
-      `${totals.avgERoas.toFixed(0)}%`,
-      totals.totalProfit.toFixed(2),
-      profitWoW,
-      status,
-      ''
+      'SOURCE_APP', sourceAppDisplayName, '', '',
+      totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
+      totals.avgRoas.toFixed(2), `${totals.avgRrD1.toFixed(1)}%`, `${totals.avgRrD7.toFixed(1)}%`,
+      `${totals.avgERoas.toFixed(0)}%`, totals.totalProfit.toFixed(2), profitWoW, status, ''
     ];
   } else {
     return [
-      'SOURCE_APP',
-      sourceAppDisplayName,
-      '', '',
-      totals.totalSpend.toFixed(2),
-      spendWoW,
-      totals.totalInstalls,
-      totals.avgCpi.toFixed(3),
-      totals.avgRoas.toFixed(2),
-      totals.avgIpm.toFixed(1),
-      totals.avgArpu.toFixed(3),
-      `${totals.avgERoas.toFixed(0)}%`,
-      totals.totalProfit.toFixed(2),
-      profitWoW,
-      status,
-      ''
+      'SOURCE_APP', sourceAppDisplayName, '', '',
+      totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
+      totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), totals.avgArpu.toFixed(3),
+      `${totals.avgERoas.toFixed(0)}%`, totals.totalProfit.toFixed(2), profitWoW, status, ''
     ];
   }
 }
 
-/**
- * Get project-specific headers
- */
 function getProjectHeaders() {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
@@ -194,56 +137,27 @@ function getProjectHeaders() {
   }
 }
 
-/**
- * Create week row based on project type
- */
 function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
-      'WEEK',
-      `${week.weekStart} - ${week.weekEnd}`,
-      '', '',
-      weekTotals.totalSpend.toFixed(2),
-      spendWoW,
-      weekTotals.totalInstalls,
-      weekTotals.avgCpi.toFixed(3),
-      weekTotals.avgRoas.toFixed(2),
-      `${weekTotals.avgRrD1.toFixed(1)}%`,
-      `${weekTotals.avgRrD7.toFixed(1)}%`,
-      `${weekTotals.avgERoas.toFixed(0)}%`,
-      weekTotals.totalProfit.toFixed(2),
-      profitWoW,
-      status,
-      ''
+      'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
+      weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
+      weekTotals.avgRoas.toFixed(2), `${weekTotals.avgRrD1.toFixed(1)}%`, `${weekTotals.avgRrD7.toFixed(1)}%`,
+      `${weekTotals.avgERoas.toFixed(0)}%`, weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
     ];
   } else {
     return [
-      'WEEK',
-      `${week.weekStart} - ${week.weekEnd}`,
-      '', '',
-      weekTotals.totalSpend.toFixed(2),
-      spendWoW,
-      weekTotals.totalInstalls,
-      weekTotals.avgCpi.toFixed(3),
-      weekTotals.avgRoas.toFixed(2),
-      weekTotals.avgIpm.toFixed(1),
-      weekTotals.avgArpu.toFixed(3),
-      `${weekTotals.avgERoas.toFixed(0)}%`,
-      weekTotals.totalProfit.toFixed(2),
-      profitWoW,
-      status,
-      ''
+      'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
+      weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
+      weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), weekTotals.avgArpu.toFixed(3),
+      `${weekTotals.avgERoas.toFixed(0)}%`, weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
     ];
   }
 }
 
-/**
- * Enhanced formatting function with text wrap for headers and comments
- */
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const config = getCurrentConfig();
   
-  // Header formatting with text wrap
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange
     .setBackground(COLORS.HEADER.background)
@@ -254,30 +168,17 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     .setFontSize(10)
     .setWrap(true);
 
-  // Set column widths based on project
   const columnWidths = getProjectColumnWidths();
-  columnWidths.forEach(col => {
-    sheet.setColumnWidth(col.c, col.w);
-  });
+  columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
-  // Text wrap для колонки комментариев И Growth Status
   if (numRows > 1) {
-    // Comments column (last column)
     const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
-    commentsRange
-      .setWrap(true)
-      .setVerticalAlignment('top')
-      .setHorizontalAlignment('left');
+    commentsRange.setWrap(true).setVerticalAlignment('top').setHorizontalAlignment('left');
     
-    // Growth Status column (second to last)
     const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
-    growthStatusRange
-      .setWrap(true)
-      .setVerticalAlignment('middle')
-      .setHorizontalAlignment('left');
+    growthStatusRange.setWrap(true).setVerticalAlignment('middle').setHorizontalAlignment('left');
   }
 
-  // Categorize rows by type
   const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [];
   formatData.forEach(item => {
     if (item.type === 'APP') appRows.push(item.row);
@@ -286,7 +187,6 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
   });
 
-  // Apply row formatting
   appRows.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.APP_ROW.background)
@@ -313,66 +213,42 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
          .setFontSize(9)
   );
 
-  // Apply numeric formats
   if (numRows > 1) {
-    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00'); // Spend
-    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000'); // CPI
-    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00'); // ROAS
+    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
+    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
+    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
     
     if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
-      // RR columns already formatted as percentages in data
-      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00');
     } else {
-      sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0'); // IPM
-      sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000'); // E-ARPU
-      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00'); // E-Profit
+      sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
+      sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000');
+      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00');
     }
   }
 
-  // Apply conditional formatting
   applyConditionalFormatting(sheet, numRows);
-  
-  // Hide Level column
   sheet.hideColumns(1);
 }
 
-/**
- * Get project-specific column widths
- */
 function getProjectColumnWidths() {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
-      { c: 1, w: 80 },   // Level
-      { c: 2, w: 300 },  // Week Range / Source App
-      { c: 3, w: 50 },   // ID
-      { c: 4, w: 50 },   // GEO
-      { c: 5, w: 75 },   // Spend
-      { c: 6, w: 80 },   // Spend WoW %
-      { c: 7, w: 60 },   // Installs
-      { c: 8, w: 60 },   // CPI
-      { c: 9, w: 60 },   // ROAS D-1
-      { c: 10, w: 50 },  // RR D-1
-      { c: 11, w: 50 },  // RR D-7
-      { c: 12, w: 75 },  // eROAS 365d
-      { c: 13, w: 75 },  // eProfit 730d
-      { c: 14, w: 85 },  // eProfit 730d WoW %
-      { c: 15, w: 160 }, // Growth Status
-      { c: 16, w: 250 }  // Comments
+      { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
+      { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
+      { c: 9, w: 60 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 75 },
+      { c: 13, w: 75 }, { c: 14, w: 85 }, { c: 15, w: 160 }, { c: 16, w: 250 }
     ];
   } else {
     return TABLE_CONFIG.COLUMN_WIDTHS;
   }
 }
 
-/**
- * Comprehensive conditional formatting with all growth status variations
- */
 function applyConditionalFormatting(sheet, numRows) {
   const config = getCurrentConfig();
   const rules = [];
   
   if (numRows > 1) {
-    // Spend WoW % formatting (колонка F = 6)
     const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -389,7 +265,6 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([spendRange]).build()
     );
 
-    // E-ROAS 365d formatting (колонка 12 для всех проектов)
     const eroasColumn = 12;
     const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
     rules.push(
@@ -414,7 +289,6 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([eroasRange]).build()
     );
 
-    // eProfit WoW % formatting (колонка 14 для всех проектов)
     const profitColumn = 14;
     const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
     rules.push(
@@ -432,7 +306,6 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    // Growth Status formatting (колонка 15 для всех проектов)
     const growthColumn = 15;
     const growthRange = sheet.getRange(2, growthColumn, numRows - 1, 1);
     const statusColors = {
@@ -469,16 +342,12 @@ function applyConditionalFormatting(sheet, numRows) {
   sheet.setConditionalFormatRules(rules);
 }
 
-/**
- * Calculate totals for a week's campaigns - Updated for Google Ads/Applovin metrics
- */
 function calculateWeekTotals(campaigns) {
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
   const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
   const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
   const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
   
-  // Calculate spend-weighted average eROAS
   const validForEROAS = campaigns.filter(c => 
     c.eRoasForecast >= 1 && 
     c.eRoasForecast <= 1000 && 
@@ -494,7 +363,6 @@ function calculateWeekTotals(campaigns) {
   
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
-  // Project-specific metrics
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
     const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
@@ -514,13 +382,8 @@ function calculateWeekTotals(campaigns) {
   }
 }
 
-/**
- * Add campaign rows to table data
- */
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
-  // Sort campaigns by spend (highest first)
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
-    // ИСПРАВЛЕНО: Ссылки только для TRICKY и REGULAR
     let campaignIdValue;
     if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
       campaignIdValue = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
@@ -528,7 +391,6 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
       campaignIdValue = campaign.campaignId;
     }
     
-    // Получаем WoW данные для кампании по campaignId
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
@@ -543,132 +405,99 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
   });
 }
 
-/**
- * Create campaign row based on project type
- */
 function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
   if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
     return [
-      'CAMPAIGN',
-      campaign.sourceApp,
-      campaignIdValue,
-      campaign.geo,
-      campaign.spend.toFixed(2),
-      spendPct,
-      campaign.installs,
-      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-      campaign.roas.toFixed(2),
-      `${campaign.rrD1.toFixed(1)}%`,
-      `${campaign.rrD7.toFixed(1)}%`,
-      `${campaign.eRoasForecast.toFixed(0)}%`,
-      campaign.eProfitForecast.toFixed(2),
-      profitPct,
-      growthStatus,
-      ''
+      'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
+      campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+      campaign.roas.toFixed(2), `${campaign.rrD1.toFixed(1)}%`, `${campaign.rrD7.toFixed(1)}%`,
+      `${campaign.eRoasForecast.toFixed(0)}%`, campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
     ];
   } else {
     return [
-      'CAMPAIGN',
-      campaign.sourceApp,
-      campaignIdValue,
-      campaign.geo,
-      campaign.spend.toFixed(2),
-      spendPct,
-      campaign.installs,
-      campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-      campaign.roas.toFixed(2),
-      campaign.ipm.toFixed(1),
-      campaign.eArpuForecast.toFixed(3),
-      `${campaign.eRoasForecast.toFixed(0)}%`,
-      campaign.eProfitForecast.toFixed(2),
-      profitPct,
-      growthStatus,
-      ''
+      'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
+      campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+      campaign.roas.toFixed(2), campaign.ipm.toFixed(1), campaign.eArpuForecast.toFixed(3),
+      `${campaign.eRoasForecast.toFixed(0)}%`, campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
     ];
   }
 }
 
 /**
- * Create row grouping: App → Week → Source App (TRICKY only) → Campaign
- * ИСПРАВЛЕНО: правильная группировка без ошибок
+ * ИСПРАВЛЕНО: Правильная группировка App → Week → Source App → Campaign
  */
 function createRowGrouping(sheet, tableData, appData) {
   const numCols = getProjectHeaders().length;
 
   try {
-    let rowPointer = 2; // Start from second row (first is headers)
+    let rowPointer = 2;
 
-    // Sort apps by name
     const sortedApps = Object.keys(appData).sort((a, b) => 
       appData[a].appName.localeCompare(appData[b].appName)
     );
 
     sortedApps.forEach(appKey => {
       const app = appData[appKey];
-      const appStartRow = rowPointer; // APP row
-      rowPointer++; // Move past APP row
+      const appStartRow = rowPointer;
+      rowPointer++;
 
-      // Process weeks within app
       const sortedWeeks = Object.keys(app.weeks).sort();
       
       sortedWeeks.forEach(weekKey => {
         const week = app.weeks[weekKey];
-        const weekStartRow = rowPointer; // WEEK row
-        rowPointer++; // Move past WEEK row
+        const weekStartRow = rowPointer;
+        rowPointer++;
 
         let weekContentRows = 0;
 
-        // For TRICKY project with source app grouping
         if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          const sourceAppKeys = Object.keys(week.sourceApps);
+          // Сортируем SOURCE_APP по spend
+          const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
+            const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+            const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+            return spendB - spendA;
+          });
           
           sourceAppKeys.forEach(sourceAppKey => {
             const sourceApp = week.sourceApps[sourceAppKey];
-            const sourceAppStartRow = rowPointer; // SOURCE_APP row
-            rowPointer++; // Move past SOURCE_APP row
+            const sourceAppStartRow = rowPointer;
+            rowPointer++;
             
             const campaignCount = sourceApp.campaigns.length;
-            rowPointer += campaignCount; // Move past all campaigns
-            weekContentRows += 1 + campaignCount; // SOURCE_APP + campaigns
+            rowPointer += campaignCount;
+            weekContentRows += 1 + campaignCount;
             
-            // Group campaigns under source app
+            // Группируем кампании под SOURCE_APP
             if (campaignCount > 0) {
               try {
-                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, numCols)
-                     .shiftRowGroupDepth(1);
-                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1)
-                     .collapseGroups();
+                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, numCols).shiftRowGroupDepth(1);
+                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).collapseGroups();
               } catch (e) {
                 console.log('Error grouping campaigns under source app:', e);
               }
             }
           });
           
-          // Group all source apps + campaigns under week
+          // Группируем все SOURCE_APP + их кампании под WEEK
           if (weekContentRows > 0) {
             try {
-              sheet.getRange(weekStartRow + 1, 1, weekContentRows, numCols)
-                   .shiftRowGroupDepth(1);
-              sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1)
-                   .collapseGroups();
+              sheet.getRange(weekStartRow + 1, 1, weekContentRows, numCols).shiftRowGroupDepth(1);
+              sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).collapseGroups();
             } catch (e) {
               console.log('Error grouping week content:', e);
             }
           }
           
         } else {
-          // For other projects without source app grouping
+          // Для других проектов без SOURCE_APP группировки
           const campaignCount = week.campaigns ? week.campaigns.length : 0;
-          rowPointer += campaignCount; // Move past all campaigns
+          rowPointer += campaignCount;
           weekContentRows = campaignCount;
           
-          // Group campaigns under week
           if (campaignCount > 0) {
             try {
-              sheet.getRange(weekStartRow + 1, 1, campaignCount, numCols)
-                   .shiftRowGroupDepth(1);
-              sheet.getRange(weekStartRow + 1, 1, campaignCount, 1)
-                   .collapseGroups();
+              sheet.getRange(weekStartRow + 1, 1, campaignCount, numCols).shiftRowGroupDepth(1);
+              sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).collapseGroups();
             } catch (e) {
               console.log('Error grouping campaigns under week:', e);
             }
@@ -676,14 +505,12 @@ function createRowGrouping(sheet, tableData, appData) {
         }
       });
 
-      // Group all weeks + their content under app
-      const appContentRows = rowPointer - appStartRow - 1; // -1 to exclude APP row itself
+      // Группируем все недели + их содержимое под APP
+      const appContentRows = rowPointer - appStartRow - 1;
       if (appContentRows > 0) {
         try {
-          sheet.getRange(appStartRow + 1, 1, appContentRows, numCols)
-               .shiftRowGroupDepth(1);
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1)
-               .collapseGroups();
+          sheet.getRange(appStartRow + 1, 1, appContentRows, numCols).shiftRowGroupDepth(1);
+          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
         } catch (e) {
           console.log('Error grouping app content:', e);
         }
@@ -697,18 +524,13 @@ function createRowGrouping(sheet, tableData, appData) {
   }
 }
 
-/**
- * Create enhanced pivot table for specific project
- */
 function createProjectPivotTable(projectName, appData) {
-  // Set current project context
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   
   try {
     createEnhancedPivotTable(appData);
   } finally {
-    // Restore original project context
     setCurrentProject(originalProject);
   }
 }
