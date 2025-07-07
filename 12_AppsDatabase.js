@@ -66,47 +66,27 @@ class AppsDatabase {
     if (!this.cacheSheet) return false;
     
     try {
-      console.log('Updating Apps Database cache from external table...');
-      
-      // Access external spreadsheet
       const externalSpreadsheet = SpreadsheetApp.openById(APPS_DATABASE_ID);
       const externalSheet = externalSpreadsheet.getSheetByName(APPS_DATABASE_SHEET);
       
-      if (!externalSheet) {
-        console.error('Apps Database sheet not found');
-        return false;
-      }
+      if (!externalSheet) return false;
       
       const externalData = externalSheet.getDataRange().getValues();
-      if (externalData.length < 2) {
-        console.error('No data in Apps Database sheet');
-        return false;
-      }
+      if (externalData.length < 2) return false;
       
-      // Find column indices
       const headers = externalData[0];
       const linkAppCol = this.findColumnIndex(headers, ['Link App', 'link_app', 'linkapp', 'links']);
       const publisherCol = this.findColumnIndex(headers, ['Publisher', 'publisher']);
       const appNameCol = this.findColumnIndex(headers, ['App Name', 'app_name', 'appname']);
       
-      if (linkAppCol === -1) {
-        console.error('Link App column not found in Apps Database');
-        console.log('Available headers:', headers);
-        return false;
-      }
+      if (linkAppCol === -1) return false;
       
-      // Clear cache sheet except headers
       if (this.cacheSheet.getLastRow() > 1) {
         this.cacheSheet.deleteRows(2, this.cacheSheet.getLastRow() - 1);
       }
       
-      // Process external data with merged cells support
       const cacheData = [];
       const now = new Date();
-      let processedApps = 0;
-      let skippedApps = 0;
-      
-      // Track last non-empty values for merged cells
       let lastPublisher = '';
       let lastAppName = '';
       
@@ -118,28 +98,24 @@ class AppsDatabase {
           const bundleId = this.extractBundleIdFromLink(linkApp);
           
           if (bundleId) {
-            // Get raw values
             let publisherRaw = publisherCol !== -1 ? row[publisherCol] : '';
             let appNameRaw = appNameCol !== -1 ? row[appNameCol] : '';
             
-            // Convert to strings safely
             let publisher = (publisherRaw != null && publisherRaw.toString) ? publisherRaw.toString().trim() : '';
             let appName = (appNameRaw != null && appNameRaw.toString) ? appNameRaw.toString().trim() : '';
             
-            // Handle merged cells - use last non-empty value if current is empty
             if (publisher) {
-              lastPublisher = publisher; // Update last known publisher
+              lastPublisher = publisher;
             } else if (lastPublisher) {
-              publisher = lastPublisher; // Use last known publisher for merged cell
+              publisher = lastPublisher;
             }
             
             if (appName) {
-              lastAppName = appName; // Update last known app name
+              lastAppName = appName;
             } else if (lastAppName) {
-              appName = lastAppName; // Use last known app name for merged cell
+              appName = lastAppName;
             }
             
-            // Use fallbacks for completely empty values
             if (!publisher && !appName) {
               publisher = 'Unknown Publisher';
               appName = 'Unknown App';
@@ -150,15 +126,8 @@ class AppsDatabase {
             }
             
             cacheData.push([bundleId, publisher, appName, linkApp, now]);
-            processedApps++;
-          } else {
-            skippedApps++;
-            console.log(`Could not extract bundle ID from: ${linkApp.substring(0, 100)}...`);
           }
         } else {
-          skippedApps++;
-          
-          // Still need to update merged cell tracking even for rows without links
           let publisherRaw = publisherCol !== -1 ? row[publisherCol] : '';
           let appNameRaw = appNameCol !== -1 ? row[appNameCol] : '';
           
@@ -170,18 +139,14 @@ class AppsDatabase {
         }
       }
       
-      // Write to cache
       if (cacheData.length > 0) {
         const lastRow = this.cacheSheet.getLastRow();
         this.cacheSheet.getRange(lastRow + 1, 1, cacheData.length, 5).setValues(cacheData);
       }
       
-      console.log(`Apps Database cache updated: ${processedApps} apps processed, ${skippedApps} skipped`);
-      console.log(`Merged cells handling: Publisher "${lastPublisher}", App Name "${lastAppName}"`);
       return true;
       
     } catch (e) {
-      console.error('Error updating Apps Database cache:', e);
       return false;
     }
   }
@@ -194,41 +159,36 @@ class AppsDatabase {
     
     const url = linkApp.trim();
     
-    // Skip invalid links
     if (url === 'no app found' || url.length < 10 || url.includes('idx') || url.endsWith('id...')) return null;
     
     try {
-      // iOS App Store patterns (multiple variations)
       const iosPatterns = [
-        /apps\.apple\.com\/.*\/app\/[^\/]*\/id(\d{8,})/,  // Standard format
-        /apps\.apple\.com\/.*\/id(\d{8,})/,               // Short format  
-        /apps\.apple\.com\/app\/id(\d{8,})/,              // Direct format
-        /\/id(\d{8,})(?:[^\d]|$)/                         // Any /id followed by 8+ digits
+        /apps\.apple\.com\/.*\/app\/[^\/]*\/id(\d{8,})/,
+        /apps\.apple\.com\/.*\/id(\d{8,})/,
+        /apps\.apple\.com\/app\/id(\d{8,})/,
+        /\/id(\d{8,})(?:[^\d]|$)/
       ];
       
       for (const pattern of iosPatterns) {
         const match = url.match(pattern);
         if (match && match[1] && match[1].length >= 8) {
-          // Additional validation: iOS IDs should be numeric only
           if (/^\d+$/.test(match[1])) {
             return match[1];
           }
         }
       }
       
-      // Google Play Store patterns (multiple parameter orders)
       const androidPatterns = [
-        /play\.google\.com\/store\/apps\/details\?id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/,  // id first
-        /play\.google\.com\/store\/apps\/details\?[^&]*&id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/, // id not first
-        /play\.google\.com\/store\/apps\/details\/[^?]*\?id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/, // with path
-        /[?&]id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/  // any id parameter
+        /play\.google\.com\/store\/apps\/details\?id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/,
+        /play\.google\.com\/store\/apps\/details\?[^&]*&id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/,
+        /play\.google\.com\/store\/apps\/details\/[^?]*\?id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/,
+        /[?&]id=([a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9])(?:&|$)/
       ];
       
       for (const pattern of androidPatterns) {
         const match = url.match(pattern);
         if (match && match[1]) {
           const bundleId = match[1];
-          // Validate Android bundle ID format
           if (bundleId.includes('.') && bundleId.length >= 3 && /^[a-zA-Z]/.test(bundleId)) {
             return bundleId;
           }
@@ -236,7 +196,7 @@ class AppsDatabase {
       }
       
     } catch (e) {
-      console.error('Error extracting bundle ID from link:', e);
+      // Silent fail
     }
     
     return null;
@@ -288,40 +248,25 @@ class AppsDatabase {
    * Get source app display name (Publisher + App Name or bundle ID)
    */
   getSourceAppDisplayName(bundleId) {
-    // Debug logging
-    console.log(`getSourceAppDisplayName called with bundleId: "${bundleId}", type: ${typeof bundleId}, project: ${this.projectName}`);
-    
     if (!bundleId || this.projectName !== 'TRICKY') {
-      console.log(`Returning early: bundleId="${bundleId}", project="${this.projectName}"`);
       return bundleId || 'Unknown';
     }
     
     const appInfo = this.getAppInfo(bundleId);
-    console.log(`Apps Database lookup result:`, appInfo);
     
-    // If we found data in database
     if (appInfo.publisher !== bundleId) {
       const publisher = appInfo.publisher || '';
       const appName = appInfo.appName || '';
       
-      console.log(`Found in database - Publisher: "${publisher}", App Name: "${appName}"`);
-      
-      // Create display name based on available data
       if (publisher && appName && publisher !== appName) {
-        const result = `${publisher} ${appName}`;
-        console.log(`Returning combined: "${result}"`);
-        return result;
+        return `${publisher} ${appName}`;
       } else if (publisher) {
-        console.log(`Returning publisher: "${publisher}"`);
         return publisher;
       } else if (appName) {
-        console.log(`Returning app name: "${appName}"`);
         return appName;
       }
     }
     
-    // Fallback to bundle ID
-    console.log(`Fallback to bundle ID: "${bundleId}"`);
     return bundleId;
   }
 
@@ -357,90 +302,96 @@ class AppsDatabase {
     
     try {
       if (this.shouldUpdateCache()) {
-        console.log('Apps Database cache is outdated, updating...');
         this.updateCacheFromExternalTable();
-      } else {
-        console.log('Apps Database cache is up to date');
       }
     } catch (e) {
-      console.error('Error ensuring cache is up to date:', e);
+      // Silent fail
     }
   }
 }
 
 /**
- * Extract bundle ID from campaign name - ИСПРАВЛЕНО: правильная логика поиска
- * Ищем знак "=", потом берем текст от следующего символа до следующего пробела
+ * Extract bundle ID from campaign name - ИСПРАВЛЕНО: правильная логика поиска включая случаи с "=" в конце
+ * Проверяет ДВА варианта: bundle ID до "=" и bundle ID после "="
  */
 function extractBundleIdFromCampaign(campaignName) {
-  console.log(`extractBundleIdFromCampaign called with: "${campaignName}"`);
+  if (!campaignName) return null;
   
-  if (!campaignName) {
-    console.log('Campaign name is empty, returning null');
-    return null;
-  }
-  
-  // Ищем знак "="
   const equalsIndex = campaignName.indexOf('=');
-  if (equalsIndex === -1) {
-    console.log('No "=" found, using fallback logic');
-    // Fallback: берем текст до первого пробела
-    const spaceIndex = campaignName.indexOf(' ');
-    if (spaceIndex === -1) {
-      console.log('No space found, returning whole campaign name:', campaignName.trim());
-      return campaignName.trim();
+  
+  if (equalsIndex !== -1) {
+    const beforeEquals = campaignName.substring(0, equalsIndex).trim();
+    
+    if (isValidBundleId(beforeEquals)) {
+      return beforeEquals;
     }
     
-    const bundleId = campaignName.substring(0, spaceIndex).trim();
-    console.log(`Extracted before space: "${bundleId}"`);
+    let startIndex = equalsIndex + 1;
     
-    // Валидация: bundle ID должен содержать точку или быть iOS ID (только цифры 8+ символов)
-    if (bundleId.includes('.') || (/^\d{8,}$/.test(bundleId))) {
-      console.log(`Bundle ID validated: "${bundleId}"`);
+    while (startIndex < campaignName.length && campaignName[startIndex] === ' ') {
+      startIndex++;
+    }
+    
+    if (startIndex >= campaignName.length) return null;
+    
+    const spaceIndex = campaignName.indexOf(' ', startIndex);
+    let bundleId;
+    
+    if (spaceIndex === -1) {
+      bundleId = campaignName.substring(startIndex).trim();
+    } else {
+      bundleId = campaignName.substring(startIndex, spaceIndex).trim();
+    }
+    
+    if (isValidBundleId(bundleId)) {
       return bundleId;
     } else {
-      console.log(`Bundle ID rejected (no dot or not iOS ID): "${bundleId}"`);
       return null;
     }
   }
   
-  // Найден "=", ищем следующий символ (исключая пробелы)
-  let startIndex = equalsIndex + 1;
-  
-  // Пропускаем пробелы после "="
-  while (startIndex < campaignName.length && campaignName[startIndex] === ' ') {
-    startIndex++;
-  }
-  
-  if (startIndex >= campaignName.length) {
-    console.log('No content after "=", returning null');
-    return null;
-  }
-  
-  console.log(`Found "=" at position ${equalsIndex}, text after: "${campaignName.substring(startIndex)}"`);
-  
-  // Ищем следующий пробел после начального символа
-  const spaceIndex = campaignName.indexOf(' ', startIndex);
-  let bundleId;
+  const spaceIndex = campaignName.indexOf(' ');
   
   if (spaceIndex === -1) {
-    // Нет пробела - берем до конца строки
-    bundleId = campaignName.substring(startIndex).trim();
+    const wholeName = campaignName.trim();
+    if (isValidBundleId(wholeName)) {
+      return wholeName;
+    }
   } else {
-    // Есть пробел - берем до него
-    bundleId = campaignName.substring(startIndex, spaceIndex).trim();
+    const bundleId = campaignName.substring(0, spaceIndex).trim();
+    
+    if (isValidBundleId(bundleId)) {
+      return bundleId;
+    }
   }
   
-  console.log(`Extracted bundle ID from subject: "${bundleId}"`);
+  return null;
+}
+
+/**
+ * Валидация bundle ID - НОВАЯ ФУНКЦИЯ
+ * Проверяет, является ли строка валидным bundle ID (Android или iOS)
+ */
+function isValidBundleId(bundleId) {
+  if (!bundleId || typeof bundleId !== 'string') return false;
   
-  // Валидация: bundle ID должен содержать точку (Android) или быть только цифрами 8+ символов (iOS)
-  if (bundleId.includes('.') || (/^\d{8,}$/.test(bundleId))) {
-    console.log(`Bundle ID validated: "${bundleId}"`);
-    return bundleId;
-  } else {
-    console.log(`Bundle ID rejected (no dot or not iOS ID): "${bundleId}"`);
-    return null;
+  const trimmed = bundleId.trim();
+  if (trimmed.length < 3) return false;
+  
+  // Android bundle ID: содержит точку и начинается с буквы
+  if (trimmed.includes('.') && /^[a-zA-Z]/.test(trimmed)) {
+    // Дополнительная проверка: должен содержать только допустимые символы
+    if (/^[a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9]$/.test(trimmed)) {
+      return true;
+    }
   }
+  
+  // iOS App ID: только цифры, 8+ символов
+  if (/^\d{8,}$/.test(trimmed)) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
@@ -630,12 +581,13 @@ function testAppsDbBundleExtraction() {
   setCurrentProject('TRICKY');
   console.log('Project set to:', CURRENT_PROJECT);
   
-  // Test campaign names from the table
+  // Test campaign names from the table including new case
   const testCampaigns = [
     '[pb tricky] | NPCW | USA | bm | I | subject = words.puzzle.wordgame.free.connect Bidmachine AMBO CPI skipctr',
     '[pb tricky] | NPCW | GBR | bm | I | subject = com.fanatee.cody Bidmachine skipctr AMBO CPI',
     '[pb tricky] | NPCNM | CAN | bm | I | subject = 6473832648 AMBO CPI abdoul Bidmachine skipctr autobudget',
-    '[pb tricky] | NPKS | USA | subj=com.intensedev.classicsolitaire.gp Bidmachine AMBO CPA skipctr'
+    '[pb tricky] | NPKS | USA | subj=com.intensedev.classicsolitaire.gp Bidmachine AMBO CPA skipctr',
+    'com.easybrain.number.puzzle.game=80 Pub/Smaato СPP_nc_easybrain'  // НОВЫЙ ТЕСТ СЛУЧАЙ
   ];
   
   console.log('\n🧪 TESTING CAMPAIGN NAME PROCESSING:');
