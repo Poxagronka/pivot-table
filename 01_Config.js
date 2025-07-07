@@ -1,8 +1,10 @@
 /**
- * Configuration file - ИСПРАВЛЕНО: токен спрятан в Properties без ошибок при инициализации
+ * Configuration file - ИСПРАВЛЕНО: возврат к старой структуре API для TRICKY
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
+var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
+var APPS_DATABASE_SHEET = 'Apps Database';
 
 var PROPERTY_KEYS = {
   BEARER_TOKEN: 'BEARER_TOKEN',
@@ -61,7 +63,7 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   MINTEGRAL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
-// TOKEN MANAGEMENT - ИСПРАВЛЕНО: без ошибок при инициализации
+// TOKEN MANAGEMENT
 function getBearerToken() {
   var props = PropertiesService.getScriptProperties();
   var token = props.getProperty(PROPERTY_KEYS.BEARER_TOKEN);
@@ -162,6 +164,7 @@ var PROJECTS = {
     GROWTH_THRESHOLDS: getTrickyGrowthThresholds,
     BEARER_TOKEN: getBearerTokenStrict,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
+    APPS_CACHE_SHEET: 'AppsCache_Tricky',
     API_CONFIG: {
       OPERATION_NAME: "RichStats",
       FILTERS: {
@@ -365,7 +368,8 @@ function getCurrentConfig() {
     TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS(),
     GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET
+    COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].APPS_CACHE_SHEET || null
   };
 }
 
@@ -384,7 +388,8 @@ function getProjectConfig(projectName) {
     TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS(),
     GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET
+    COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: PROJECTS[projectName].APPS_CACHE_SHEET || null
   };
 }
 
@@ -422,6 +427,7 @@ var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
+  SOURCE_APP_ROW: { background: '#f0f8ff' },
   CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },
   NEGATIVE: { background: '#f8d7da', fontColor: '#721c24' },

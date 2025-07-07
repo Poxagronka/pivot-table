@@ -1,5 +1,5 @@
 /**
- * API Client - Multi Project Support - ОБНОВЛЕНО: новая логика GEO для проектов кроме Tricky/Regular
+ * API Client - Multi Project Support - ИСПРАВЛЕНО: возврат к старой структуре для TRICKY + Apps Database
  * Handles all API communication and data fetching
  */
 
@@ -266,9 +266,9 @@ function getGraphQLQuery() {
 }
 
 /**
- * Process API data and group by apps, then weeks
+ * Process API data and group by apps, then weeks, then source apps (for TRICKY only using Apps Database)
  * Skip current week data as it's incomplete
- * ИСПРАВЛЕНО: Добавлен фильтр по спенду > 0 и поддержка всех проектов
+ * ИСПРАВЛЕНО: возврат к старой структуре API + группировка через Apps Database
  */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
@@ -277,6 +277,13 @@ function processApiData(rawData) {
   // Calculate current week start (Monday)
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+
+  // Initialize Apps Database for TRICKY project
+  let appsDb = null;
+  if (CURRENT_PROJECT === 'TRICKY') {
+    appsDb = new AppsDatabase('TRICKY');
+    appsDb.ensureCacheUpToDate();
+  }
 
   stats.forEach((row, index) => {
     try {
@@ -289,22 +296,24 @@ function processApiData(rawData) {
         return;
       }
 
+      // All projects now use same structure: date[0], campaign[1], app[2], metrics[3+]
       const campaign = row[1];
       const app = row[2];
+      const metricsStartIndex = 3;
       
-      // Extract metrics based on project type - Applovin uses same format as Google Ads
+      // Extract metrics based on project type
       let metrics;
       if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
         // Google Ads/Applovin format: cpi, installs, spend, rr_d1, roas_d1, rr_d7, e_roas_365, e_profit_730
         metrics = {
-          cpi: parseFloat(row[3].value) || 0,
-          installs: parseInt(row[4].value) || 0,
-          spend: parseFloat(row[5].value) || 0,
-          rrD1: parseFloat(row[6].value) || 0,
-          roas: parseFloat(row[7].value) || 0,
-          rrD7: parseFloat(row[8].value) || 0,
-          eRoasForecast: parseFloat(row[9].value) || 0,
-          eProfitForecast: parseFloat(row[10].value) || 0,
+          cpi: parseFloat(row[metricsStartIndex].value) || 0,
+          installs: parseInt(row[metricsStartIndex + 1].value) || 0,
+          spend: parseFloat(row[metricsStartIndex + 2].value) || 0,
+          rrD1: parseFloat(row[metricsStartIndex + 3].value) || 0,
+          roas: parseFloat(row[metricsStartIndex + 4].value) || 0,
+          rrD7: parseFloat(row[metricsStartIndex + 5].value) || 0,
+          eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
+          eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
           // Default values for missing metrics
           ipm: 0,
           eArpuForecast: 0
@@ -312,28 +321,28 @@ function processApiData(rawData) {
       } else {
         // Original format: cpi, installs, ipm, spend, roas, e_arpu, e_roas, e_profit
         metrics = {
-          cpi: parseFloat(row[3].value) || 0,
-          installs: parseInt(row[4].value) || 0,
-          ipm: parseFloat(row[5].value) || 0,
-          spend: parseFloat(row[6].value) || 0,
-          roas: parseFloat(row[7].value) || 0,
-          eArpuForecast: parseFloat(row[8].value) || 0,
-          eRoasForecast: parseFloat(row[9].value) || 0,
-          eProfitForecast: parseFloat(row[10].value) || 0,
+          cpi: parseFloat(row[metricsStartIndex].value) || 0,
+          installs: parseInt(row[metricsStartIndex + 1].value) || 0,
+          ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
+          spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
+          roas: parseFloat(row[metricsStartIndex + 4].value) || 0,
+          eArpuForecast: parseFloat(row[metricsStartIndex + 5].value) || 0,
+          eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
+          eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
           // Default values for Google Ads/Applovin metrics
           rrD1: 0,
           rrD7: 0
         };
       }
 
-      // ИСПРАВЛЕНО: Пропускаем кампании с нулевым или отрицательным спендом
+      // Skip campaigns with spend <= 0
       if (metrics.spend <= 0) {
         return;
       }
 
       const sunday = getSundayOfWeek(new Date(date));
-
       const appKey = app.id;
+      
       if (!appData[appKey]) {
         appData[appKey] = {
           appId: app.id,
@@ -348,22 +357,20 @@ function processApiData(rawData) {
         appData[appKey].weeks[weekKey] = {
           weekStart: formatDateForAPI(monday),
           weekEnd: formatDateForAPI(sunday),
-          campaigns: []
+          sourceApps: CURRENT_PROJECT === 'TRICKY' ? {} : null,
+          campaigns: CURRENT_PROJECT === 'TRICKY' ? [] : []
         };
       }
 
-      // Extract campaign name - different structure for different projects
+      // Extract campaign name and ID
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
       if (campaign) {
-        // For UaCampaign objects (Tricky/Regular/Google_Ads/Applovin/Mintegral)
         if (campaign.campaignName) {
           campaignName = campaign.campaignName;
           campaignId = campaign.campaignId || campaign.id || 'Unknown';
-        }
-        // For StatsValue objects (Moloco) 
-        else if (campaign.value) {
+        } else if (campaign.value) {
           campaignName = campaign.value;
           campaignId = campaign.id || 'Unknown';
         }
@@ -372,7 +379,7 @@ function processApiData(rawData) {
       const geo = extractGeoFromCampaign(campaignName);
       const sourceApp = extractSourceApp(campaignName);
 
-      appData[appKey].weeks[weekKey].campaigns.push({
+      const campaignData = {
         date: date,
         campaignId: campaignId,
         campaignName: campaignName,
@@ -380,9 +387,31 @@ function processApiData(rawData) {
         status: campaign.status || 'Unknown',
         type: campaign.type || 'Unknown',
         geo,
-        sourceApp,
+        sourceApp: sourceApp,
         isAutomated: campaign.isAutomated || false
-      });
+      };
+
+      // For TRICKY project, group by bundle ID using Apps Database
+      if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
+        const bundleId = extractBundleIdFromCampaign(campaignName);
+        const sourceAppKey = bundleId || 'unknown';
+        const sourceAppDisplayName = appsDb.getSourceAppDisplayName(bundleId);
+        
+        if (!appData[appKey].weeks[weekKey].sourceApps[sourceAppKey]) {
+          appData[appKey].weeks[weekKey].sourceApps[sourceAppKey] = {
+            sourceAppId: bundleId || 'unknown',
+            sourceAppName: sourceAppDisplayName,
+            sourceAppIconUrl: '',
+            sourceAppStoreUrl: '',
+            campaigns: []
+          };
+        }
+        
+        appData[appKey].weeks[weekKey].sourceApps[sourceAppKey].campaigns.push(campaignData);
+      } else {
+        // For other projects, add directly to week
+        appData[appKey].weeks[weekKey].campaigns.push(campaignData);
+      }
 
     } catch (error) {
       console.error(`Error processing row ${index}:`, error);
@@ -439,21 +468,18 @@ function extractGeoFromCampaign(campaignName) {
   } 
   
   // Для остальных проектов - новая логика поиска GEO в названии
-  // Порядок важен! От более специфичных к менее специфичным
   const geoPatterns = [
-    'WW_ru', 'WW_es', 'WW_de', 'WW_pt',  // Сначала более специфичные WW_
-    'Asia T1', 'T2-ES', 'T1-EN',         // Затем составные
-    'LatAm', 'TopGeo', 'Europe',         // Затем регионы
-    'US', 'RU', 'UK', 'GE', 'FR', 'PT', 'ES', 'DE', 'T1', 'WW'  // Последними простые коды
+    'WW_ru', 'WW_es', 'WW_de', 'WW_pt',
+    'Asia T1', 'T2-ES', 'T1-EN',
+    'LatAm', 'TopGeo', 'Europe',
+    'US', 'RU', 'UK', 'GE', 'FR', 'PT', 'ES', 'DE', 'T1', 'WW'
   ];
   
-  // Ищем паттерны в названии кампании (регистронезависимо)
   const upperCampaignName = campaignName.toUpperCase();
   
   for (const pattern of geoPatterns) {
     const upperPattern = pattern.toUpperCase();
     
-    // Ищем точное совпадение как отдельное слово или разделенное подчеркиванием/дефисом
     if (upperCampaignName.includes('_' + upperPattern + '_') ||
         upperCampaignName.includes('-' + upperPattern + '-') ||
         upperCampaignName.includes('_' + upperPattern) ||

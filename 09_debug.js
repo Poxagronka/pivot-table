@@ -1,5 +1,5 @@
 /**
- * Debug Functions - Сокращенная версия для всех проектов - ОБНОВЛЕНО: добавлен Mintegral
+ * Debug Functions - ОБНОВЛЕНО: поддержка source app группировки для TRICKY
  */
 
 function debugReportGeneration() {
@@ -101,10 +101,27 @@ function debugConfiguration(debugSheet, projectName) {
       logDebug(debugSheet, 'Bearer Token: Отсутствует или слишком короткий!', 'ERROR');
     }
     
-    logDebug(debugSheet, 'API Фильтры:', 'INFO');
+    logDebug(debugSheet, 'API Конфигурация:', 'INFO');
     logDebug(debugSheet, '- Users: ' + apiConfig.FILTERS.USER.length + ' элементов', 'INFO', JSON.stringify(apiConfig.FILTERS.USER));
     logDebug(debugSheet, '- Attribution Partner: ' + apiConfig.FILTERS.ATTRIBUTION_PARTNER.join(', '), 'INFO');
     logDebug(debugSheet, '- Attribution Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', '), 'INFO');
+    
+    // GROUP_BY analysis
+    logDebug(debugSheet, 'GROUP_BY структура:', 'INFO');
+    apiConfig.GROUP_BY.forEach((group, index) => {
+      const groupInfo = `[${index}] ${group.dimension}${group.timeBucket ? ` (${group.timeBucket})` : ''}`;
+      logDebug(debugSheet, `- ${groupInfo}`, 'INFO');
+    });
+    
+    // Special handling for TRICKY project
+    if (projectName === 'TRICKY') {
+      const hasSourceApp = apiConfig.GROUP_BY.some(g => g.dimension === 'ATTRIBUTION_SOURCE_APP');
+      if (hasSourceApp) {
+        logDebug(debugSheet, '✅ TRICKY: SOURCE_APP группировка включена', 'SUCCESS');
+      } else {
+        logDebug(debugSheet, '❌ TRICKY: SOURCE_APP группировка отсутствует!', 'ERROR');
+      }
+    }
     
     if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
       logDebug(debugSheet, '- Campaign Search: ' + apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH, 'INFO');
@@ -248,12 +265,50 @@ function debugDataStructure(debugSheet, apiResponse) {
     
     if (Array.isArray(firstRecord)) {
       logDebug(debugSheet, 'Первая запись - массив с ' + firstRecord.length + ' элементами', 'INFO');
+      
+      // Analyze each element in the first record
       firstRecord.forEach((item, index) => {
         if (item && typeof item === 'object') {
-          logDebug(debugSheet, `Элемент [${index}]: ${item.__typename || 'неизвестный тип'}`, 'INFO', 
-                  JSON.stringify(item, null, 2).substring(0, 200));
+          const typename = item.__typename || 'неизвестный тип';
+          let description = `Элемент [${index}]: ${typename}`;
+          
+          // Special analysis for different types
+          if (typename === 'StatsValue') {
+            description += ` (value: ${item.value})`;
+          } else if (typename === 'SourceAppInfo') {
+            description += ` (name: ${item.name}, id: ${item.id})`;
+          } else if (typename === 'UaCampaign') {
+            description += ` (campaignName: ${item.campaignName}, id: ${item.campaignId})`;
+          } else if (typename === 'AppInfo') {
+            description += ` (name: ${item.name}, platform: ${item.platform})`;
+          } else if (typename === 'ForecastStatsItem') {
+            description += ` (value: ${item.value})`;
+          }
+          
+          logDebug(debugSheet, description, 'INFO');
         }
       });
+      
+      // Special check for TRICKY project structure
+      if (CURRENT_PROJECT === 'TRICKY') {
+        logDebug(debugSheet, 'TRICKY структура анализ:', 'SECTION');
+        if (firstRecord.length >= 4) {
+          const hasSourceApp = firstRecord[1] && firstRecord[1].__typename === 'SourceAppInfo';
+          const hasCampaign = firstRecord[2] && firstRecord[2].__typename === 'UaCampaign';
+          const hasApp = firstRecord[3] && firstRecord[3].__typename === 'AppInfo';
+          
+          if (hasSourceApp && hasCampaign && hasApp) {
+            logDebug(debugSheet, '✅ TRICKY: Корректная структура [date, sourceApp, campaign, app, metrics...]', 'SUCCESS');
+          } else {
+            logDebug(debugSheet, '❌ TRICKY: Неожиданная структура данных!', 'ERROR');
+            logDebug(debugSheet, `- [1] sourceApp: ${firstRecord[1]?.__typename || 'отсутствует'}`, 'INFO');
+            logDebug(debugSheet, `- [2] campaign: ${firstRecord[2]?.__typename || 'отсутствует'}`, 'INFO');
+            logDebug(debugSheet, `- [3] app: ${firstRecord[3]?.__typename || 'отсутствует'}`, 'INFO');
+          }
+        } else {
+          logDebug(debugSheet, '❌ TRICKY: Недостаточно элементов в записи!', 'ERROR');
+        }
+      }
     }
     
     if (apiResponse.data.analytics.richStats.totals) {
@@ -284,11 +339,12 @@ function debugDataProcessing(debugSheet, apiResponse) {
     let totalProcessed = 0;
     let skippedCurrentWeek = 0;
     let errorCount = 0;
+    let sourceAppCount = 0;
     
     stats.forEach((row, index) => {
       try {
-        if (!Array.isArray(row) || row.length < 8) {
-          logDebug(debugSheet, `Запись ${index}: неверная структура (длина: ${row ? row.length : 'undefined'})`, 'WARNING');
+        if (!Array.isArray(row)) {
+          logDebug(debugSheet, `Запись ${index}: не является массивом`, 'WARNING');
           errorCount++;
           return;
         }
@@ -308,8 +364,25 @@ function debugDataProcessing(debugSheet, apiResponse) {
           return;
         }
         
-        const campaign = row[1];
-        const app = row[2];
+        let sourceApp, campaign, app, metricsStartIndex;
+        
+        if (CURRENT_PROJECT === 'TRICKY') {
+          // TRICKY structure: date[0], sourceApp[1], campaign[2], app[3], metrics[4+]
+          sourceApp = row[1];
+          campaign = row[2];
+          app = row[3];
+          metricsStartIndex = 4;
+          
+          if (sourceApp && sourceApp.__typename === 'SourceAppInfo') {
+            sourceAppCount++;
+          }
+        } else {
+          // Other projects structure: date[0], campaign[1], app[2], metrics[3+]
+          sourceApp = null;
+          campaign = row[1];
+          app = row[2];
+          metricsStartIndex = 3;
+        }
         
         if (!campaign || !app) {
           logDebug(debugSheet, `Запись ${index}: отсутствует campaign или app`, 'WARNING');
@@ -317,11 +390,10 @@ function debugDataProcessing(debugSheet, apiResponse) {
           return;
         }
         
-        let campaignName = 'Unknown';
-        if (campaign.campaignName) {
-          campaignName = campaign.campaignName;
-        } else if (campaign.value) {
-          campaignName = campaign.value;
+        // Check spend > 0
+        const spendValue = parseFloat(row[metricsStartIndex + (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' ? 2 : 3)]?.value) || 0;
+        if (spendValue <= 0) {
+          return; // Skip zero spend campaigns
         }
         
         const appKey = app.id;
@@ -338,15 +410,29 @@ function debugDataProcessing(debugSheet, apiResponse) {
         if (!processedData[appKey].weeks[weekKey]) {
           processedData[appKey].weeks[weekKey] = {
             weekStart: weekKey,
-            campaigns: []
+            sourceApps: CURRENT_PROJECT === 'TRICKY' ? {} : null,
+            campaigns: CURRENT_PROJECT === 'TRICKY' ? [] : []
           };
         }
         
         totalProcessed++;
         
         if (index < 3) {
+          let campaignName = 'Unknown';
+          if (campaign.campaignName) {
+            campaignName = campaign.campaignName;
+          } else if (campaign.value) {
+            campaignName = campaign.value;
+          }
+          
           const shortCampaignName = campaignName.length > 50 ? campaignName.substring(0, 50) + '...' : campaignName;
-          logDebug(debugSheet, `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}`, 'INFO');
+          let recordInfo = `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}`;
+          
+          if (CURRENT_PROJECT === 'TRICKY' && sourceApp) {
+            recordInfo += `, SourceApp: ${sourceApp.name}`;
+          }
+          
+          logDebug(debugSheet, recordInfo, 'INFO');
         }
       } catch (e) {
         logDebug(debugSheet, `Ошибка обработки записи ${index}: ${e.toString()}`, 'ERROR');
@@ -360,6 +446,10 @@ function debugDataProcessing(debugSheet, apiResponse) {
     logDebug(debugSheet, '- Пропущено (текущая неделя): ' + skippedCurrentWeek, 'INFO');
     logDebug(debugSheet, '- Ошибок обработки: ' + errorCount, errorCount > 0 ? 'WARNING' : 'INFO');
     logDebug(debugSheet, '- Уникальных приложений: ' + Object.keys(processedData).length, 'INFO');
+    
+    if (CURRENT_PROJECT === 'TRICKY') {
+      logDebug(debugSheet, '- Source App записей: ' + sourceAppCount, 'INFO');
+    }
     
     if (Object.keys(processedData).length === 0) {
       logDebug(debugSheet, 'ПРОБЛЕМА: После обработки не осталось данных!', 'ERROR');
@@ -392,16 +482,27 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     const uniqueApps = new Set();
     const uniqueCampaigns = new Set();
     const uniqueDates = new Set();
+    const uniqueSourceApps = new Set();
     const campaignPatterns = new Set();
     
     stats.forEach(row => {
-      if (Array.isArray(row) && row.length >= 3) {
+      if (Array.isArray(row)) {
         const date = row[0]?.value;
-        const campaign = row[1];
-        const app = row[2];
+        
+        let sourceApp, campaign, app;
+        if (projectName === 'TRICKY') {
+          sourceApp = row[1];
+          campaign = row[2];
+          app = row[3];
+        } else {
+          sourceApp = null;
+          campaign = row[1];
+          app = row[2];
+        }
         
         if (date) uniqueDates.add(date);
         if (app?.name) uniqueApps.add(app.name);
+        if (sourceApp?.name) uniqueSourceApps.add(`${sourceApp.name} (${sourceApp.id})`);
         
         let campaignName = null;
         if (campaign) {
@@ -436,6 +537,14 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     logDebug(debugSheet, '- Уникальных приложений: ' + uniqueApps.size, 'INFO');
     logDebug(debugSheet, '- Уникальных кампаний: ' + uniqueCampaigns.size, 'INFO');
     logDebug(debugSheet, '- Уникальных дат: ' + uniqueDates.size, 'INFO');
+    
+    if (projectName === 'TRICKY') {
+      logDebug(debugSheet, '- Уникальных Source Apps: ' + uniqueSourceApps.size, 'INFO');
+      if (uniqueSourceApps.size > 0) {
+        const sourceAppsList = Array.from(uniqueSourceApps).slice(0, 5);
+        logDebug(debugSheet, 'Примеры Source Apps:', 'INFO', sourceAppsList.join('\n'));
+      }
+    }
     
     const appsList = Array.from(uniqueApps).slice(0, 5);
     logDebug(debugSheet, 'Примеры приложений: ' + appsList.join(', '), 'INFO');
@@ -473,8 +582,22 @@ function debugFilters(debugSheet, apiResponse, projectName) {
       } else {
         logDebug(debugSheet, 'ПРОБЛЕМА: Кампании не найдены!', 'ERROR');
       }
+    } else if (projectName === 'TRICKY') {
+      logDebug(debugSheet, `${projectName}: Фильтр кампаний с source app группировкой`, 'INFO');
+      logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ')}`, 'INFO');
+      logDebug(debugSheet, `Campaign Search: ${apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH}`, 'INFO');
+      logDebug(debugSheet, '- Всего кампаний найдено: ' + campaignPatterns.size, 'INFO');
+      logDebug(debugSheet, '- Source Apps найдено: ' + uniqueSourceApps.size, 'INFO');
+      
+      if (campaignPatterns.size > 0 && uniqueSourceApps.size > 0) {
+        const examples = Array.from(campaignPatterns).slice(0, 5);
+        logDebug(debugSheet, 'Примеры кампаний:', 'INFO', examples.join('\n'));
+        logDebug(debugSheet, `✅ ${projectName} данные корректны с source app группировкой!`, 'SUCCESS');
+      } else {
+        logDebug(debugSheet, 'ПРОБЛЕМА: Недостаточно данных для группировки!', 'ERROR');
+      }
     } else {
-      // Tricky logic
+      // Other projects logic
       const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
       logDebug(debugSheet, `Паттерн поиска кампаний: ${searchPattern}`, 'INFO');
       logDebug(debugSheet, '- Кампаний, соответствующих паттерну: ' + campaignPatterns.size, 'INFO');
@@ -510,7 +633,19 @@ function quickAPICheck() {
       ui.alert(`${projectName} API Проверка`, `API не возвращает данные за последние 7 дней.\nЗапустите полную диагностику для детального анализа.`, ui.ButtonSet.OK);
     } else {
       const count = raw.data.analytics.richStats.stats.length;
-      ui.alert(`${projectName} API Проверка`, `API работает: получено ${count} записей за последние 7 дней.`, ui.ButtonSet.OK);
+      let message = `API работает: получено ${count} записей за последние 7 дней.`;
+      
+      // Special check for TRICKY project
+      if (projectName === 'TRICKY') {
+        const firstRecord = raw.data.analytics.richStats.stats[0];
+        if (firstRecord && Array.isArray(firstRecord) && firstRecord[1]?.__typename === 'SourceAppInfo') {
+          message += `\n✅ Source App группировка работает корректно.`;
+        } else {
+          message += `\n⚠️ Source App группировка может работать некорректно.`;
+        }
+      }
+      
+      ui.alert(`${projectName} API Проверка`, message, ui.ButtonSet.OK);
     }
   } catch (e) {
     ui.alert(`${projectName} API Проверка`, 'Ошибка API: ' + e.toString(), ui.ButtonSet.OK);

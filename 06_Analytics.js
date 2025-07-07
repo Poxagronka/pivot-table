@@ -1,38 +1,103 @@
 /**
- * Analytics Functions - Сокращенная версия
+ * Analytics Functions - ИСПРАВЛЕНО: аналитика для TRICKY с Apps Database
  */
 
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
     console.error('Invalid appData provided to calculateWoWMetrics');
-    return { campaignWoW: {}, appWeekWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 
   try {
     const campaignData = {};
     const appWeekData = {};
+    const sourceAppData = {};
 
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
+      
       Object.values(app.weeks).forEach(week => {
-        const spend = week.campaigns.reduce((s, c) => s + c.spend, 0);
-        const profit = week.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
-
-        week.campaigns.forEach(c => {
-          if (c.campaignId) {
-            campaignData[`${c.campaignId}_${week.weekStart}`] = {
-              campaignId: c.campaignId, campaignName: c.campaignName, sourceApp: c.sourceApp,
-              weekStart: week.weekStart, spend: c.spend, eRoasForecast: c.eRoasForecast,
-              eProfitForecast: c.eProfitForecast, installs: c.installs, cpi: c.cpi,
-              roas: c.roas, ipm: c.ipm || 0, eArpuForecast: c.eArpuForecast || 0,
-              rrD1: c.rrD1 || 0, rrD7: c.rrD7 || 0
+        // Calculate week-level metrics for app
+        let allCampaigns = [];
+        
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          // For TRICKY: collect all campaigns from all source apps
+          Object.values(week.sourceApps).forEach(sourceApp => {
+            allCampaigns.push(...sourceApp.campaigns);
+            
+            // Calculate source app level metrics using bundle ID as key
+            const sourceAppKey = sourceApp.sourceAppId; // This is the bundle ID
+            const sourceAppSpend = sourceApp.campaigns.reduce((s, c) => s + c.spend, 0);
+            const sourceAppProfit = sourceApp.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+            
+            if (!sourceAppData[sourceAppKey]) {
+              sourceAppData[sourceAppKey] = {};
+            }
+            
+            sourceAppData[sourceAppKey][week.weekStart] = {
+              weekStart: week.weekStart,
+              spend: sourceAppSpend,
+              profit: sourceAppProfit,
+              sourceAppId: sourceApp.sourceAppId,
+              sourceAppName: sourceApp.sourceAppName
             };
-          }
-        });
+            
+            // Store individual campaigns for campaign-level WoW
+            sourceApp.campaigns.forEach(c => {
+              if (c.campaignId) {
+                campaignData[`${c.campaignId}_${week.weekStart}`] = {
+                  campaignId: c.campaignId,
+                  campaignName: c.campaignName,
+                  sourceApp: c.sourceApp,
+                  weekStart: week.weekStart,
+                  spend: c.spend,
+                  eRoasForecast: c.eRoasForecast,
+                  eProfitForecast: c.eProfitForecast,
+                  installs: c.installs,
+                  cpi: c.cpi,
+                  roas: c.roas,
+                  ipm: c.ipm || 0,
+                  eArpuForecast: c.eArpuForecast || 0,
+                  rrD1: c.rrD1 || 0,
+                  rrD7: c.rrD7 || 0
+                };
+              }
+            });
+          });
+        } else {
+          // For other projects: use campaigns directly
+          allCampaigns = week.campaigns || [];
+          
+          allCampaigns.forEach(c => {
+            if (c.campaignId) {
+              campaignData[`${c.campaignId}_${week.weekStart}`] = {
+                campaignId: c.campaignId,
+                campaignName: c.campaignName,
+                sourceApp: c.sourceApp,
+                weekStart: week.weekStart,
+                spend: c.spend,
+                eRoasForecast: c.eRoasForecast,
+                eProfitForecast: c.eProfitForecast,
+                installs: c.installs,
+                cpi: c.cpi,
+                roas: c.roas,
+                ipm: c.ipm || 0,
+                eArpuForecast: c.eArpuForecast || 0,
+                rrD1: c.rrD1 || 0,
+                rrD7: c.rrD7 || 0
+              };
+            }
+          });
+        }
+        
+        // Calculate app week totals
+        const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+        const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
       });
     });
 
+    // Calculate campaign WoW
     const campaigns = {};
     Object.values(campaignData).forEach(d => {
       if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
@@ -50,11 +115,16 @@ function calculateWoWMetrics(appData) {
           const prev = campaigns[campaignId][i - 1];
           const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
           const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
-          campaignWoW[key] = { spendChangePercent: spendPct, eProfitChangePercent: profitPct, growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) };
+          campaignWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
+          };
         }
       });
     });
 
+    // Calculate app week WoW
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
       const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
@@ -66,15 +136,42 @@ function calculateWoWMetrics(appData) {
           const prev = weeks[i - 1];
           const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
           const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-          appWeekWoW[key] = { spendChangePercent: spendPct, eProfitChangePercent: profitPct, growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') };
+          appWeekWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+          };
         }
       });
     });
 
-    return { campaignWoW, appWeekWoW };
+    // Calculate source app WoW (for TRICKY only) - key by bundle ID + week
+    const sourceAppWoW = {};
+    if (CURRENT_PROJECT === 'TRICKY') {
+      Object.keys(sourceAppData).forEach(bundleId => {
+        const weeks = Object.values(sourceAppData[bundleId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        weeks.forEach((curr, i) => {
+          const key = `${bundleId}_${curr.weekStart}`;
+          sourceAppWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = weeks[i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+            sourceAppWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+            };
+          }
+        });
+      });
+    }
+
+    return { campaignWoW, appWeekWoW, sourceAppWoW };
   } catch (e) {
     console.error('Error calculating WoW metrics:', e);
-    return { campaignWoW: {}, appWeekWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 }
 
@@ -188,7 +285,7 @@ function generateReport(days) {
       return;
     }
     
-    clearAllDataSilent(); // Теперь сама кеширует комментарии
+    clearAllDataSilent();
     createEnhancedPivotTable(processed);
     
     const cache = new CommentCache();
@@ -217,7 +314,7 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    clearAllDataSilent(); // Теперь сама кеширует комментарии
+    clearAllDataSilent();
     createEnhancedPivotTable(processed);
     
     const cache = new CommentCache();
@@ -282,7 +379,7 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    clearAllDataSilent(); // Теперь сама кеширует комментарии
+    clearAllDataSilent();
     createEnhancedPivotTable(processed);
     
     const cache = new CommentCache();
