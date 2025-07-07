@@ -1,5 +1,5 @@
 /**
- * API Client - ИСПРАВЛЕНО: убрана SOURCE_APP группировка из API, группировка только через Apps Database
+ * API Client - ИСПРАВЛЕНО: правильная группировка по bundle ID для TRICKY проекта
  */
 
 /**
@@ -265,8 +265,7 @@ function getGraphQLQuery() {
 }
 
 /**
- * Process API data - ИСПРАВЛЕНО: все проекты используют одинаковую структуру API
- * TRICKY группирует по bundle ID через Apps Database локально
+ * Process API data - ИСПРАВЛЕНО: правильная группировка по bundle ID для TRICKY
  */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
@@ -282,6 +281,9 @@ function processApiData(rawData) {
     appsDb = new AppsDatabase('TRICKY');
     appsDb.ensureCacheUpToDate();
   }
+
+  // Temporary storage for TRICKY campaigns to group by bundle ID
+  const trickyWeeklyData = {};
 
   stats.forEach((row, index) => {
     try {
@@ -341,25 +343,6 @@ function processApiData(rawData) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
-      if (!appData[appKey]) {
-        appData[appKey] = {
-          appId: app.id,
-          appName: app.name,
-          platform: app.platform,
-          bundleId: app.bundleId,
-          weeks: {}
-        };
-      }
-
-      if (!appData[appKey].weeks[weekKey]) {
-        appData[appKey].weeks[weekKey] = {
-          weekStart: formatDateForAPI(monday),
-          weekEnd: formatDateForAPI(sunday),
-          sourceApps: CURRENT_PROJECT === 'TRICKY' ? {} : null,
-          campaigns: CURRENT_PROJECT === 'TRICKY' ? [] : []
-        };
-      }
-
       // Extract campaign name and ID
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
@@ -389,25 +372,52 @@ function processApiData(rawData) {
         isAutomated: campaign.isAutomated || false
       };
 
-      // Для TRICKY проекта - группируем по bundle ID используя Apps Database
+      // ИСПРАВЛЕНО: Для TRICKY проекта - собираем данные в промежуточную структуру для группировки
       if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
         const bundleId = extractBundleIdFromCampaign(campaignName);
-        const sourceAppKey = bundleId || 'unknown';
-        const sourceAppDisplayName = appsDb.getSourceAppDisplayName(bundleId);
         
-        if (!appData[appKey].weeks[weekKey].sourceApps[sourceAppKey]) {
-          appData[appKey].weeks[weekKey].sourceApps[sourceAppKey] = {
-            sourceAppId: bundleId || 'unknown',
-            sourceAppName: sourceAppDisplayName,
-            sourceAppIconUrl: '',
-            sourceAppStoreUrl: '',
+        if (!trickyWeeklyData[appKey]) {
+          trickyWeeklyData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            weeks: {}
+          };
+        }
+        
+        if (!trickyWeeklyData[appKey].weeks[weekKey]) {
+          trickyWeeklyData[appKey].weeks[weekKey] = {
+            weekStart: formatDateForAPI(monday),
+            weekEnd: formatDateForAPI(sunday),
             campaigns: []
           };
         }
         
-        appData[appKey].weeks[weekKey].sourceApps[sourceAppKey].campaigns.push(campaignData);
+        // Добавляем bundle ID к кампании для последующей группировки
+        campaignData.extractedBundleId = bundleId;
+        trickyWeeklyData[appKey].weeks[weekKey].campaigns.push(campaignData);
+        
       } else {
-        // Для остальных проектов - добавляем напрямую к неделе
+        // Для остальных проектов - используем старую логику без источников приложений
+        if (!appData[appKey]) {
+          appData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            weeks: {}
+          };
+        }
+
+        if (!appData[appKey].weeks[weekKey]) {
+          appData[appKey].weeks[weekKey] = {
+            weekStart: formatDateForAPI(monday),
+            weekEnd: formatDateForAPI(sunday),
+            campaigns: []
+          };
+        }
+        
         appData[appKey].weeks[weekKey].campaigns.push(campaignData);
       }
 
@@ -415,6 +425,71 @@ function processApiData(rawData) {
       console.error(`Error processing row ${index}:`, error);
     }
   });
+
+  // ИСПРАВЛЕНО: Для TRICKY проекта - группируем кампании по bundle ID
+  if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
+    console.log('Processing TRICKY project data with bundle ID grouping...');
+    
+    Object.keys(trickyWeeklyData).forEach(appKey => {
+      const appInfo = trickyWeeklyData[appKey];
+      
+      if (!appData[appKey]) {
+        appData[appKey] = {
+          appId: appInfo.appId,
+          appName: appInfo.appName,
+          platform: appInfo.platform,
+          bundleId: appInfo.bundleId,
+          weeks: {}
+        };
+      }
+      
+      Object.keys(appInfo.weeks).forEach(weekKey => {
+        const weekInfo = appInfo.weeks[weekKey];
+        
+        // Группируем кампании по bundle ID
+        const bundleGroups = {};
+        weekInfo.campaigns.forEach(campaign => {
+          const bundleId = campaign.extractedBundleId || 'unknown';
+          if (!bundleGroups[bundleId]) {
+            bundleGroups[bundleId] = [];
+          }
+          bundleGroups[bundleId].push(campaign);
+        });
+        
+        // Сортируем bundle ID в алфавитном порядке
+        const sortedBundleIds = Object.keys(bundleGroups).sort();
+        
+        // Создаем sourceApps структуру
+        const sourceApps = {};
+        sortedBundleIds.forEach(bundleId => {
+          const campaigns = bundleGroups[bundleId];
+          
+          // Сортируем кампании внутри bundle ID по спенду (убывающая)
+          campaigns.sort((a, b) => b.spend - a.spend);
+          
+          // Получаем display name для bundle ID
+          const sourceAppDisplayName = appsDb.getSourceAppDisplayName(bundleId);
+          
+          sourceApps[bundleId] = {
+            sourceAppId: bundleId,
+            sourceAppName: sourceAppDisplayName,
+            sourceAppIconUrl: '',
+            sourceAppStoreUrl: '',
+            campaigns: campaigns
+          };
+        });
+        
+        appData[appKey].weeks[weekKey] = {
+          weekStart: weekInfo.weekStart,
+          weekEnd: weekInfo.weekEnd,
+          sourceApps: sourceApps,
+          campaigns: [] // Для TRICKY кампании находятся в sourceApps
+        };
+      });
+    });
+    
+    console.log('TRICKY project data grouping completed');
+  }
 
   return appData;
 }

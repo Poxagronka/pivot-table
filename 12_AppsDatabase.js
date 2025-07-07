@@ -1,5 +1,5 @@
 /**
- * Apps Database Cache Management - ИСПРАВЛЕНО: правильное извлечение bundle ID из TRICKY кампаний
+ * Apps Database Cache Management - ИСПРАВЛЕНО: правильное извлечение bundle ID из названия кампании
  * Кеширует данные из внешней таблицы Apps Database для группировки по Publisher + App Name
  */
 
@@ -288,6 +288,7 @@ class AppsDatabase {
    * Get source app display name (Publisher + App Name or bundle ID)
    */
   getSourceAppDisplayName(bundleId) {
+    // Debug logging
     console.log(`getSourceAppDisplayName called with bundleId: "${bundleId}", type: ${typeof bundleId}, project: ${this.projectName}`);
     
     if (!bundleId || this.projectName !== 'TRICKY') {
@@ -368,7 +369,8 @@ class AppsDatabase {
 }
 
 /**
- * Extract bundle ID from campaign name (ИСПРАВЛЕНО для TRICKY кампаний)
+ * Extract bundle ID from campaign name - ИСПРАВЛЕНО: правильная логика поиска
+ * Ищем знак "=", потом берем текст от следующего символа до следующего пробела
  */
 function extractBundleIdFromCampaign(campaignName) {
   console.log(`extractBundleIdFromCampaign called with: "${campaignName}"`);
@@ -378,66 +380,67 @@ function extractBundleIdFromCampaign(campaignName) {
     return null;
   }
   
-  // ИСПРАВЛЕНО: для TRICKY кампаний используем логику извлечения из subject=
-  // Структура: [pb tricky] | CODE | GEO | ... | subject = bundle.id ... или subject=bundle.id ...
-  
-  // Ищем "subject =" (с пробелами) или "subject=" (без пробелов)
-  let subjectIndex = campaignName.indexOf('subject =');
-  let hasSpaces = true;
-  
-  if (subjectIndex === -1) {
-    subjectIndex = campaignName.indexOf('subject=');
-    hasSpaces = false;
-  }
-  
-  if (subjectIndex !== -1) {
-    // Извлекаем текст после subject= или subject =
-    let startPos = subjectIndex + (hasSpaces ? 'subject ='.length : 'subject='.length);
-    let textAfterSubject = campaignName.substring(startPos).trim();
-    
-    console.log(`Found subject at position ${subjectIndex}, text after: "${textAfterSubject}"`);
-    
-    // Берем текст до первого пробела (bundle ID)
-    const spaceIndex = textAfterSubject.indexOf(' ');
-    let bundleId;
-    
+  // Ищем знак "="
+  const equalsIndex = campaignName.indexOf('=');
+  if (equalsIndex === -1) {
+    console.log('No "=" found, using fallback logic');
+    // Fallback: берем текст до первого пробела
+    const spaceIndex = campaignName.indexOf(' ');
     if (spaceIndex === -1) {
-      bundleId = textAfterSubject.trim();
-    } else {
-      bundleId = textAfterSubject.substring(0, spaceIndex).trim();
+      console.log('No space found, returning whole campaign name:', campaignName.trim());
+      return campaignName.trim();
     }
     
-    console.log(`Extracted bundle ID from subject: "${bundleId}"`);
+    const bundleId = campaignName.substring(0, spaceIndex).trim();
+    console.log(`Extracted before space: "${bundleId}"`);
     
-    // Валидация: bundle ID должен содержать точку для Android или быть числом для iOS
-    if (bundleId.includes('.') || /^\d{8,}$/.test(bundleId)) {
+    // Валидация: bundle ID должен содержать точку или быть iOS ID (только цифры 8+ символов)
+    if (bundleId.includes('.') || (/^\d{8,}$/.test(bundleId))) {
       console.log(`Bundle ID validated: "${bundleId}"`);
       return bundleId;
     } else {
-      console.log(`Bundle ID rejected (invalid format): "${bundleId}"`);
+      console.log(`Bundle ID rejected (no dot or not iOS ID): "${bundleId}"`);
       return null;
     }
   }
   
-  // Fallback: старая логика (берем текст до первого пробела)
-  console.log('No subject= found, using fallback logic');
-  const spaceIndex = campaignName.indexOf(' ');
-  if (spaceIndex === -1) {
-    console.log('No space found, returning whole campaign name:', campaignName.trim());
-    return campaignName.trim();
+  // Найден "=", ищем следующий символ (исключая пробелы)
+  let startIndex = equalsIndex + 1;
+  
+  // Пропускаем пробелы после "="
+  while (startIndex < campaignName.length && campaignName[startIndex] === ' ') {
+    startIndex++;
   }
   
-  const bundleId = campaignName.substring(0, spaceIndex).trim();
-  console.log(`Extracted before space: "${bundleId}"`);
+  if (startIndex >= campaignName.length) {
+    console.log('No content after "=", returning null');
+    return null;
+  }
   
-  // Basic validation: bundle ID should contain a dot for Android or be numeric for iOS
-  if (bundleId.includes('.') || /^\d{8,}$/.test(bundleId)) {
+  console.log(`Found "=" at position ${equalsIndex}, text after: "${campaignName.substring(startIndex)}"`);
+  
+  // Ищем следующий пробел после начального символа
+  const spaceIndex = campaignName.indexOf(' ', startIndex);
+  let bundleId;
+  
+  if (spaceIndex === -1) {
+    // Нет пробела - берем до конца строки
+    bundleId = campaignName.substring(startIndex).trim();
+  } else {
+    // Есть пробел - берем до него
+    bundleId = campaignName.substring(startIndex, spaceIndex).trim();
+  }
+  
+  console.log(`Extracted bundle ID from subject: "${bundleId}"`);
+  
+  // Валидация: bundle ID должен содержать точку (Android) или быть только цифрами 8+ символов (iOS)
+  if (bundleId.includes('.') || (/^\d{8,}$/.test(bundleId))) {
     console.log(`Bundle ID validated: "${bundleId}"`);
     return bundleId;
+  } else {
+    console.log(`Bundle ID rejected (no dot or not iOS ID): "${bundleId}"`);
+    return null;
   }
-  
-  console.log(`Bundle ID rejected (no dot or not iOS ID): "${bundleId}"`);
-  return null;
 }
 
 /**
@@ -627,15 +630,15 @@ function testAppsDbBundleExtraction() {
   setCurrentProject('TRICKY');
   console.log('Project set to:', CURRENT_PROJECT);
   
-  // Test campaign names from the real logs
+  // Test campaign names from the table
   const testCampaigns = [
-    '[pb tricky] | NPCNM | USA | bm | I | subject = com.easybrain.number.puzzle.game=80 Bet/F autobudget skipctr',
-    '[pb tricky] | NPKS | CAN | BM |subj=com.mintgames.king.solitaire BidMachina skipctr CPI',
-    '[pb tricky] | NPCW | USA | subj=in.playsimple.wordtrip BidMachine skipctr AMBO dc_30level_done_BeforeD4',
-    '[pb tricky] | NPCNM | AUS | bm | I | subject = daily.number.match.free.puzzle AMBO CPI Bidmachine skipctr'
+    '[pb tricky] | NPCW | USA | bm | I | subject = words.puzzle.wordgame.free.connect Bidmachine AMBO CPI skipctr',
+    '[pb tricky] | NPCW | GBR | bm | I | subject = com.fanatee.cody Bidmachine skipctr AMBO CPI',
+    '[pb tricky] | NPCNM | CAN | bm | I | subject = 6473832648 AMBO CPI abdoul Bidmachine skipctr autobudget',
+    '[pb tricky] | NPKS | USA | subj=com.intensedev.classicsolitaire.gp Bidmachine AMBO CPA skipctr'
   ];
   
-  console.log('\n🧪 TESTING TRICKY CAMPAIGN NAME PROCESSING:');
+  console.log('\n🧪 TESTING CAMPAIGN NAME PROCESSING:');
   
   testCampaigns.forEach((campaignName, index) => {
     console.log(`\n--- Test ${index + 1}: "${campaignName}" ---`);
