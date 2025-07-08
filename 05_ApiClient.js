@@ -614,6 +614,31 @@ function extractGeoFromCampaign(campaignName) {
     return 'ALL';
   }
   
+  // Специальные паттерны для Google_Ads (APD кампании)
+  if (CURRENT_PROJECT === 'GOOGLE_ADS') {
+    const geoPatterns = [
+      // Точные совпадения (приоритет)
+      { pattern: 'LatAm', geo: 'LatAm' },
+      { pattern: 'UK,GE', geo: 'UK,GE' },
+      { pattern: 'BR (PT)', geo: 'BR' },
+      // Отдельные страны
+      { pattern: 'US ', geo: 'US' },
+      { pattern: ' US ', geo: 'US' },
+      { pattern: 'WW ', geo: 'WW' },
+      { pattern: ' WW ', geo: 'WW' },
+      { pattern: 'UK', geo: 'UK' },
+      { pattern: 'GE', geo: 'GE' },
+      { pattern: 'BR', geo: 'BR' }
+    ];
+    
+    for (const {pattern, geo} of geoPatterns) {
+      if (campaignName.includes(pattern)) {
+        return geo;
+      }
+    }
+    return 'OTHER';
+  }
+  
   const geoPatterns = [
     'WW_ru', 'WW_es', 'WW_de', 'WW_pt',
     'Asia T1', 'T2-ES', 'T1-EN',

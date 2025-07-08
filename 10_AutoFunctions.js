@@ -1,5 +1,5 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: добавлен Overall
+ * Auto Functions - ОБНОВЛЕНО: исправлен день недели на вторник + сортировка листов
  */
 
 function autoCacheAllProjects() {
@@ -38,15 +38,30 @@ function cacheProjectComments(projectName) {
 function autoUpdateAllProjects() {
   console.log('=== AUTO UPDATE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(proj => {
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    let successCount = 0;
+    
+    projects.forEach(proj => {
       try {
         console.log(`Updating ${proj}...`);
         updateProjectData(proj);
+        successCount++;
       } catch (e) {
         console.error(`Error updating ${proj}:`, e);
       }
     });
-    console.log('=== AUTO UPDATE COMPLETED ===');
+    
+    // Сортируем листы после обновления всех проектов
+    if (successCount > 1) {
+      try {
+        sortProjectSheets();
+        console.log('Project sheets sorted after auto-update');
+      } catch (e) {
+        console.error('Error sorting sheets after auto-update:', e);
+      }
+    }
+    
+    console.log(`=== AUTO UPDATE COMPLETED: ${successCount}/${projects.length} projects updated ===`);
   } catch (e) {
     console.error('AUTO UPDATE FATAL ERROR:', e);
   }
@@ -191,7 +206,7 @@ function showAutomationStatus() {
   
   msg += '\n🔄 AUTO UPDATE:\n';
   if (updateEnabled && updateTrigger) {
-    msg += '✅ Enabled - Runs every Monday at 5:00 AM\n• Updates all project data\n• Includes previous complete week\n• Preserves all comments\n';
+    msg += '✅ Enabled - Runs every Tuesday at 5:00 AM\n• Updates all project data\n• Includes previous complete week\n• Preserves all comments\n• Sorts project sheets after update\n';
   } else if (updateEnabled && !updateTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please disable and re-enable to fix\n';
   } else {

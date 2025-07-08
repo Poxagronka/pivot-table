@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: добавлена поддержка Overall
+ * Utility Functions - ОБНОВЛЕНО: добавлена retry логика и сортировка листов
  */
 
 // Date Utils
@@ -86,47 +86,78 @@ function recreateGrouping(sheet) {
   createRowGrouping(sheet, data, null);
 }
 
+// ОБНОВЛЕНО: Добавлена retry логика против timeout
 function clearAllDataSilent() {
-  try {
-    const config = getCurrentConfig();
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    // ВАЖНО: Кешируем комментарии перед удалением листа
-    if (oldSheet && oldSheet.getLastRow() > 1) {
-      const cache = new CommentCache();
-      cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+  const maxRetries = 3;
+  const baseDelay = 2000;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const config = getCurrentConfig();
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      // ВАЖНО: Кешируем комментарии перед удалением листа
+      if (oldSheet && oldSheet.getLastRow() > 1) {
+        const cache = new CommentCache();
+        cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+      }
+      
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
+      if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+      newSheet.setName(config.SHEET_NAME);
+      
+      return; // Успех
+    } catch (e) {
+      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e; // Финальная попытка не удалась
+      }
+      
+      // Ждем перед повторной попыткой
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
-    
-    const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
-    const newSheet = spreadsheet.insertSheet(tempSheetName);
-    if (oldSheet) spreadsheet.deleteSheet(oldSheet);
-    newSheet.setName(config.SHEET_NAME);
-  } catch (e) {
-    console.error('Error during sheet recreation:', e);
-    throw e;
   }
 }
 
 function clearProjectDataSilent(projectName) {
-  try {
-    const config = getProjectConfig(projectName);
-    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-    const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-    
-    // ВАЖНО: Кешируем комментарии перед удалением листа
-    if (oldSheet && oldSheet.getLastRow() > 1) {
-      const cache = new CommentCache(projectName);
-      cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+  const maxRetries = 3;
+  const baseDelay = 2000;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const config = getProjectConfig(projectName);
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      // ВАЖНО: Кешируем комментарии перед удалением листа
+      if (oldSheet && oldSheet.getLastRow() > 1) {
+        const cache = new CommentCache(projectName);
+        cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+      }
+      
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
+      if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+      newSheet.setName(config.SHEET_NAME);
+      
+      return; // Успех
+    } catch (e) {
+      console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e; // Финальная попытка не удалась
+      }
+      
+      // Ждем перед повторной попыткой
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
-    
-    const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
-    const newSheet = spreadsheet.insertSheet(tempSheetName);
-    if (oldSheet) spreadsheet.deleteSheet(oldSheet);
-    newSheet.setName(config.SHEET_NAME);
-  } catch (e) {
-    console.error(`Error during ${projectName} sheet recreation:`, e);
-    throw e;
   }
 }
 
@@ -138,6 +169,49 @@ function getOrCreateProjectSheet(projectName) {
     sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   }
   return sheet;
+}
+
+// НОВАЯ ФУНКЦИЯ: Сортировка листов по определенному порядку
+function sortProjectSheets() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    const sheets = spreadsheet.getSheets();
+    
+    // Желаемый порядок проектов
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
+    
+    // Находим листы проектов
+    const projectSheets = [];
+    const otherSheets = [];
+    
+    sheets.forEach(sheet => {
+      const sheetName = sheet.getName();
+      const projectIndex = projectOrder.indexOf(sheetName);
+      
+      if (projectIndex !== -1) {
+        projectSheets.push({ sheet, index: projectIndex, name: sheetName });
+      } else {
+        otherSheets.push(sheet);
+      }
+    });
+    
+    // Сортируем листы проектов по желаемому порядку
+    projectSheets.sort((a, b) => a.index - b.index);
+    
+    // Переставляем листы
+    let position = 1;
+    
+    // Сначала размещаем листы проектов в правильном порядке
+    projectSheets.forEach(({sheet}) => {
+      spreadsheet.setActiveSheet(sheet);
+      spreadsheet.moveActiveSheet(position);
+      position++;
+    });
+    
+    console.log('Project sheets sorted successfully');
+  } catch (e) {
+    console.error('Error sorting project sheets:', e);
+  }
 }
 
 // String Utils

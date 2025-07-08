@@ -1,5 +1,5 @@
 /**
- * Settings Functions - ОБНОВЛЕНО: добавлен Overall
+ * Settings Functions - ОБНОВЛЕНО: исправлен день недели на вторник
  */
 
 function showClearDataDialog() {
@@ -170,8 +170,8 @@ function showProjectSettings() {
   
   message += '⚙️ AUTOMATION:\n';
   message += `• Auto Cache: ${cacheEnabled ? '✅ Enabled (2 AM daily)' : '❌ Disabled'}\n`;
-  message += `• Auto Update: ${updateEnabled ? '✅ Enabled (Monday 5 AM)' : '❌ Disabled'}\n\n`;
-  message += '📝 FEATURES: Week/Campaign comments, Auto-collapse, Project-specific thresholds';
+  message += `• Auto Update: ${updateEnabled ? '✅ Enabled (Tuesday 5 AM)' : '❌ Disabled'}\n\n`;
+  message += '📝 FEATURES: Week/Campaign comments, Auto-collapse, Project-specific thresholds, Sheet sorting';
   
   ui.alert('Project Settings', message, ui.ButtonSet.OK);
 }
@@ -280,7 +280,7 @@ function showAutoUpdateSettings() {
   const isEnabled = props.getProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED) === 'true';
   
   const result = ui.alert('🔄 Auto Update Settings', 
-    `Auto-update: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\nUpdates all projects every Monday at 5:00 AM.\n\n${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`, 
+    `Auto-update: ${isEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n\nUpdates all projects every Tuesday at 5:00 AM.\n\n${isEnabled ? 'DISABLE' : 'ENABLE'} auto-update?`, 
     ui.ButtonSet.YES_NO_CANCEL);
   
   if (result === ui.Button.YES) {
@@ -295,10 +295,10 @@ function enableAutoUpdate() {
       .filter(t => t.getHandlerFunction() === 'autoUpdateAllProjects')
       .forEach(t => ScriptApp.deleteTrigger(t));
     
-    ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(5).create();
+    ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
     PropertiesService.getScriptProperties().setProperty(PROPERTY_KEYS.AUTO_UPDATE_ENABLED, 'true');
     
-    ui.alert('Auto Update Enabled', '✅ Auto-update enabled!\n\n• Every Monday at 5:00 AM\n• All projects updated\n• Comments preserved', ui.ButtonSet.OK);
+    ui.alert('Auto Update Enabled', '✅ Auto-update enabled!\n\n• Every Tuesday at 5:00 AM\n• All projects updated\n• Comments preserved\n• Sheets sorted after update', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Failed to enable auto-update: ' + e.toString(), ui.ButtonSet.OK);
   }
@@ -340,7 +340,7 @@ function getCompleteAutomationStatus() {
   msg += '\n🔄 AUTO UPDATE:\n';
   
   if (updateEnabled && updateTrigger) {
-    msg += '✅ Enabled - Every Monday at 5:00 AM\n• Updates all projects\n• Includes previous week\n• Preserves comments\n';
+    msg += '✅ Enabled - Every Tuesday at 5:00 AM\n• Updates all projects\n• Includes previous week\n• Preserves comments\n• Sorts sheets after update\n';
   } else if (updateEnabled && !updateTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Disable and re-enable to fix\n';
   } else {

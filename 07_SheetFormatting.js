@@ -177,7 +177,21 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
     
     formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
     
-    const sourceAppDisplayName = sourceApp.sourceAppName;
+    // ДОБАВЛЕНО: Получаем данные для гиперссылки из Apps Database
+    let sourceAppDisplayName = sourceApp.sourceAppName;
+    if (CURRENT_PROJECT === 'TRICKY') {
+      try {
+        const appsDb = new AppsDatabase('TRICKY');
+        const cache = appsDb.loadFromCache();
+        const appInfo = cache[sourceApp.sourceAppId];
+        if (appInfo && appInfo.linkApp) {
+          sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+        }
+      } catch (e) {
+        console.log('Error getting store link for source app:', e);
+      }
+    }
+    
     const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
     tableData.push(sourceAppRow);
     

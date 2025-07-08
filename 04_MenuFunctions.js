@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Overall
+ * Menu Functions - ОБНОВЛЕНО: добавлена кнопка обновления до актуальных данных
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
@@ -13,6 +13,7 @@ function onOpen() {
   var tokenStatus = isBearerTokenConfigured() ? '🔐✅' : '🔐❌';
   
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
+      .addItem('🔄 Update All to Current', 'updateAllProjectsToCurrent')
       .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
       .addSeparator()
       .addItem(tokenStatus + ' Bearer Token...', 'showTokenSettings')
@@ -23,6 +24,50 @@ function onOpen() {
       .addItem('⚙️ Settings & Tools...', 'smartSettingsHub')
       .addItem('🐙 GitHub Repository', 'openGitHubRepo')
       .addToUi();
+}
+
+function updateAllProjectsToCurrent() {
+  var ui = SpreadsheetApp.getUi();
+  
+  if (!isBearerTokenConfigured()) {
+    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please configure it first.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  var result = ui.alert('🔄 Update All Projects', 
+    'This will update all projects with the latest data (up to last complete week).\n\nThis may take several minutes. Continue?', 
+    ui.ButtonSet.YES_NO);
+  
+  if (result !== ui.Button.YES) return;
+  
+  try {
+    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    var successCount = 0;
+    var errors = [];
+    
+    projects.forEach(proj => {
+      try {
+        console.log(`Updating ${proj}...`);
+        updateProjectData(proj);
+        successCount++;
+      } catch (e) {
+        console.error(`Error updating ${proj}:`, e);
+        errors.push(`${proj}: ${e.toString().substring(0, 50)}...`);
+      }
+    });
+    
+    // Сортируем листы в конце
+    sortProjectSheets();
+    
+    var message = `✅ Update completed!\n\n• Successfully updated: ${successCount}/${projects.length} projects`;
+    if (errors.length > 0) {
+      message += `\n• Errors:\n${errors.join('\n')}`;
+    }
+    
+    ui.alert('Update Complete', message, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Error during update: ' + e.toString(), ui.ButtonSet.OK);
+  }
 }
 
 function openGitHubRepo() {
@@ -740,6 +785,8 @@ function quickGenerateAllForDays(days) {
         console.error(e); 
       }
     }
+    // Сортируем листы в конце
+    sortProjectSheets();
     ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports', ui.ButtonSet.OK);
   } catch(e) {
     ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
@@ -750,6 +797,10 @@ function runSelectedProjects(projects, days) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReport(projects[i].toUpperCase(), days);
   }
+  // Сортируем листы если обновлялось несколько проектов
+  if (projects.length > 1) {
+    sortProjectSheets();
+  }
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -757,12 +808,18 @@ function runAllProjectsDateRange(start, end) {
   for (var i = 0; i < MENU_PROJECTS.length; i++) {
     generateProjectReportForDateRange(MENU_PROJECTS[i].toUpperCase(), start, end);
   }
+  // Сортируем листы в конце
+  sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function runSelectedProjectsDateRange(projects, start, end) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
+  }
+  // Сортируем листы если обновлялось несколько проектов
+  if (projects.length > 1) {
+    sortProjectSheets();
   }
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
