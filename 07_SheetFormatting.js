@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ИСПРАВЛЕНО: корректная группировка для TRICKY
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: добавлена поддержка Incent
  */
 
 function createEnhancedPivotTable(appData) {
@@ -75,7 +75,6 @@ function createEnhancedPivotTable(appData) {
 }
 
 function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
-  // Сортируем по общему spend
   const sourceAppKeys = Object.keys(sourceApps).sort((a, b) => {
     const totalSpendA = sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
     const totalSpendB = sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -104,7 +103,7 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
 }
 
 function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     return [
       'SOURCE_APP', sourceAppDisplayName, '', '',
       totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
@@ -122,7 +121,7 @@ function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, s
 }
 
 function getProjectHeaders() {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     return [
       'Level', 'Week Range / Source App', 'ID', 'GEO',
       'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'RR D-1',
@@ -138,7 +137,7 @@ function getProjectHeaders() {
 }
 
 function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     return [
       'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
       weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
@@ -218,7 +217,7 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
     sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
     
-    if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+    if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
       sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00');
     } else {
       sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
@@ -232,7 +231,7 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
 }
 
 function getProjectColumnWidths() {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     return [
       { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
       { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
@@ -363,7 +362,7 @@ function calculateWeekTotals(campaigns) {
   
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
     const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
     
@@ -406,7 +405,7 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
 }
 
 function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
+  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
     return [
       'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
       campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
@@ -423,9 +422,6 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
   }
 }
 
-/**
- * ИСПРАВЛЕНО: Правильная группировка App → Week → Source App → Campaign
- */
 function createRowGrouping(sheet, tableData, appData) {
   const numCols = getProjectHeaders().length;
 
@@ -451,7 +447,6 @@ function createRowGrouping(sheet, tableData, appData) {
         let weekContentRows = 0;
 
         if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          // Сортируем SOURCE_APP по spend
           const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
             const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
             const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -467,7 +462,6 @@ function createRowGrouping(sheet, tableData, appData) {
             rowPointer += campaignCount;
             weekContentRows += 1 + campaignCount;
             
-            // Группируем кампании под SOURCE_APP
             if (campaignCount > 0) {
               try {
                 sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, numCols).shiftRowGroupDepth(1);
@@ -478,7 +472,6 @@ function createRowGrouping(sheet, tableData, appData) {
             }
           });
           
-          // Группируем все SOURCE_APP + их кампании под WEEK
           if (weekContentRows > 0) {
             try {
               sheet.getRange(weekStartRow + 1, 1, weekContentRows, numCols).shiftRowGroupDepth(1);
@@ -489,7 +482,6 @@ function createRowGrouping(sheet, tableData, appData) {
           }
           
         } else {
-          // Для других проектов без SOURCE_APP группировки
           const campaignCount = week.campaigns ? week.campaigns.length : 0;
           rowPointer += campaignCount;
           weekContentRows = campaignCount;
@@ -505,7 +497,6 @@ function createRowGrouping(sheet, tableData, appData) {
         }
       });
 
-      // Группируем все недели + их содержимое под APP
       const appContentRows = rowPointer - appStartRow - 1;
       if (appContentRows > 0) {
         try {

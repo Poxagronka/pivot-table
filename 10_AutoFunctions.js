@@ -1,12 +1,11 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: добавлен Mintegral
+ * Auto Functions - ОБНОВЛЕНО: добавлен Incent
  */
 
-// AUTO CACHE SYSTEM
 function autoCacheAllProjects() {
   console.log('=== AUTO CACHE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'].forEach(proj => {
       try {
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
@@ -30,19 +29,16 @@ function cacheProjectComments(projectName) {
     return;
   }
   
-  // ОПТИМИЗИРОВАНО: Для кеширования комментариев НЕ нужно раскрывать группы!
-  // getDataRange().getValues() читает все данные включая свернутые строки
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
   
   console.log(`${projectName}: Comments cached (groups unchanged)`);
 }
 
-// AUTO UPDATE SYSTEM
 function autoUpdateAllProjects() {
   console.log('=== AUTO UPDATE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'].forEach(proj => {
       try {
         console.log(`Updating ${proj}...`);
         updateProjectData(proj);
@@ -114,7 +110,7 @@ function updateProjectData(projectName) {
     return;
   }
   
-  clearProjectDataSilent(projectName); // Теперь сама кеширует комментарии
+  clearProjectDataSilent(projectName);
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -129,11 +125,10 @@ function updateProjectData(projectName) {
   console.log(`${projectName}: Update completed`);
 }
 
-// MANUAL SAVE FUNCTIONS
 function saveAllCommentsToCache() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL'];
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'];
     let successCount = 0;
     
     projects.forEach(proj => {
@@ -164,13 +159,10 @@ function saveProjectCommentsManual(projectName) {
     throw new Error(`No data found in ${projectName} sheet`);
   }
   
-  // ОПТИМИЗИРОВАНО: Для кеширования комментариев НЕ нужно раскрывать группы!
-  // getDataRange().getValues() читает все данные включая свернутые строки
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
 }
 
-// STATUS MONITORING
 function showAutomationStatus() {
   const ui = SpreadsheetApp.getUi();
   const props = PropertiesService.getScriptProperties();
@@ -184,7 +176,6 @@ function showAutomationStatus() {
   
   let msg = '📊 AUTOMATION STATUS\n\n';
   
-  // Cache status
   msg += '💾 AUTO CACHE:\n';
   if (cacheEnabled && cacheTrigger) {
     msg += '✅ Enabled - Runs daily at 2:00 AM\n• Caches comments from all projects\n• Collapses all row groups after caching\n';

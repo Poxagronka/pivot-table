@@ -1,8 +1,8 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Mintegral + управление токеном + GitHub ссылка + Apps Database
+ * Menu Functions - ОБНОВЛЕНО: добавлен Incent
  */
 
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral'];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent'];
 var MENU_DAYS = [30, 60, 90];
 
 function onOpen() {
@@ -10,7 +10,6 @@ function onOpen() {
   var menu = ui.createMenu('📊 Campaign Report');
   var props = PropertiesService.getScriptProperties();
   
-  // Token status indicator
   var tokenStatus = isBearerTokenConfigured() ? '🔐✅' : '🔐❌';
   
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
@@ -40,7 +39,6 @@ function openGitHubRepo() {
 function smartReportWizard() {
   var ui = SpreadsheetApp.getUi();
   
-  // Check token first
   if (!isBearerTokenConfigured()) {
     if (ui.alert('🔐 Token Required', 'Bearer token is not configured. Set it now?', ui.ButtonSet.YES_NO) === ui.Button.YES) {
       updateBearerToken();
@@ -120,7 +118,6 @@ function smartSettingsHub() {
   }
 }
 
-// APPS DATABASE WIZARD
 function appsDbWizard() {
   var ui = SpreadsheetApp.getUi();
   
@@ -185,7 +182,6 @@ function showAppsDbStatus() {
       message += '• Action Required: Refresh database\n';
       message += '• Debug Tip: Use "Debug Update Process" for detailed logs\n';
       
-      // Additional diagnostic info
       message += '\n🔍 DIAGNOSTIC INFO:\n';
       try {
         var externalSpreadsheet = SpreadsheetApp.openById(APPS_DATABASE_ID);
@@ -261,7 +257,6 @@ function clearAppsDbCache() {
   try {
     var appsDb = new AppsDatabase('TRICKY');
     if (appsDb.cacheSheet) {
-      // Clear all data except headers
       if (appsDb.cacheSheet.getLastRow() > 1) {
         appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
       }
@@ -274,7 +269,6 @@ function clearAppsDbCache() {
   }
 }
 
-// TOKEN MANAGEMENT
 function showTokenSettings() {
   var ui = SpreadsheetApp.getUi();
   var isConfigured = isBearerTokenConfigured();
@@ -336,7 +330,6 @@ function testBearerToken() {
   }
   
   try {
-    // Test with a simple API call
     setCurrentProject('TRICKY');
     var dateRange = getDateRange(7);
     var raw = fetchCampaignData(dateRange);
@@ -391,13 +384,14 @@ function targetSettingsWizard() {
       ui.alert('✅ Updated', 'All targets have been saved', ui.ButtonSet.OK);
     }
   } else if (choice === 4) {
-    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%\nMintegral: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
+    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%\nMintegral: 140%\nIncent: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
       setTargetEROAS('TRICKY', 160);
       setTargetEROAS('MOLOCO', 140);
       setTargetEROAS('REGULAR', 140);
       setTargetEROAS('GOOGLE_ADS', 140);
       setTargetEROAS('APPLOVIN', 140);
       setTargetEROAS('MINTEGRAL', 140);
+      setTargetEROAS('INCENT', 140);
       ui.alert('✅ Reset', 'All targets reset to defaults', ui.ButtonSet.OK);
     }
   }
@@ -440,7 +434,6 @@ function getProjectStatusOverview(projectName) {
   overview += '🔍 Campaign Filter: ' + (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH || 'NO FILTER') + '\n';
   overview += '👥 Users: ' + apiConfig.FILTERS.USER.length + ' configured\n';
   
-  // Apps Database info for TRICKY
   if (projectName === 'TRICKY') {
     try {
       var appsDb = new AppsDatabase('TRICKY');
@@ -536,7 +529,7 @@ function updateBasicThresholds() {
   }
   
   setGrowthThresholds(projectName, newThresholds);
-  ui.alert('✅ Updated', MENU_PROJECTS[project-1] + ' thresholds have been updated!', ui.ButtonSet.OK);
+  ui.alert('✅ Updated', MENU_PROJECTS[project-1] + ' thresholds updated!', ui.ButtonSet.OK);
 }
 
 function viewCurrentThresholds() {
@@ -680,7 +673,6 @@ function debugWizard() {
   if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
 }
 
-// Helper UI Functions
 function showChoice(title, options) {
   var ui = SpreadsheetApp.getUi();
   var numbered = '';
@@ -729,7 +721,6 @@ function promptDateRange() {
   return { start: start.getResponseText(), end: end.getResponseText() };
 }
 
-// Quick Actions
 function quickGenerateAllForDays(days) {
   var ui = SpreadsheetApp.getUi();
   var success = 0;
@@ -771,7 +762,6 @@ function runSelectedProjectsDateRange(projects, start, end) {
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-// Toggle functions
 function toggleAutoCache() {
   var props = PropertiesService.getScriptProperties();
   var isOn = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
@@ -784,13 +774,11 @@ function toggleAutoUpdate() {
   isOn ? disableAutoUpdate() : enableAutoUpdate();
 }
 
-// Core functions
 function generateProjectReport(projectName, days) { setCurrentProject(projectName); generateReport(days); }
 function generateProjectReportForDateRange(projectName, startDate, endDate) { setCurrentProject(projectName); generateReportForDateRange(startDate, endDate); }
 function debugProjectReportGeneration(projectName) { setCurrentProject(projectName); debugReportGeneration(); }
 function isValidDate(dateString) { var regex = /^\d{4}-\d{2}-\d{2}$/; if (!regex.test(dateString)) return false; var date = new Date(dateString); return date instanceof Date && !isNaN(date); }
 
-// Legacy support functions
 function generateReport30() { generateProjectReport('TRICKY', 30); }
 function generateReport60() { generateProjectReport('TRICKY', 60); }
 function generateReport90() { generateProjectReport('TRICKY', 90); }

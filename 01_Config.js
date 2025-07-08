@@ -1,5 +1,5 @@
 /**
- * Configuration file - ИСПРАВЛЕНО: убрана SOURCE_APP группировка из API для TRICKY
+ * Configuration file - ОБНОВЛЕНО: добавлен проект Incent
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -14,6 +14,7 @@ var PROPERTY_KEYS = {
   TARGET_EROAS_GOOGLE_ADS: 'TARGET_EROAS_GOOGLE_ADS',
   TARGET_EROAS_APPLOVIN: 'TARGET_EROAS_APPLOVIN',
   TARGET_EROAS_MINTEGRAL: 'TARGET_EROAS_MINTEGRAL',
+  TARGET_EROAS_INCENT: 'TARGET_EROAS_INCENT',
   AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
   AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED',
   GROWTH_THRESHOLDS_TRICKY: 'GROWTH_THRESHOLDS_TRICKY',
@@ -21,7 +22,8 @@ var PROPERTY_KEYS = {
   GROWTH_THRESHOLDS_REGULAR: 'GROWTH_THRESHOLDS_REGULAR',
   GROWTH_THRESHOLDS_GOOGLE_ADS: 'GROWTH_THRESHOLDS_GOOGLE_ADS',
   GROWTH_THRESHOLDS_APPLOVIN: 'GROWTH_THRESHOLDS_APPLOVIN',
-  GROWTH_THRESHOLDS_MINTEGRAL: 'GROWTH_THRESHOLDS_MINTEGRAL'
+  GROWTH_THRESHOLDS_MINTEGRAL: 'GROWTH_THRESHOLDS_MINTEGRAL',
+  GROWTH_THRESHOLDS_INCENT: 'GROWTH_THRESHOLDS_INCENT'
 };
 
 var DEFAULT_TARGET_EROAS = {
@@ -30,7 +32,8 @@ var DEFAULT_TARGET_EROAS = {
   REGULAR: 140,
   GOOGLE_ADS: 140,
   APPLOVIN: 140,
-  MINTEGRAL: 140
+  MINTEGRAL: 140,
+  INCENT: 140
 };
 
 var DEFAULT_GROWTH_THRESHOLDS_BASE = {
@@ -60,7 +63,8 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   REGULAR: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
   GOOGLE_ADS: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
   APPLOVIN: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
-  MINTEGRAL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
+  MINTEGRAL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
+  INCENT: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
 // TOKEN MANAGEMENT
@@ -147,6 +151,7 @@ function getRegularTargetEROAS() { return getTargetEROAS('REGULAR'); }
 function getGoogleAdsTargetEROAS() { return getTargetEROAS('GOOGLE_ADS'); }
 function getApplovinTargetEROAS() { return getTargetEROAS('APPLOVIN'); }
 function getMintegralTargetEROAS() { return getTargetEROAS('MINTEGRAL'); }
+function getIncentTargetEROAS() { return getTargetEROAS('INCENT'); }
 
 function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
 function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
@@ -154,6 +159,7 @@ function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
 function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS'); }
 function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
 function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
+function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 
 // PROJECT CONFIGURATIONS
 var PROJECTS = {
@@ -351,6 +357,39 @@ var PROJECTS = {
         { id: "roas", day: 1 }, 
         { id: "e_arpu_forecast", day: 365 },
         { id: "e_roas_forecast", day: 365 }, 
+        { id: "e_profit_forecast", day: 730 }
+      ]
+    }
+  },
+
+  INCENT: {
+    SHEET_NAME: 'Incent',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getIncentTargetEROAS,
+    GROWTH_THRESHOLDS: getIncentGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: [
+        { id: "cpi", day: null },
+        { id: "installs", day: null },
+        { id: "spend", day: null },
+        { id: "retention_rate", day: 1 },
+        { id: "roas", day: 1 },
+        { id: "retention_rate", day: 7 },
+        { id: "e_roas_forecast", day: 365 },
         { id: "e_profit_forecast", day: 730 }
       ]
     }

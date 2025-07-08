@@ -1,27 +1,21 @@
 /**
- * API Client - ИСПРАВЛЕНО: правильная группировка по bundle ID для TRICKY проекта
+ * API Client - ОБНОВЛЕНО: добавлена поддержка проекта Incent
  */
 
-/**
- * Fetch data from API with updated headers using current project configuration
- */
 function fetchCampaignData(dateRange) {
   const config = getCurrentConfig();
   const apiConfig = getCurrentApiConfig();
   
-  // Build filters array
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
     { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
   ];
   
-  // Add campaign filter based on project type
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular/Google_Ads/Applovin/Mintegral - exclude campaigns)
       const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
@@ -30,7 +24,6 @@ function fetchCampaignData(dateRange) {
         searchByString: excludePattern
       });
     } else {
-      // Positive filter (for Tricky - include campaigns)
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
         values: [], 
@@ -40,8 +33,7 @@ function fetchCampaignData(dateRange) {
     }
   }
   
-  // Determine date dimension based on project
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -89,9 +81,6 @@ function fetchCampaignData(dateRange) {
   return JSON.parse(resp.getContentText());
 }
 
-/**
- * Fetch data for specific project
- */
 function fetchProjectCampaignData(projectName, dateRange) {
   const config = getProjectConfig(projectName);
   const apiConfig = getProjectApiConfig(projectName);
@@ -104,19 +93,16 @@ function fetchProjectCampaignData(projectName, dateRange) {
     throw new Error(`${projectName} project is not configured: missing USER filters`);
   }
   
-  // Build filters array
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
     { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
   ];
   
-  // Add campaign filter based on project type
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
     
     if (searchPattern.startsWith('!')) {
-      // Negative filter (for Regular/Google_Ads/Applovin/Mintegral - exclude campaigns)
       const excludePattern = searchPattern.substring(1);
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
@@ -125,7 +111,6 @@ function fetchProjectCampaignData(projectName, dateRange) {
         searchByString: excludePattern
       });
     } else {
-      // Positive filter (for Tricky - include campaigns)
       filters.push({
         dimension: "ATTRIBUTION_CAMPAIGN_HID", 
         values: [], 
@@ -135,8 +120,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     }
   }
   
-  // Determine date dimension based on project
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -184,9 +168,6 @@ function fetchProjectCampaignData(projectName, dateRange) {
   return JSON.parse(resp.getContentText());
 }
 
-/**
- * Get GraphQL query string
- */
 function getGraphQLQuery() {
   return `query RichStats($dateFilters: [DateFilterInput!]!, $filters: [FilterInput!]!, $groupBy: [GroupByInput!]!, $measures: [RichMeasureInput!]!, $havingFilters: [HavingFilterInput!], $anonymizationMode: DataAnonymizationMode, $revenuePredictionVersion: String!, $topFilter: TopFilterInput, $funnelFilter: FunnelAttributes, $isMultiMediation: Boolean) {
     analytics(anonymizationMode: $anonymizationMode) {
@@ -264,25 +245,19 @@ function getGraphQLQuery() {
   }`;
 }
 
-/**
- * Process API data - ИСПРАВЛЕНО: правильная группировка по bundle ID для TRICKY
- */
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
 
-  // Calculate current week start (Monday)
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
 
-  // Initialize Apps Database only for TRICKY project
   let appsDb = null;
   if (CURRENT_PROJECT === 'TRICKY') {
     appsDb = new AppsDatabase('TRICKY');
     appsDb.ensureCacheUpToDate();
   }
 
-  // Temporary storage for TRICKY campaigns to group by bundle ID
   const trickyWeeklyData = {};
 
   stats.forEach((row, index) => {
@@ -291,20 +266,16 @@ function processApiData(rawData) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
 
-      // Skip current week as it's incomplete
       if (weekKey >= currentWeekStart) {
         return;
       }
 
-      // ВСЕ ПРОЕКТЫ теперь используют одинаковую структуру: date[0], campaign[1], app[2], metrics[3+]
       const campaign = row[1];
       const app = row[2];
       const metricsStartIndex = 3;
       
-      // Extract metrics based on project type
       let metrics;
-      if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN') {
-        // Google Ads/Applovin format: cpi, installs, spend, rr_d1, roas_d1, rr_d7, e_roas_365, e_profit_730
+      if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
         metrics = {
           cpi: parseFloat(row[metricsStartIndex].value) || 0,
           installs: parseInt(row[metricsStartIndex + 1].value) || 0,
@@ -314,12 +285,10 @@ function processApiData(rawData) {
           rrD7: parseFloat(row[metricsStartIndex + 5].value) || 0,
           eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
           eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
-          // Default values for missing metrics
           ipm: 0,
           eArpuForecast: 0
         };
       } else {
-        // Original format: cpi, installs, ipm, spend, roas, e_arpu, e_roas, e_profit
         metrics = {
           cpi: parseFloat(row[metricsStartIndex].value) || 0,
           installs: parseInt(row[metricsStartIndex + 1].value) || 0,
@@ -329,13 +298,11 @@ function processApiData(rawData) {
           eArpuForecast: parseFloat(row[metricsStartIndex + 5].value) || 0,
           eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
           eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
-          // Default values for Google Ads/Applovin metrics
           rrD1: 0,
           rrD7: 0
         };
       }
 
-      // Skip campaigns with spend <= 0
       if (metrics.spend <= 0) {
         return;
       }
@@ -343,7 +310,6 @@ function processApiData(rawData) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
-      // Extract campaign name and ID
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
@@ -372,7 +338,6 @@ function processApiData(rawData) {
         isAutomated: campaign.isAutomated || false
       };
 
-      // ИСПРАВЛЕНО: Для TRICKY проекта - собираем данные в промежуточную структуру для группировки
       if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
         const bundleId = extractBundleIdFromCampaign(campaignName);
         
@@ -394,12 +359,10 @@ function processApiData(rawData) {
           };
         }
         
-        // Добавляем bundle ID к кампании для последующей группировки
         campaignData.extractedBundleId = bundleId;
         trickyWeeklyData[appKey].weeks[weekKey].campaigns.push(campaignData);
         
       } else {
-        // Для остальных проектов - используем старую логику без источников приложений
         if (!appData[appKey]) {
           appData[appKey] = {
             appId: app.id,
@@ -426,7 +389,6 @@ function processApiData(rawData) {
     }
   });
 
-  // ИСПРАВЛЕНО: Для TRICKY проекта - группируем кампании по bundle ID
   if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
     console.log('Processing TRICKY project data with bundle ID grouping...');
     
@@ -446,7 +408,6 @@ function processApiData(rawData) {
       Object.keys(appInfo.weeks).forEach(weekKey => {
         const weekInfo = appInfo.weeks[weekKey];
         
-        // Группируем кампании по bundle ID
         const bundleGroups = {};
         weekInfo.campaigns.forEach(campaign => {
           const bundleId = campaign.extractedBundleId || 'unknown';
@@ -456,18 +417,14 @@ function processApiData(rawData) {
           bundleGroups[bundleId].push(campaign);
         });
         
-        // Сортируем bundle ID в алфавитном порядке
         const sortedBundleIds = Object.keys(bundleGroups).sort();
         
-        // Создаем sourceApps структуру
         const sourceApps = {};
         sortedBundleIds.forEach(bundleId => {
           const campaigns = bundleGroups[bundleId];
           
-          // Сортируем кампании внутри bundle ID по спенду (убывающая)
           campaigns.sort((a, b) => b.spend - a.spend);
           
-          // Получаем display name для bundle ID
           const sourceAppDisplayName = appsDb.getSourceAppDisplayName(bundleId);
           
           sourceApps[bundleId] = {
@@ -483,7 +440,7 @@ function processApiData(rawData) {
           weekStart: weekInfo.weekStart,
           weekEnd: weekInfo.weekEnd,
           sourceApps: sourceApps,
-          campaigns: [] // Для TRICKY кампании находятся в sourceApps
+          campaigns: []
         };
       });
     });
@@ -494,11 +451,7 @@ function processApiData(rawData) {
   return appData;
 }
 
-/**
- * Process API data for specific project
- */
 function processProjectApiData(projectName, rawData) {
-  // Set current project context for processing
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   
@@ -506,19 +459,13 @@ function processProjectApiData(projectName, rawData) {
     const result = processApiData(rawData);
     return result;
   } finally {
-    // Restore original project context
     setCurrentProject(originalProject);
   }
 }
 
-/**
- * Extract geo information from campaign name
- * ОБНОВЛЕНО: Разная логика для разных проектов
- */
 function extractGeoFromCampaign(campaignName) {
   if (!campaignName) return 'OTHER';
   
-  // Для Tricky и Regular - используем старую логику
   if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
     const geoMap = {
       '| USA |': 'USA',
@@ -540,7 +487,6 @@ function extractGeoFromCampaign(campaignName) {
     return 'OTHER';
   } 
   
-  // Для остальных проектов - новая логика поиска GEO в названии
   const geoPatterns = [
     'WW_ru', 'WW_es', 'WW_de', 'WW_pt',
     'Asia T1', 'T2-ES', 'T1-EN',
@@ -567,23 +513,16 @@ function extractGeoFromCampaign(campaignName) {
   return 'OTHER';
 }
 
-/**
- * Extract source app from campaign name
- * This function handles different campaign naming patterns for different projects
- */
 function extractSourceApp(campaignName) {
   try {
-    // Handle Moloco APD_ campaigns: show full campaign name
     if (campaignName.startsWith('APD_')) {
       return campaignName;
     }
     
-    // Handle Regular, Google_Ads, Applovin, and Mintegral campaigns: DO NOT modify campaign names - return as is
-    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'MINTEGRAL') {
+    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'MINTEGRAL' || CURRENT_PROJECT === 'INCENT') {
       return campaignName;
     }
     
-    // Handle Tricky campaigns (original logic)
     const eq = campaignName.indexOf('=');
     if (eq !== -1) {
       let t = campaignName.substring(eq + 1).trim();
@@ -606,11 +545,7 @@ function extractSourceApp(campaignName) {
   }
 }
 
-/**
- * Project-specific source app extraction (for future use)
- */
 function extractProjectSourceApp(projectName, campaignName) {
-  // Set project context for extraction
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   
@@ -621,11 +556,7 @@ function extractProjectSourceApp(projectName, campaignName) {
   }
 }
 
-/**
- * Project-specific geo extraction (for future use)
- */
 function extractProjectGeoFromCampaign(projectName, campaignName) {
-  // Set project context for extraction
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   
