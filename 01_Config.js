@@ -1,5 +1,5 @@
 /**
- * Configuration file - ОБНОВЛЕНО: добавлен проект Overall
+ * Configuration file - ОПТИМИЗИРОВАНО: очистка кеша при смене проекта
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -71,7 +71,6 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   OVERALL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
-// TOKEN MANAGEMENT
 function getBearerToken() {
   var props = PropertiesService.getScriptProperties();
   var token = props.getProperty(PROPERTY_KEYS.BEARER_TOKEN);
@@ -104,7 +103,6 @@ function clearBearerToken() {
   props.deleteProperty(PROPERTY_KEYS.BEARER_TOKEN);
 }
 
-// TARGET EROAS MANAGEMENT
 function getTargetEROAS(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'TARGET_EROAS_' + projectName;
@@ -118,7 +116,6 @@ function setTargetEROAS(projectName, value) {
   props.setProperty(key, value.toString());
 }
 
-// GROWTH THRESHOLDS MANAGEMENT
 function getGrowthThresholds(projectName) {
   var props = PropertiesService.getScriptProperties();
   var key = 'GROWTH_THRESHOLDS_' + projectName;
@@ -148,7 +145,6 @@ function resetGrowthThresholds(projectName) {
   props.deleteProperty(key);
 }
 
-// PROJECT GETTER FUNCTIONS
 function getTrickyTargetEROAS() { return getTargetEROAS('TRICKY'); }
 function getMolocoTargetEROAS() { return getTargetEROAS('MOLOCO'); }
 function getRegularTargetEROAS() { return getTargetEROAS('REGULAR'); }
@@ -167,7 +163,6 @@ function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 
-// PROJECT CONFIGURATIONS
 var PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
@@ -436,7 +431,6 @@ var PROJECTS = {
 
 var CURRENT_PROJECT = 'TRICKY';
 
-// DYNAMIC CONFIG GETTERS
 function getCurrentConfig() {
   return {
     SHEET_ID: MAIN_SHEET_ID,
@@ -477,14 +471,25 @@ function getProjectApiConfig(projectName) {
   return PROJECTS[projectName].API_CONFIG;
 }
 
+// ОПТИМИЗИРОВАНО: очищаем кеши при смене проекта
 function setCurrentProject(projectName) {
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
+  
+  // Очищаем кеши TRICKY если переключаемся с него или на него
+  if (CURRENT_PROJECT === 'TRICKY' || projectName === 'TRICKY') {
+    try {
+      clearTrickyCaches();
+    } catch (e) {
+      // Функция может не существовать в старых версиях
+      console.log('Cache clear function not available');
+    }
+  }
+  
   CURRENT_PROJECT = projectName;
 }
 
-// TABLE CONFIGURATION
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -499,7 +504,6 @@ var TABLE_CONFIG = {
   ]
 };
 
-// COLOR SCHEME
 var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },

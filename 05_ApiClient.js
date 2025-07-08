@@ -1,6 +1,11 @@
 /**
- * API Client - ОБНОВЛЕНО: добавлена поддержка проекта Overall
+ * API Client - ОПТИМИЗИРОВАНО для TRICKY: кеширование bundle ID и оптимизация Apps Database
  */
+
+// Глобальный кеш для bundle ID extractions
+var BUNDLE_ID_CACHE = {};
+var APPS_DB_CACHE = null;
+var APPS_DB_CACHE_TIME = null;
 
 function fetchCampaignData(dateRange) {
   const config = getCurrentConfig();
@@ -11,7 +16,6 @@ function fetchCampaignData(dateRange) {
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
   ];
   
-  // Для Overall не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
   if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
     filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
   }
@@ -102,7 +106,6 @@ function fetchProjectCampaignData(projectName, dateRange) {
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
   ];
   
-  // Для Overall не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
   if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
     filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
   }
@@ -253,6 +256,60 @@ function getGraphQLQuery() {
   }`;
 }
 
+// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: кеш для bundle ID и ленивая загрузка Apps DB
+function getOptimizedAppsDb() {
+  const now = new Date().getTime();
+  
+  // Кеш Apps DB на 10 минут
+  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 600000) {
+    return APPS_DB_CACHE;
+  }
+  
+  console.log('Loading Apps Database...');
+  const appsDb = new AppsDatabase('TRICKY');
+  appsDb.ensureCacheUpToDate();
+  APPS_DB_CACHE = appsDb.loadFromCache();
+  APPS_DB_CACHE_TIME = now;
+  
+  console.log(`Apps Database loaded: ${Object.keys(APPS_DB_CACHE).length} apps`);
+  return APPS_DB_CACHE;
+}
+
+// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: кешированное извлечение bundle ID
+function getCachedBundleId(campaignName) {
+  if (BUNDLE_ID_CACHE[campaignName]) {
+    return BUNDLE_ID_CACHE[campaignName];
+  }
+  
+  const bundleId = extractBundleIdFromCampaign(campaignName);
+  BUNDLE_ID_CACHE[campaignName] = bundleId;
+  return bundleId;
+}
+
+// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: быстрый lookup Apps Database
+function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
+  if (!bundleId || CURRENT_PROJECT !== 'TRICKY') {
+    return bundleId || 'Unknown';
+  }
+  
+  const appInfo = appsDbCache[bundleId];
+  
+  if (appInfo && appInfo.publisher !== bundleId) {
+    const publisher = appInfo.publisher || '';
+    const appName = appInfo.appName || '';
+    
+    if (publisher && appName && publisher !== appName) {
+      return `${publisher} ${appName}`;
+    } else if (publisher) {
+      return publisher;
+    } else if (appName) {
+      return appName;
+    }
+  }
+  
+  return bundleId;
+}
+
 function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
@@ -260,13 +317,16 @@ function processApiData(rawData) {
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
 
-  let appsDb = null;
+  console.log(`Processing ${stats.length} records...`);
+
+  // ОПТИМИЗАЦИЯ: Для TRICKY загружаем Apps DB один раз
+  let appsDbCache = null;
   if (CURRENT_PROJECT === 'TRICKY') {
-    appsDb = new AppsDatabase('TRICKY');
-    appsDb.ensureCacheUpToDate();
+    appsDbCache = getOptimizedAppsDb();
   }
 
   const trickyWeeklyData = {};
+  let processedCount = 0;
 
   stats.forEach((row, index) => {
     try {
@@ -278,11 +338,10 @@ function processApiData(rawData) {
         return;
       }
 
-      // Для OVERALL проекта структура данных отличается: date[0], app[1], metrics[2+]
       let campaign, app, metricsStartIndex;
       
       if (CURRENT_PROJECT === 'OVERALL') {
-        campaign = null; // Нет кампаний в Overall
+        campaign = null;
         app = row[1];
         metricsStartIndex = 2;
       } else {
@@ -327,7 +386,6 @@ function processApiData(rawData) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
-      // Для OVERALL нет кампаний, создаем "виртуальную" запись уровня приложения
       if (CURRENT_PROJECT === 'OVERALL') {
         if (!appData[appKey]) {
           appData[appKey] = {
@@ -347,7 +405,6 @@ function processApiData(rawData) {
           };
         }
         
-        // Создаем "виртуальную" кампанию для представления данных на уровне приложения
         const virtualCampaignData = {
           date: date,
           campaignId: `app_${app.id}_${weekKey}`,
@@ -364,7 +421,6 @@ function processApiData(rawData) {
         return;
       }
 
-      // Обычная логика для других проектов
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
@@ -393,8 +449,9 @@ function processApiData(rawData) {
         isAutomated: campaign?.isAutomated || false
       };
 
-      if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
-        const bundleId = extractBundleIdFromCampaign(campaignName);
+      if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
+        // ОПТИМИЗАЦИЯ: используем кешированное извлечение bundle ID
+        const bundleId = getCachedBundleId(campaignName);
         
         if (!trickyWeeklyData[appKey]) {
           trickyWeeklyData[appKey] = {
@@ -439,13 +496,21 @@ function processApiData(rawData) {
         appData[appKey].weeks[weekKey].campaigns.push(campaignData);
       }
 
+      processedCount++;
+      
+      // Прогресс каждые 100 записей
+      if (processedCount % 100 === 0) {
+        console.log(`Processed ${processedCount}/${stats.length} records...`);
+      }
+
     } catch (error) {
       console.error(`Error processing row ${index}:`, error);
     }
   });
 
-  if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
-    console.log('Processing TRICKY project data with bundle ID grouping...');
+  // ОПТИМИЗИРОВАННАЯ ГРУППИРОВКА ДЛЯ TRICKY
+  if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
+    console.log('Optimized TRICKY grouping...');
     
     Object.keys(trickyWeeklyData).forEach(appKey => {
       const appInfo = trickyWeeklyData[appKey];
@@ -463,6 +528,7 @@ function processApiData(rawData) {
       Object.keys(appInfo.weeks).forEach(weekKey => {
         const weekInfo = appInfo.weeks[weekKey];
         
+        // ОПТИМИЗАЦИЯ: группируем все кампании сразу по bundle ID
         const bundleGroups = {};
         weekInfo.campaigns.forEach(campaign => {
           const bundleId = campaign.extractedBundleId || 'unknown';
@@ -472,15 +538,16 @@ function processApiData(rawData) {
           bundleGroups[bundleId].push(campaign);
         });
         
+        const sourceApps = {};
         const sortedBundleIds = Object.keys(bundleGroups).sort();
         
-        const sourceApps = {};
+        // ОПТИМИЗАЦИЯ: батчевая обработка source apps
         sortedBundleIds.forEach(bundleId => {
           const campaigns = bundleGroups[bundleId];
-          
           campaigns.sort((a, b) => b.spend - a.spend);
           
-          const sourceAppDisplayName = appsDb.getSourceAppDisplayName(bundleId);
+          // ОПТИМИЗАЦИЯ: используем предзагруженный кеш
+          const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
           
           sourceApps[bundleId] = {
             sourceAppId: bundleId,
@@ -500,9 +567,10 @@ function processApiData(rawData) {
       });
     });
     
-    console.log('TRICKY project data grouping completed');
+    console.log('TRICKY optimized grouping completed');
   }
 
+  console.log(`Processing completed: ${processedCount} records processed`);
   return appData;
 }
 
@@ -543,7 +611,7 @@ function extractGeoFromCampaign(campaignName) {
   }
   
   if (CURRENT_PROJECT === 'OVERALL') {
-    return 'ALL'; // Для Overall всегда показываем ALL
+    return 'ALL';
   }
   
   const geoPatterns = [
@@ -575,7 +643,7 @@ function extractGeoFromCampaign(campaignName) {
 function extractSourceApp(campaignName) {
   try {
     if (CURRENT_PROJECT === 'OVERALL') {
-      return campaignName; // Для Overall возвращаем имя приложения
+      return campaignName;
     }
     
     if (campaignName.startsWith('APD_')) {
@@ -628,4 +696,12 @@ function extractProjectGeoFromCampaign(projectName, campaignName) {
   } finally {
     setCurrentProject(originalProject);
   }
+}
+
+// ОЧИСТКА КЕША при смене проекта
+function clearTrickyCaches() {
+  BUNDLE_ID_CACHE = {};
+  APPS_DB_CACHE = null;
+  APPS_DB_CACHE_TIME = null;
+  console.log('TRICKY caches cleared');
 }

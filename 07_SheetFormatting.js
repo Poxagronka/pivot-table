@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: добавлена поддержка Overall
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: добавлена поддержка Overall + vertical align middle
  */
 
 function createEnhancedPivotTable(appData) {
@@ -253,12 +253,16 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const columnWidths = getProjectColumnWidths();
   columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
+  // Устанавливаем vertical align middle для всей таблицы
   if (numRows > 1) {
+    const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
+    allDataRange.setVerticalAlignment('middle');
+    
     const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
-    commentsRange.setWrap(true).setVerticalAlignment('top').setHorizontalAlignment('left');
+    commentsRange.setWrap(true).setHorizontalAlignment('left');
     
     const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
-    growthStatusRange.setWrap(true).setVerticalAlignment('middle').setHorizontalAlignment('left');
+    growthStatusRange.setWrap(true).setHorizontalAlignment('left');
   }
 
   const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [];
@@ -465,7 +469,6 @@ function calculateWeekTotals(campaigns) {
 }
 
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
-  // Для OVERALL проекта не добавляем строки кампаний, так как данные уже на уровне приложения
   if (CURRENT_PROJECT === 'OVERALL') {
     return;
   }
@@ -583,7 +586,6 @@ function createRowGrouping(sheet, tableData, appData) {
             }
           }
         }
-        // Для OVERALL нет кампаний для группировки
       });
 
       const appContentRows = rowPointer - appStartRow - 1;
