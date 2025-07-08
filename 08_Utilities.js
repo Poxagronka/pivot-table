@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: добавлена retry логика и сортировка листов
+ * Utility Functions - ОБНОВЛЕНО: улучшена обработка таймаутов
  */
 
 // Date Utils
@@ -86,10 +86,10 @@ function recreateGrouping(sheet) {
   createRowGrouping(sheet, data, null);
 }
 
-// ОБНОВЛЕНО: Добавлена retry логика против timeout
+// ОБНОВЛЕНО: Улучшенная обработка таймаутов
 function clearAllDataSilent() {
-  const maxRetries = 3;
-  const baseDelay = 2000;
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -99,15 +99,28 @@ function clearAllDataSilent() {
       
       // ВАЖНО: Кешируем комментарии перед удалением листа
       if (oldSheet && oldSheet.getLastRow() > 1) {
-        const cache = new CommentCache();
-        cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+        try {
+          const cache = new CommentCache();
+          cache.syncCommentsFromSheet();
+          console.log('Comments cached before clearing sheet');
+        } catch (e) {
+          console.error('Error caching comments:', e);
+        }
       }
+      
+      // Добавляем небольшую паузу перед операциями с листом
+      Utilities.sleep(1000);
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
-      if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
+      }
+      
       newSheet.setName(config.SHEET_NAME);
       
+      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
       return; // Успех
     } catch (e) {
       console.error(`Sheet recreation attempt ${attempt} failed:`, e);
@@ -125,26 +138,51 @@ function clearAllDataSilent() {
 }
 
 function clearProjectDataSilent(projectName) {
-  const maxRetries = 3;
-  const baseDelay = 2000;
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const config = getProjectConfig(projectName);
       const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      
+      // Проверяем доступность spreadsheet
+      if (!spreadsheet) {
+        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
+      }
+      
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
       // ВАЖНО: Кешируем комментарии перед удалением листа
       if (oldSheet && oldSheet.getLastRow() > 1) {
-        const cache = new CommentCache(projectName);
-        cache.syncCommentsFromSheet(); // БЕЗ раскрытия групп
+        try {
+          const cache = new CommentCache(projectName);
+          cache.syncCommentsFromSheet();
+          console.log(`${projectName}: Comments cached before clearing sheet`);
+        } catch (e) {
+          console.error(`${projectName}: Error caching comments:`, e);
+        }
       }
+      
+      // Добавляем паузу перед критическими операциями
+      Utilities.sleep(1500);
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
-      if (oldSheet) spreadsheet.deleteSheet(oldSheet);
+      
+      // Небольшая пауза между созданием и удалением
+      Utilities.sleep(500);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
+      }
+      
+      // Пауза перед переименованием
+      Utilities.sleep(500);
+      
       newSheet.setName(config.SHEET_NAME);
       
+      console.log(`${projectName}: Sheet recreated successfully`);
       return; // Успех
     } catch (e) {
       console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
@@ -153,8 +191,8 @@ function clearProjectDataSilent(projectName) {
         throw e; // Финальная попытка не удалась
       }
       
-      // Ждем перед повторной попыткой
-      const delay = baseDelay * Math.pow(2, attempt - 1);
+      // Увеличенная задержка для проблемных случаев
+      const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
       console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
     }
@@ -171,7 +209,7 @@ function getOrCreateProjectSheet(projectName) {
   return sheet;
 }
 
-// НОВАЯ ФУНКЦИЯ: Сортировка листов по определенному порядку
+// ОБНОВЛЕНО: Улучшенная сортировка листов с защитой от таймаутов
 function sortProjectSheets() {
   try {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -198,19 +236,28 @@ function sortProjectSheets() {
     // Сортируем листы проектов по желаемому порядку
     projectSheets.sort((a, b) => a.index - b.index);
     
-    // Переставляем листы
+    // Переставляем листы с паузами
     let position = 1;
     
-    // Сначала размещаем листы проектов в правильном порядке
-    projectSheets.forEach(({sheet}) => {
-      spreadsheet.setActiveSheet(sheet);
-      spreadsheet.moveActiveSheet(position);
-      position++;
+    projectSheets.forEach(({sheet}, index) => {
+      try {
+        spreadsheet.setActiveSheet(sheet);
+        spreadsheet.moveActiveSheet(position);
+        position++;
+        
+        // Небольшая пауза между перемещениями
+        if (index < projectSheets.length - 1) {
+          Utilities.sleep(200);
+        }
+      } catch (e) {
+        console.error(`Error moving sheet ${sheet.getName()}:`, e);
+      }
     });
     
     console.log('Project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);
+    throw e; // Пробрасываем ошибку дальше
   }
 }
 
