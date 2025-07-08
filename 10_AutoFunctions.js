@@ -1,11 +1,10 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: использует Settings лист для проверки автоматизации
+ * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы после автообновления
  */
 
 function autoCacheAllProjects() {
   console.log('=== AUTO CACHE STARTED ===');
   
-  // Проверяем что автокеш включен в настройках
   if (!isAutoCacheEnabled()) {
     console.log('Auto cache is disabled in settings, skipping');
     return;
@@ -29,7 +28,6 @@ function autoCacheAllProjects() {
 function autoUpdateAllProjects() {
   console.log('=== AUTO UPDATE STARTED ===');
   
-  // Проверяем что автообновление включено в настройках
   if (!isAutoUpdateEnabled()) {
     console.log('Auto update is disabled in settings, skipping');
     return;
@@ -49,8 +47,8 @@ function autoUpdateAllProjects() {
       }
     });
     
-    // Сортируем листы после обновления всех проектов
-    if (successCount > 1) {
+    // ИЗМЕНЕНО: всегда сортируем листы после автообновления (убрали условие successCount > 1)
+    if (successCount > 0) {
       try {
         sortProjectSheets();
         console.log('Project sheets sorted after auto-update');
@@ -233,20 +231,13 @@ function showAutomationStatus() {
   ui.alert('Automation Status', msg, ui.ButtonSet.OK);
 }
 
-/**
- * Функции управления триггерами - теперь обновляют Settings лист
- */
 function enableAutoCache() {
   try {
-    // Удаляем существующие триггеры
     ScriptApp.getProjectTriggers()
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // Создаем новый триггер
     ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-    
-    // Обновляем настройку в листе Settings
     saveSettingToSheet('automation.autoCache', true);
     
     console.log('Auto cache enabled and saved to Settings sheet');
@@ -258,12 +249,10 @@ function enableAutoCache() {
 
 function disableAutoCache() {
   try {
-    // Удаляем триггеры
     ScriptApp.getProjectTriggers()
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // Обновляем настройку в листе Settings
     saveSettingToSheet('automation.autoCache', false);
     
     console.log('Auto cache disabled and saved to Settings sheet');
@@ -275,15 +264,11 @@ function disableAutoCache() {
 
 function enableAutoUpdate() {
   try {
-    // Удаляем существующие триггеры
     ScriptApp.getProjectTriggers()
       .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // Создаем новый триггер
     ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
-    
-    // Обновляем настройку в листе Settings
     saveSettingToSheet('automation.autoUpdate', true);
     
     console.log('Auto update enabled and saved to Settings sheet');
@@ -295,12 +280,10 @@ function enableAutoUpdate() {
 
 function disableAutoUpdate() {
   try {
-    // Удаляем триггеры
     ScriptApp.getProjectTriggers()
       .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // Обновляем настройку в листе Settings
     saveSettingToSheet('automation.autoUpdate', false);
     
     console.log('Auto update disabled and saved to Settings sheet');
@@ -310,9 +293,6 @@ function disableAutoUpdate() {
   }
 }
 
-/**
- * Синхронизация триггеров с настройками из Settings листа
- */
 function syncTriggersWithSettings() {
   try {
     var settings = loadSettingsFromSheet();
@@ -321,7 +301,6 @@ function syncTriggersWithSettings() {
     var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
-    // Синхронизация auto cache
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
       console.log('Created auto cache trigger');
@@ -330,7 +309,6 @@ function syncTriggersWithSettings() {
       console.log('Deleted auto cache trigger');
     }
     
-    // Синхронизация auto update
     if (settings.automation.autoUpdate && !updateTrigger) {
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
       console.log('Created auto update trigger');
@@ -345,13 +323,7 @@ function syncTriggersWithSettings() {
   }
 }
 
-/**
- * Вызывается при изменении Settings листа (можно настроить через onEdit trigger)
- */
 function onSettingsChange() {
-  // Очищаем кеш настроек
   clearSettingsCache();
-  
-  // Синхронизируем триггеры
   syncTriggersWithSettings();
 }

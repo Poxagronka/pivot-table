@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: улучшена обработка таймаутов
+ * Utility Functions - ОБНОВЛЕНО: улучшена сортировка листов с Settings, To do и скрытыми листами
  */
 
 // Date Utils
@@ -86,7 +86,6 @@ function recreateGrouping(sheet) {
   createRowGrouping(sheet, data, null);
 }
 
-// ОБНОВЛЕНО: Улучшенная обработка таймаутов
 function clearAllDataSilent() {
   const maxRetries = 2;
   const baseDelay = 3000;
@@ -97,7 +96,6 @@ function clearAllDataSilent() {
       const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
-      // ВАЖНО: Кешируем комментарии перед удалением листа
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
           const cache = new CommentCache();
@@ -108,7 +106,6 @@ function clearAllDataSilent() {
         }
       }
       
-      // Добавляем небольшую паузу перед операциями с листом
       Utilities.sleep(1000);
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
@@ -121,15 +118,14 @@ function clearAllDataSilent() {
       newSheet.setName(config.SHEET_NAME);
       
       console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
-      return; // Успех
+      return;
     } catch (e) {
       console.error(`Sheet recreation attempt ${attempt} failed:`, e);
       
       if (attempt === maxRetries) {
-        throw e; // Финальная попытка не удалась
+        throw e;
       }
       
-      // Ждем перед повторной попыткой
       const delay = baseDelay * Math.pow(2, attempt - 1);
       console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
@@ -146,14 +142,12 @@ function clearProjectDataSilent(projectName) {
       const config = getProjectConfig(projectName);
       const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
       
-      // Проверяем доступность spreadsheet
       if (!spreadsheet) {
         throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
       }
       
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
-      // ВАЖНО: Кешируем комментарии перед удалением листа
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
           const cache = new CommentCache(projectName);
@@ -164,34 +158,30 @@ function clearProjectDataSilent(projectName) {
         }
       }
       
-      // Добавляем паузу перед критическими операциями
       Utilities.sleep(1500);
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      // Небольшая пауза между созданием и удалением
       Utilities.sleep(500);
       
       if (oldSheet) {
         spreadsheet.deleteSheet(oldSheet);
       }
       
-      // Пауза перед переименованием
       Utilities.sleep(500);
       
       newSheet.setName(config.SHEET_NAME);
       
       console.log(`${projectName}: Sheet recreated successfully`);
-      return; // Успех
+      return;
     } catch (e) {
       console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
       
       if (attempt === maxRetries) {
-        throw e; // Финальная попытка не удалась
+        throw e;
       }
       
-      // Увеличенная задержка для проблемных случаев
       const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
       console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
@@ -209,44 +199,65 @@ function getOrCreateProjectSheet(projectName) {
   return sheet;
 }
 
-// ОБНОВЛЕНО: Улучшенная сортировка листов с защитой от таймаутов
+// ОБНОВЛЕНО: улучшенная сортировка листов с Settings, To do и скрытыми листами в алфавитном порядке
 function sortProjectSheets() {
   try {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
-    // Желаемый порядок проектов
-    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
+    // ОБНОВЛЕНО: добавлены Settings и To do в конец списка
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
     
-    // Находим листы проектов
-    const projectSheets = [];
-    const otherSheets = [];
+    // Разделяем листы на категории
+    const projectSheets = [];      // Листы из projectOrder
+    const visibleOtherSheets = []; // Видимые листы не из projectOrder
+    const hiddenSheets = [];       // Скрытые листы
     
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
       const projectIndex = projectOrder.indexOf(sheetName);
+      const isHidden = sheet.isSheetHidden();
       
       if (projectIndex !== -1) {
+        // Лист из основного списка
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
+      } else if (isHidden) {
+        // Скрытый лист
+        hiddenSheets.push({ sheet, name: sheetName });
       } else {
-        otherSheets.push(sheet);
+        // Видимый лист, не входящий в основной список
+        visibleOtherSheets.push({ sheet, name: sheetName });
       }
     });
     
-    // Сортируем листы проектов по желаемому порядку
+    // Сортируем каждую категорию
     projectSheets.sort((a, b) => a.index - b.index);
+    visibleOtherSheets.sort((a, b) => a.name.localeCompare(b.name));
+    hiddenSheets.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Объединяем в финальный порядок: основные листы + видимые прочие + скрытые в алфавитном порядке
+    const finalOrder = [
+      ...projectSheets.map(item => item.sheet),
+      ...visibleOtherSheets.map(item => item.sheet),
+      ...hiddenSheets.map(item => item.sheet)
+    ];
+    
+    console.log('Sheet ordering:');
+    console.log('- Project sheets:', projectSheets.map(s => s.name));
+    console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
+    console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
     
     // Переставляем листы с паузами
     let position = 1;
     
-    projectSheets.forEach(({sheet}, index) => {
+    finalOrder.forEach((sheet, index) => {
       try {
         spreadsheet.setActiveSheet(sheet);
         spreadsheet.moveActiveSheet(position);
         position++;
         
         // Небольшая пауза между перемещениями
-        if (index < projectSheets.length - 1) {
+        if (index < finalOrder.length - 1) {
           Utilities.sleep(200);
         }
       } catch (e) {
@@ -257,7 +268,7 @@ function sortProjectSheets() {
     console.log('Project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);
-    throw e; // Пробрасываем ошибку дальше
+    throw e;
   }
 }
 
@@ -423,7 +434,6 @@ function getProjectStatus(projectName) {
     campaignSearch: project.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
   };
   
-  // Для OVERALL добавляем информацию о типе данных
   if (projectName === 'OVERALL') {
     status.dataType = 'app-level aggregated';
     status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 

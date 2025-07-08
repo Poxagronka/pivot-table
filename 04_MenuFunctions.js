@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: использует Settings лист
+ * Menu Functions - ОБНОВЛЕНО: всегда сортирует листы после обновления
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
@@ -59,10 +59,9 @@ function updateSelectedProjectsToCurrent() {
         var projectName = proj.toUpperCase();
         console.log(`Updating ${projectName} (${index + 1}/${selected.length})...`);
         
-        // Пауза между проектами
         if (index > 0) {
           console.log('Waiting before next project...');
-          Utilities.sleep(4000); // 4 секунды между проектами
+          Utilities.sleep(4000);
         }
         
         updateProjectDataWithRetry(projectName);
@@ -72,14 +71,12 @@ function updateSelectedProjectsToCurrent() {
       } catch (e) {
         console.error(`Error updating ${proj}:`, e);
         errors.push(`${proj}: ${e.toString().substring(0, 50)}...`);
-        
-        // Пауза после ошибки
         Utilities.sleep(2000);
       }
     });
     
-    // Сортируем листы если обновлено больше 1 проекта
-    if (successCount > 1) {
+    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
+    if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
         Utilities.sleep(2000);
@@ -114,7 +111,6 @@ function refreshSettingsDialog() {
     message += `🔄 Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
     message += `🎯 Target eROAS: ${Object.keys(settings.targetEROAS).length} projects configured\n`;
     
-    // Синхронизируем триггеры с обновленными настройками
     try {
       syncTriggersWithSettings();
       message += '\n✅ Triggers synchronized';
@@ -128,9 +124,6 @@ function refreshSettingsDialog() {
   }
 }
 
-/**
- * Синхронизация триггеров с настройками из Settings листа
- */
 function syncTriggersWithSettings() {
   try {
     var settings = loadSettingsFromSheet();
@@ -139,7 +132,6 @@ function syncTriggersWithSettings() {
     var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
-    // Синхронизация auto cache
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
       console.log('Created auto cache trigger');
@@ -148,7 +140,6 @@ function syncTriggersWithSettings() {
       console.log('Deleted auto cache trigger');
     }
     
-    // Синхронизация auto update
     if (settings.automation.autoUpdate && !updateTrigger) {
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
       console.log('Created auto update trigger');
@@ -167,7 +158,6 @@ function syncTriggersWithSettings() {
 function showQuickStatus() {
   var ui = SpreadsheetApp.getUi();
   
-  // Принудительно обновляем настройки из листа
   refreshSettingsFromSheet();
   
   var tokenStatus = isBearerTokenConfigured() ? '✅ Configured' : '❌ Not Set';
@@ -179,7 +169,6 @@ function showQuickStatus() {
   message += `💾 Auto Cache: ${cacheStatus}\n`;
   message += `🔄 Auto Update: ${updateStatus}\n\n`;
   
-  // Проверяем синхронизацию с триггерами
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
   var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
@@ -213,11 +202,7 @@ function showQuickStatus() {
   ui.alert('System Status', message, ui.ButtonSet.OK);
 }
 
-/**
- * Обновить меню (пересоздать его)
- */
 function refreshMenu() {
-  // Очищаем все меню и создаем заново
   var ui = SpreadsheetApp.getUi();
   try {
     onOpen();
@@ -301,10 +286,9 @@ function updateAllProjectsToCurrent() {
       try {
         console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
         
-        // Добавляем паузу между проектами для предотвращения таймаутов
         if (index > 0) {
           console.log('Waiting before next project...');
-          Utilities.sleep(5000); // 5 секунд между проектами
+          Utilities.sleep(5000);
         }
         
         updateProjectDataWithRetry(proj);
@@ -314,17 +298,15 @@ function updateAllProjectsToCurrent() {
       } catch (e) {
         console.error(`Error updating ${proj}:`, e);
         errors.push(`${proj}: ${e.toString().substring(0, 50)}...`);
-        
-        // Дополнительная пауза после ошибки
         Utilities.sleep(3000);
       }
     });
     
-    // Сортируем листы только если обновилось больше 1 проекта
-    if (successCount > 1) {
+    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
+    if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
-        Utilities.sleep(2000); // Пауза перед сортировкой
+        Utilities.sleep(2000);
         sortProjectSheetsWithRetry();
         console.log('Sheets sorted successfully');
       } catch (e) {
@@ -345,24 +327,20 @@ function updateAllProjectsToCurrent() {
   }
 }
 
-/**
- * Обновление проекта с повторными попытками и улучшенной обработкой ошибок
- */
 function updateProjectDataWithRetry(projectName, maxRetries = 2) {
   var baseDelay = 3000;
   
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       updateProjectData(projectName);
-      return; // Успех
+      return;
     } catch (e) {
       console.error(`${projectName} update attempt ${attempt} failed:`, e);
       
       if (attempt === maxRetries) {
-        throw e; // Финальная попытка не удалась
+        throw e;
       }
       
-      // Увеличиваем задержку с каждой попыткой
       var delay = baseDelay * Math.pow(2, attempt - 1);
       console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
@@ -370,21 +348,18 @@ function updateProjectDataWithRetry(projectName, maxRetries = 2) {
   }
 }
 
-/**
- * Сортировка листов с повторными попытками
- */
 function sortProjectSheetsWithRetry(maxRetries = 2) {
   var baseDelay = 2000;
   
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       sortProjectSheets();
-      return; // Успех
+      return;
     } catch (e) {
       console.error(`Sheet sorting attempt ${attempt} failed:`, e);
       
       if (attempt === maxRetries) {
-        throw e; // Финальная попытка не удалась
+        throw e;
       }
       
       var delay = baseDelay * attempt;
@@ -747,7 +722,6 @@ function clearProjectAllData(projectName) {
   }
 }
 
-// Apps Database functions
 function showAppsDbStatus() {
   var ui = SpreadsheetApp.getUi();
   
@@ -836,7 +810,6 @@ function clearAppsDbCache() {
   }
 }
 
-// Utility functions
 function showChoice(title, options) {
   var ui = SpreadsheetApp.getUi();
   var numbered = '';
@@ -892,7 +865,6 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date); 
 }
 
-// Report generation functions
 function quickGenerateAllForDays(days) {
   var ui = SpreadsheetApp.getUi();
   var success = 0;
@@ -918,7 +890,8 @@ function runSelectedProjects(projects, days) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReport(projects[i].toUpperCase(), days);
   }
-  if (projects.length > 1) sortProjectSheets();
+  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
+  sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -934,7 +907,8 @@ function runSelectedProjectsDateRange(projects, start, end) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
   }
-  if (projects.length > 1) sortProjectSheets();
+  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
+  sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
