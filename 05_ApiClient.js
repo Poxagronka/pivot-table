@@ -1,5 +1,5 @@
 /**
- * API Client - ОБНОВЛЕНО: добавлена поддержка проекта Incent
+ * API Client - ОБНОВЛЕНО: добавлена поддержка проекта Overall
  */
 
 function fetchCampaignData(dateRange) {
@@ -8,9 +8,13 @@ function fetchCampaignData(dateRange) {
   
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
-    { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
+    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
   ];
+  
+  // Для Overall не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
+  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
+    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
+  }
   
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
@@ -33,7 +37,7 @@ function fetchCampaignData(dateRange) {
     }
   }
   
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -47,7 +51,7 @@ function fetchCampaignData(dateRange) {
       filters: filters,
       groupBy: apiConfig.GROUP_BY,
       measures: apiConfig.MEASURES,
-      havingFilters: [],
+      havingFilters: CURRENT_PROJECT === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
       anonymizationMode: "OFF",
       topFilter: null,
       revenuePredictionVersion: "",
@@ -95,9 +99,13 @@ function fetchProjectCampaignData(projectName, dateRange) {
   
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
-    { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
+    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
   ];
+  
+  // Для Overall не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
+  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
+    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
+  }
   
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
@@ -120,7 +128,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     }
   }
   
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -134,7 +142,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
       filters: filters,
       groupBy: apiConfig.GROUP_BY,
       measures: apiConfig.MEASURES,
-      havingFilters: [],
+      havingFilters: projectName === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
       anonymizationMode: "OFF",
       topFilter: null,
       revenuePredictionVersion: "",
@@ -270,12 +278,21 @@ function processApiData(rawData) {
         return;
       }
 
-      const campaign = row[1];
-      const app = row[2];
-      const metricsStartIndex = 3;
+      // Для OVERALL проекта структура данных отличается: date[0], app[1], metrics[2+]
+      let campaign, app, metricsStartIndex;
+      
+      if (CURRENT_PROJECT === 'OVERALL') {
+        campaign = null; // Нет кампаний в Overall
+        app = row[1];
+        metricsStartIndex = 2;
+      } else {
+        campaign = row[1];
+        app = row[2];
+        metricsStartIndex = 3;
+      }
       
       let metrics;
-      if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT') {
+      if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
         metrics = {
           cpi: parseFloat(row[metricsStartIndex].value) || 0,
           installs: parseInt(row[metricsStartIndex + 1].value) || 0,
@@ -310,6 +327,44 @@ function processApiData(rawData) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
+      // Для OVERALL нет кампаний, создаем "виртуальную" запись уровня приложения
+      if (CURRENT_PROJECT === 'OVERALL') {
+        if (!appData[appKey]) {
+          appData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            weeks: {}
+          };
+        }
+
+        if (!appData[appKey].weeks[weekKey]) {
+          appData[appKey].weeks[weekKey] = {
+            weekStart: formatDateForAPI(monday),
+            weekEnd: formatDateForAPI(sunday),
+            campaigns: []
+          };
+        }
+        
+        // Создаем "виртуальную" кампанию для представления данных на уровне приложения
+        const virtualCampaignData = {
+          date: date,
+          campaignId: `app_${app.id}_${weekKey}`,
+          campaignName: app.name,
+          ...metrics,
+          status: 'Active',
+          type: 'Overall',
+          geo: 'ALL',
+          sourceApp: app.name,
+          isAutomated: false
+        };
+        
+        appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
+        return;
+      }
+
+      // Обычная логика для других проектов
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
@@ -331,11 +386,11 @@ function processApiData(rawData) {
         campaignId: campaignId,
         campaignName: campaignName,
         ...metrics,
-        status: campaign.status || 'Unknown',
-        type: campaign.type || 'Unknown',
+        status: campaign?.status || 'Unknown',
+        type: campaign?.type || 'Unknown',
         geo,
         sourceApp: sourceApp,
-        isAutomated: campaign.isAutomated || false
+        isAutomated: campaign?.isAutomated || false
       };
 
       if (CURRENT_PROJECT === 'TRICKY' && appsDb) {
@@ -485,7 +540,11 @@ function extractGeoFromCampaign(campaignName) {
       }
     }
     return 'OTHER';
-  } 
+  }
+  
+  if (CURRENT_PROJECT === 'OVERALL') {
+    return 'ALL'; // Для Overall всегда показываем ALL
+  }
   
   const geoPatterns = [
     'WW_ru', 'WW_es', 'WW_de', 'WW_pt',
@@ -515,6 +574,10 @@ function extractGeoFromCampaign(campaignName) {
 
 function extractSourceApp(campaignName) {
   try {
+    if (CURRENT_PROJECT === 'OVERALL') {
+      return campaignName; // Для Overall возвращаем имя приложения
+    }
+    
     if (campaignName.startsWith('APD_')) {
       return campaignName;
     }

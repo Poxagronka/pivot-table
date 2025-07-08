@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ИСПРАВЛЕНО: правильная аналитика для TRICKY с Apps Database группировкой
+ * Analytics Functions - ОБНОВЛЕНО: добавлена поддержка проекта Overall
  */
 
 function calculateWoWMetrics(appData) {
@@ -64,6 +64,12 @@ function calculateWoWMetrics(appData) {
               }
             });
           });
+        } else if (CURRENT_PROJECT === 'OVERALL') {
+          // For OVERALL: use campaigns as app-level data (no actual campaigns)
+          allCampaigns = week.campaigns || [];
+          
+          // For OVERALL, campaigns are virtual app-level data, so we don't store them in campaignData
+          // We only need app-level WoW metrics
         } else {
           // For other projects: use campaigns directly
           allCampaigns = week.campaigns || [];
@@ -97,32 +103,34 @@ function calculateWoWMetrics(appData) {
       });
     });
 
-    // Calculate campaign WoW
-    const campaigns = {};
-    Object.values(campaignData).forEach(d => {
-      if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
-      campaigns[d.campaignId].push(d);
-    });
-
+    // Calculate campaign WoW (skip for OVERALL)
     const campaignWoW = {};
-    Object.keys(campaigns).forEach(campaignId => {
-      campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-      campaigns[campaignId].forEach((curr, i) => {
-        const key = `${campaignId}_${curr.weekStart}`;
-        campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-        
-        if (i > 0) {
-          const prev = campaigns[campaignId][i - 1];
-          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-          const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
-          campaignWoW[key] = { 
-            spendChangePercent: spendPct, 
-            eProfitChangePercent: profitPct, 
-            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
-          };
-        }
+    if (CURRENT_PROJECT !== 'OVERALL') {
+      const campaigns = {};
+      Object.values(campaignData).forEach(d => {
+        if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
+        campaigns[d.campaignId].push(d);
       });
-    });
+
+      Object.keys(campaigns).forEach(campaignId => {
+        campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        campaigns[campaignId].forEach((curr, i) => {
+          const key = `${campaignId}_${curr.weekStart}`;
+          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = campaigns[campaignId][i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
+            campaignWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
+            };
+          }
+        });
+      });
+    }
 
     // Calculate app week WoW
     const appWeekWoW = {};
@@ -286,7 +294,13 @@ function generateReport(days) {
     }
     
     clearAllDataSilent();
-    createEnhancedPivotTable(processed);
+    
+    // Для OVERALL используем специальную функцию создания таблицы
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
@@ -315,7 +329,13 @@ function generateReportForDateRange(startDate, endDate) {
     }
     
     clearAllDataSilent();
-    createEnhancedPivotTable(processed);
+    
+    // Для OVERALL используем специальную функцию создания таблицы
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
@@ -380,7 +400,13 @@ function updateAllDataToCurrent() {
     }
     
     clearAllDataSilent();
-    createEnhancedPivotTable(processed);
+    
+    // Для OVERALL используем специальную функцию создания таблицы
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();

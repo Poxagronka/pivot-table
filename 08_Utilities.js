@@ -1,5 +1,5 @@
 /**
- * Utility Functions - Сокращенная версия
+ * Utility Functions - ОБНОВЛЕНО: добавлена поддержка Overall
  */
 
 // Date Utils
@@ -294,11 +294,20 @@ function getProjectStatus(projectName) {
   }
   
   const project = PROJECTS[projectName];
-  return {
+  const status = {
     configured: true,
     sheetName: project.SHEET_NAME,
     hasToken: !!project.BEARER_TOKEN,
     userCount: project.API_CONFIG.FILTERS.USER.length,
     campaignSearch: project.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
   };
+  
+  // Для OVERALL добавляем информацию о типе данных
+  if (projectName === 'OVERALL') {
+    status.dataType = 'app-level aggregated';
+    status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 
+      project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS';
+  }
+  
+  return status;
 }

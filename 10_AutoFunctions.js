@@ -1,11 +1,11 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: добавлен Incent
+ * Auto Functions - ОБНОВЛЕНО: добавлен Overall
  */
 
 function autoCacheAllProjects() {
   console.log('=== AUTO CACHE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(proj => {
       try {
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
@@ -38,7 +38,7 @@ function cacheProjectComments(projectName) {
 function autoUpdateAllProjects() {
   console.log('=== AUTO UPDATE STARTED ===');
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'].forEach(proj => {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(proj => {
       try {
         console.log(`Updating ${proj}...`);
         updateProjectData(proj);
@@ -115,7 +115,11 @@ function updateProjectData(projectName) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   try {
-    createEnhancedPivotTable(processed);
+    if (projectName === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
     const cache = new CommentCache(projectName);
     cache.applyCommentsToSheet();
   } finally {
@@ -128,7 +132,7 @@ function updateProjectData(projectName) {
 function saveAllCommentsToCache() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT'];
+    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     let successCount = 0;
     
     projects.forEach(proj => {

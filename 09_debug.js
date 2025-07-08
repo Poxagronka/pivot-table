@@ -1,5 +1,5 @@
 /**
- * Debug Functions - ИСПРАВЛЕНО: убрана проверка SOURCE_APP из API для TRICKY
+ * Debug Functions - ОБНОВЛЕНО: добавлена поддержка проекта Overall
  */
 
 function debugReportGeneration() {
@@ -104,7 +104,12 @@ function debugConfiguration(debugSheet, projectName) {
     logDebug(debugSheet, 'API Конфигурация:', 'INFO');
     logDebug(debugSheet, '- Users: ' + apiConfig.FILTERS.USER.length + ' элементов', 'INFO', JSON.stringify(apiConfig.FILTERS.USER));
     logDebug(debugSheet, '- Attribution Partner: ' + apiConfig.FILTERS.ATTRIBUTION_PARTNER.join(', '), 'INFO');
-    logDebug(debugSheet, '- Attribution Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', '), 'INFO');
+    
+    if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
+      logDebug(debugSheet, '- Attribution Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', '), 'INFO');
+    } else {
+      logDebug(debugSheet, '- Attribution Network HID: ALL NETWORKS (пустой массив)', 'INFO');
+    }
     
     // GROUP_BY analysis
     logDebug(debugSheet, 'GROUP_BY структура:', 'INFO');
@@ -113,8 +118,10 @@ function debugConfiguration(debugSheet, projectName) {
       logDebug(debugSheet, `- ${groupInfo}`, 'INFO');
     });
     
-    // ИСПРАВЛЕНО: убрана проверка SOURCE_APP для TRICKY
-    if (projectName === 'TRICKY') {
+    if (projectName === 'OVERALL') {
+      logDebug(debugSheet, '✅ OVERALL: Использует упрощенную группировку (app + week)', 'SUCCESS');
+      logDebug(debugSheet, '✅ OVERALL: Нет разбивки по кампаниям', 'INFO');
+    } else if (projectName === 'TRICKY') {
       logDebug(debugSheet, '✅ TRICKY: Использует локальную группировку через Apps Database', 'SUCCESS');
       
       // Проверка Apps Database
@@ -148,9 +155,13 @@ function debugAPIRequest(debugSheet, projectName) {
     
     const filters = [
       { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-      { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true },
-      { dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true }
+      { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
     ];
+    
+    // Для OVERALL не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
+    if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
+      filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
+    }
     
     if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
       const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
@@ -171,7 +182,7 @@ function debugAPIRequest(debugSheet, projectName) {
       }
     }
     
-    const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN') ? 'DATE' : 'INSTALL_DATE';
+    const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
     
     const payload = {
       operationName: apiConfig.OPERATION_NAME,
@@ -185,7 +196,7 @@ function debugAPIRequest(debugSheet, projectName) {
         filters: filters,
         groupBy: apiConfig.GROUP_BY,
         measures: apiConfig.MEASURES,
-        havingFilters: [],
+        havingFilters: projectName === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
         anonymizationMode: "OFF",
         topFilter: null,
         revenuePredictionVersion: "",
@@ -292,27 +303,44 @@ function debugDataStructure(debugSheet, apiResponse) {
         }
       });
       
-      // ИСПРАВЛЕНО: проверка единой структуры для всех проектов
+      // Проверка структуры данных для OVERALL и других проектов
       logDebug(debugSheet, 'Проверка структуры данных:', 'SECTION');
-      if (firstRecord.length >= 3) {
-        const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
-        const hasCampaign = firstRecord[1] && firstRecord[1].__typename === 'UaCampaign';
-        const hasApp = firstRecord[2] && firstRecord[2].__typename === 'AppInfo';
-        
-        if (hasDate && hasCampaign && hasApp) {
-          logDebug(debugSheet, '✅ Корректная структура [date, campaign, app, metrics...]', 'SUCCESS');
+      if (CURRENT_PROJECT === 'OVERALL') {
+        if (firstRecord.length >= 2) {
+          const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
+          const hasApp = firstRecord[1] && firstRecord[1].__typename === 'AppInfo';
           
-          if (CURRENT_PROJECT === 'TRICKY') {
-            logDebug(debugSheet, '✅ TRICKY: Будет группироваться локально через Apps Database', 'SUCCESS');
+          if (hasDate && hasApp) {
+            logDebug(debugSheet, '✅ OVERALL: Корректная структура [date, app, metrics...] - без кампаний', 'SUCCESS');
+          } else {
+            logDebug(debugSheet, '❌ OVERALL: Неожиданная структура данных!', 'ERROR');
+            logDebug(debugSheet, `- [0] date: ${firstRecord[0]?.__typename || 'отсутствует'}`, 'INFO');
+            logDebug(debugSheet, `- [1] app: ${firstRecord[1]?.__typename || 'отсутствует'}`, 'INFO');
           }
         } else {
-          logDebug(debugSheet, '❌ Неожиданная структура данных!', 'ERROR');
-          logDebug(debugSheet, `- [0] date: ${firstRecord[0]?.__typename || 'отсутствует'}`, 'INFO');
-          logDebug(debugSheet, `- [1] campaign: ${firstRecord[1]?.__typename || 'отсутствует'}`, 'INFO');
-          logDebug(debugSheet, `- [2] app: ${firstRecord[2]?.__typename || 'отсутствует'}`, 'INFO');
+          logDebug(debugSheet, '❌ OVERALL: Недостаточно элементов в записи!', 'ERROR');
         }
       } else {
-        logDebug(debugSheet, '❌ Недостаточно элементов в записи!', 'ERROR');
+        if (firstRecord.length >= 3) {
+          const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
+          const hasCampaign = firstRecord[1] && firstRecord[1].__typename === 'UaCampaign';
+          const hasApp = firstRecord[2] && firstRecord[2].__typename === 'AppInfo';
+          
+          if (hasDate && hasCampaign && hasApp) {
+            logDebug(debugSheet, '✅ Корректная структура [date, campaign, app, metrics...]', 'SUCCESS');
+            
+            if (CURRENT_PROJECT === 'TRICKY') {
+              logDebug(debugSheet, '✅ TRICKY: Будет группироваться локально через Apps Database', 'SUCCESS');
+            }
+          } else {
+            logDebug(debugSheet, '❌ Неожиданная структура данных!', 'ERROR');
+            logDebug(debugSheet, `- [0] date: ${firstRecord[0]?.__typename || 'отсутствует'}`, 'INFO');
+            logDebug(debugSheet, `- [1] campaign: ${firstRecord[1]?.__typename || 'отсутствует'}`, 'INFO');
+            logDebug(debugSheet, `- [2] app: ${firstRecord[2]?.__typename || 'отсутствует'}`, 'INFO');
+          }
+        } else {
+          logDebug(debugSheet, '❌ Недостаточно элементов в записи!', 'ERROR');
+        }
       }
     }
     
@@ -369,19 +397,31 @@ function debugDataProcessing(debugSheet, apiResponse) {
           return;
         }
         
-        // ВСЕ ПРОЕКТЫ используют одинаковую структуру: date[0], campaign[1], app[2], metrics[3+]
-        const campaign = row[1];
-        const app = row[2];
-        const metricsStartIndex = 3;
+        let campaign, app, metricsStartIndex;
         
-        if (!campaign || !app) {
-          logDebug(debugSheet, `Запись ${index}: отсутствует campaign или app`, 'WARNING');
+        if (CURRENT_PROJECT === 'OVERALL') {
+          campaign = null;
+          app = row[1];
+          metricsStartIndex = 2;
+        } else {
+          campaign = row[1];
+          app = row[2];
+          metricsStartIndex = 3;
+        }
+        
+        if (!app) {
+          logDebug(debugSheet, `Запись ${index}: отсутствует app`, 'WARNING');
           errorCount++;
           return;
         }
         
         // Check spend > 0
-        const spendValue = parseFloat(row[metricsStartIndex + (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' ? 2 : 3)]?.value) || 0;
+        const spendIndex = CURRENT_PROJECT === 'OVERALL' ? 
+          metricsStartIndex + 2 : 
+          (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' ? 
+            metricsStartIndex + 2 : metricsStartIndex + 3);
+        
+        const spendValue = parseFloat(row[spendIndex]?.value) || 0;
         if (spendValue <= 0) {
           return; // Skip zero spend campaigns
         }
@@ -408,7 +448,7 @@ function debugDataProcessing(debugSheet, apiResponse) {
         totalProcessed++;
         
         // Для TRICKY - проверяем извлечение bundle ID
-        if (CURRENT_PROJECT === 'TRICKY') {
+        if (CURRENT_PROJECT === 'TRICKY' && campaign) {
           let campaignName = 'Unknown';
           if (campaign.campaignName) {
             campaignName = campaign.campaignName;
@@ -424,16 +464,20 @@ function debugDataProcessing(debugSheet, apiResponse) {
         
         if (index < 3) {
           let campaignName = 'Unknown';
-          if (campaign.campaignName) {
-            campaignName = campaign.campaignName;
-          } else if (campaign.value) {
-            campaignName = campaign.value;
+          if (CURRENT_PROJECT !== 'OVERALL' && campaign) {
+            if (campaign.campaignName) {
+              campaignName = campaign.campaignName;
+            } else if (campaign.value) {
+              campaignName = campaign.value;
+            }
+          } else if (CURRENT_PROJECT === 'OVERALL') {
+            campaignName = 'N/A (app-level data)';
           }
           
           const shortCampaignName = campaignName.length > 50 ? campaignName.substring(0, 50) + '...' : campaignName;
           let recordInfo = `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}`;
           
-          if (CURRENT_PROJECT === 'TRICKY') {
+          if (CURRENT_PROJECT === 'TRICKY' && campaign) {
             const bundleId = extractBundleIdFromCampaign(campaignName);
             recordInfo += `, Bundle ID: ${bundleId || 'не найден'}`;
           }
@@ -494,14 +538,21 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     stats.forEach(row => {
       if (Array.isArray(row)) {
         const date = row[0]?.value;
-        const campaign = row[1];
-        const app = row[2];
+        let campaign, app;
+        
+        if (projectName === 'OVERALL') {
+          campaign = null;
+          app = row[1];
+        } else {
+          campaign = row[1];
+          app = row[2];
+        }
         
         if (date) uniqueDates.add(date);
         if (app?.name) uniqueApps.add(app.name);
         
         let campaignName = null;
-        if (campaign) {
+        if (projectName !== 'OVERALL' && campaign) {
           if (campaign.campaignName) {
             campaignName = campaign.campaignName;
           } else if (campaign.value) {
@@ -539,7 +590,14 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     
     logDebug(debugSheet, `Анализ уникальных значений для ${projectName}:`, 'INFO');
     logDebug(debugSheet, '- Уникальных приложений: ' + uniqueApps.size, 'INFO');
-    logDebug(debugSheet, '- Уникальных кампаний: ' + uniqueCampaigns.size, 'INFO');
+    
+    if (projectName === 'OVERALL') {
+      logDebug(debugSheet, '- Кампаний: N/A (app-level data)', 'INFO');
+      logDebug(debugSheet, '- Данные агрегированы на уровне приложений', 'INFO');
+    } else {
+      logDebug(debugSheet, '- Уникальных кампаний: ' + uniqueCampaigns.size, 'INFO');
+    }
+    
     logDebug(debugSheet, '- Уникальных дат: ' + uniqueDates.size, 'INFO');
     
     if (projectName === 'TRICKY') {
@@ -553,8 +611,10 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     const appsList = Array.from(uniqueApps).slice(0, 5);
     logDebug(debugSheet, 'Примеры приложений: ' + appsList.join(', '), 'INFO');
     
-    const campaignsList = Array.from(uniqueCampaigns).slice(0, 3);
-    logDebug(debugSheet, 'Примеры кампаний:', 'INFO', campaignsList.join('\n'));
+    if (projectName !== 'OVERALL') {
+      const campaignsList = Array.from(uniqueCampaigns).slice(0, 3);
+      logDebug(debugSheet, 'Примеры кампаний:', 'INFO', campaignsList.join('\n'));
+    }
     
     const sortedDates = Array.from(uniqueDates).sort();
     if (sortedDates.length > 0) {
@@ -562,7 +622,11 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     }
     
     // Project-specific analysis
-    if (projectName === 'TRICKY') {
+    if (projectName === 'OVERALL') {
+      logDebug(debugSheet, `${projectName}: Агрегированные данные по приложениям`, 'INFO');
+      logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS'}`, 'INFO');
+      logDebug(debugSheet, '✅ OVERALL данные корректны для app-level отчета!', 'SUCCESS');
+    } else if (projectName === 'TRICKY') {
       logDebug(debugSheet, `${projectName}: Фильтр кампаний + локальная группировка`, 'INFO');
       logDebug(debugSheet, `Campaign Search: ${apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH}`, 'INFO');
       logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ')}`, 'INFO');
@@ -620,8 +684,15 @@ function quickAPICheck() {
       const count = raw.data.analytics.richStats.stats.length;
       let message = `API работает: получено ${count} записей за последние 7 дней.`;
       
-      // Special check for TRICKY project
-      if (projectName === 'TRICKY') {
+      // Special check for OVERALL and TRICKY projects
+      if (projectName === 'OVERALL') {
+        const firstRecord = raw.data.analytics.richStats.stats[0];
+        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 2) {
+          message += `\n✅ Структура данных корректна для app-level отчета.`;
+        } else {
+          message += `\n⚠️ Структура данных может быть некорректной.`;
+        }
+      } else if (projectName === 'TRICKY') {
         const firstRecord = raw.data.analytics.richStats.stats[0];
         if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 3) {
           message += `\n✅ Структура данных корректна для локальной группировки.`;

@@ -1,8 +1,8 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: добавлен Incent
+ * Menu Functions - ОБНОВЛЕНО: добавлен Overall
  */
 
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent'];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
 var MENU_DAYS = [30, 60, 90];
 
 function onOpen() {
@@ -384,7 +384,7 @@ function targetSettingsWizard() {
       ui.alert('✅ Updated', 'All targets have been saved', ui.ButtonSet.OK);
     }
   } else if (choice === 4) {
-    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%\nMintegral: 140%\nIncent: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
+    if (ui.alert('Reset to Defaults?', 'Tricky: 160%\nMoloco: 140%\nRegular: 140%\nGoogle_Ads: 140%\nApplovin: 140%\nMintegral: 140%\nIncent: 140%\nOverall: 140%', ui.ButtonSet.YES_NO) === ui.Button.YES) {
       setTargetEROAS('TRICKY', 160);
       setTargetEROAS('MOLOCO', 140);
       setTargetEROAS('REGULAR', 140);
@@ -392,6 +392,7 @@ function targetSettingsWizard() {
       setTargetEROAS('APPLOVIN', 140);
       setTargetEROAS('MINTEGRAL', 140);
       setTargetEROAS('INCENT', 140);
+      setTargetEROAS('OVERALL', 140);
       ui.alert('✅ Reset', 'All targets reset to defaults', ui.ButtonSet.OK);
     }
   }
@@ -430,7 +431,7 @@ function getProjectStatusOverview(projectName) {
   overview += '🔐 Bearer Token: ' + tokenStatus + '\n';
   overview += '🎯 Target eROAS: ' + target + '%\n';
   overview += '📊 Sheet: ' + config.SHEET_NAME + '\n';
-  overview += '🌐 Network HID: ' + apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') + '\n';
+  overview += '🌐 Network HID: ' + (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS') + '\n';
   overview += '🔍 Campaign Filter: ' + (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH || 'NO FILTER') + '\n';
   overview += '👥 Users: ' + apiConfig.FILTERS.USER.length + ' configured\n';
   
@@ -443,6 +444,10 @@ function getProjectStatusOverview(projectName) {
     } catch (e) {
       overview += '📱 Apps Database: Error\n';
     }
+  }
+  
+  if (projectName === 'OVERALL') {
+    overview += '📊 Data Type: App-level aggregated data (no campaigns)\n';
   }
   
   overview += '\n📈 GROWTH THRESHOLDS:\n';

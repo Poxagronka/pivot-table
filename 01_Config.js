@@ -1,5 +1,5 @@
 /**
- * Configuration file - ОБНОВЛЕНО: добавлен проект Incent
+ * Configuration file - ОБНОВЛЕНО: добавлен проект Overall
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -15,6 +15,7 @@ var PROPERTY_KEYS = {
   TARGET_EROAS_APPLOVIN: 'TARGET_EROAS_APPLOVIN',
   TARGET_EROAS_MINTEGRAL: 'TARGET_EROAS_MINTEGRAL',
   TARGET_EROAS_INCENT: 'TARGET_EROAS_INCENT',
+  TARGET_EROAS_OVERALL: 'TARGET_EROAS_OVERALL',
   AUTO_CACHE_ENABLED: 'AUTO_CACHE_ENABLED',
   AUTO_UPDATE_ENABLED: 'AUTO_UPDATE_ENABLED',
   GROWTH_THRESHOLDS_TRICKY: 'GROWTH_THRESHOLDS_TRICKY',
@@ -23,7 +24,8 @@ var PROPERTY_KEYS = {
   GROWTH_THRESHOLDS_GOOGLE_ADS: 'GROWTH_THRESHOLDS_GOOGLE_ADS',
   GROWTH_THRESHOLDS_APPLOVIN: 'GROWTH_THRESHOLDS_APPLOVIN',
   GROWTH_THRESHOLDS_MINTEGRAL: 'GROWTH_THRESHOLDS_MINTEGRAL',
-  GROWTH_THRESHOLDS_INCENT: 'GROWTH_THRESHOLDS_INCENT'
+  GROWTH_THRESHOLDS_INCENT: 'GROWTH_THRESHOLDS_INCENT',
+  GROWTH_THRESHOLDS_OVERALL: 'GROWTH_THRESHOLDS_OVERALL'
 };
 
 var DEFAULT_TARGET_EROAS = {
@@ -33,7 +35,8 @@ var DEFAULT_TARGET_EROAS = {
   GOOGLE_ADS: 140,
   APPLOVIN: 140,
   MINTEGRAL: 140,
-  INCENT: 140
+  INCENT: 140,
+  OVERALL: 140
 };
 
 var DEFAULT_GROWTH_THRESHOLDS_BASE = {
@@ -64,7 +67,8 @@ var DEFAULT_GROWTH_THRESHOLDS = {
   GOOGLE_ADS: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
   APPLOVIN: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
   MINTEGRAL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
-  INCENT: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
+  INCENT: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE)),
+  OVERALL: JSON.parse(JSON.stringify(DEFAULT_GROWTH_THRESHOLDS_BASE))
 };
 
 // TOKEN MANAGEMENT
@@ -152,6 +156,7 @@ function getGoogleAdsTargetEROAS() { return getTargetEROAS('GOOGLE_ADS'); }
 function getApplovinTargetEROAS() { return getTargetEROAS('APPLOVIN'); }
 function getMintegralTargetEROAS() { return getTargetEROAS('MINTEGRAL'); }
 function getIncentTargetEROAS() { return getTargetEROAS('INCENT'); }
+function getOverallTargetEROAS() { return getTargetEROAS('OVERALL'); }
 
 function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
 function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
@@ -160,6 +165,7 @@ function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS
 function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
 function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
+function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 
 // PROJECT CONFIGURATIONS
 var PROJECTS = {
@@ -380,6 +386,38 @@ var PROJECTS = {
       GROUP_BY: [
         { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: [
+        { id: "cpi", day: null },
+        { id: "installs", day: null },
+        { id: "spend", day: null },
+        { id: "retention_rate", day: 1 },
+        { id: "roas", day: 1 },
+        { id: "retention_rate", day: 7 },
+        { id: "e_roas_forecast", day: 365 },
+        { id: "e_profit_forecast", day: 730 }
+      ]
+    }
+  },
+
+  OVERALL: {
+    SHEET_NAME: 'Overall',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getOverallTargetEROAS,
+    GROWTH_THRESHOLDS: getOverallGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Overall',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: [],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "APP" }
       ],
       MEASURES: [
