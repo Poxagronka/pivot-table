@@ -1,7 +1,7 @@
 /**
  * Comment Cache Management - Multi Project Support
  * Handles saving and loading comments from a hidden sheet
- * Includes automatic caching functionality at 2AM daily
+ * Includes automatic caching functionality at 3AM daily
  * NOW SUPPORTS CAMPAIGN-LEVEL AND SOURCE_APP-LEVEL COMMENTS
  */
 class CommentCache {

@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: всегда сортирует листы после обновления
+ * Menu Functions - ОБНОВЛЕНО: описания ежедневных триггеров (кеширование 3 утра, обновление 5 утра)
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
@@ -75,7 +75,6 @@ function updateSelectedProjectsToCurrent() {
       }
     });
     
-    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
@@ -133,7 +132,7 @@ function syncTriggersWithSettings() {
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(3).everyDays(1).create();
       console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
@@ -141,7 +140,7 @@ function syncTriggersWithSettings() {
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
-      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
+      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
       console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
       ScriptApp.deleteTrigger(updateTrigger);
@@ -302,7 +301,6 @@ function updateAllProjectsToCurrent() {
       }
     });
     
-    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
@@ -631,8 +629,8 @@ function showSettingsStatus() {
     });
     
     message += '\n🤖 Automation:\n';
-    message += `• Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
-    message += `• Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
+    message += `• Auto Cache: ${settings.automation.autoCache ? 'Enabled (daily 3 AM CET)' : 'Disabled'}\n`;
+    message += `• Auto Update: ${settings.automation.autoUpdate ? 'Enabled (daily 5 AM CET)' : 'Disabled'}\n`;
     
     message += '\n📊 Growth Thresholds: Configured for all projects';
     
@@ -890,7 +888,6 @@ function runSelectedProjects(projects, days) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReport(projects[i].toUpperCase(), days);
   }
-  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
   sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -907,7 +904,6 @@ function runSelectedProjectsDateRange(projects, start, end) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
   }
-  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
   sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }

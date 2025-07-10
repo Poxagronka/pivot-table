@@ -1,5 +1,5 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы после автообновления
+ * Auto Functions - ОБНОВЛЕНО: ежедневные триггеры (кеширование 3 утра, обновление 5 утра)
  */
 
 function autoCacheAllProjects() {
@@ -47,7 +47,6 @@ function autoUpdateAllProjects() {
       }
     });
     
-    // ИЗМЕНЕНО: всегда сортируем листы после автообновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         sortProjectSheets();
@@ -208,7 +207,7 @@ function showAutomationStatus() {
   
   msg += '💾 AUTO CACHE:\n';
   if (cacheEnabled && cacheTrigger) {
-    msg += '✅ Enabled - Runs daily at 2:00 AM\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
+    msg += '✅ Enabled - Runs daily at 3:00 AM CET\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
   } else if (cacheEnabled && !cacheTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
   } else {
@@ -217,7 +216,7 @@ function showAutomationStatus() {
   
   msg += '\n🔄 AUTO UPDATE:\n';
   if (updateEnabled && updateTrigger) {
-    msg += '✅ Enabled - Runs every Tuesday at 5:00 AM\n• Updates all project data\n• Includes previous complete week\n• Preserves all comments\n• Sorts project sheets after update\n';
+    msg += '✅ Enabled - Runs daily at 5:00 AM CET\n• Updates all project data\n• Includes previous complete week\n• Preserves all comments\n• Sorts project sheets after update\n';
   } else if (updateEnabled && !updateTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
   } else {
@@ -237,7 +236,7 @@ function enableAutoCache() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(3).everyDays(1).create();
     saveSettingToSheet('automation.autoCache', true);
     
     console.log('Auto cache enabled and saved to Settings sheet');
@@ -268,7 +267,7 @@ function enableAutoUpdate() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
+    ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
     saveSettingToSheet('automation.autoUpdate', true);
     
     console.log('Auto update enabled and saved to Settings sheet');
@@ -302,7 +301,7 @@ function syncTriggersWithSettings() {
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(3).everyDays(1).create();
       console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
@@ -310,7 +309,7 @@ function syncTriggersWithSettings() {
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
-      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(5).create();
+      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
       console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
       ScriptApp.deleteTrigger(updateTrigger);
