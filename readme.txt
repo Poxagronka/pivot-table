@@ -140,8 +140,8 @@ PROJECTS = {
 ### 6. Automation System
 
 **Time-based triggers**:
-- `autoCacheAllProjects`: Daily at 2AM
-- `autoUpdateAllProjects`: Mondays at 5AM
+- `autoCacheAllProjects`: Daily at 3:00 AM CET
+- `autoUpdateAllProjects`: Daily at 5:00 AM CET
 
 **Auto-cache process**:
 1. ~~Expand groups silently~~ **OPTIMIZED** - No longer needed
@@ -334,3 +334,4 @@ PROJECTS = {
 4. **Improved GEO Detection** - Project-specific geo extraction logic
 5. **Better Error Handling** - More robust API and sheet operations
 6. **Menu Enhancements** - Smart wizards and GitHub integration
+7. **Daily Automation** - Updated triggers to run daily (cache 3AM, update 5AM CET)
