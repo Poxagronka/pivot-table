@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ОБНОВЛЕНО: добавлена updateProjectData
+ * Analytics Functions - ОБНОВЛЕНО: добавлена updateProjectData + логика предыдущей недели
  */
 
 function calculateWoWMetrics(appData) {
@@ -287,7 +287,7 @@ function generateReport(days) {
       return;
     }
     
-    const processed = processApiData(raw);
+    const processed = processApiData(raw); // Автоматически учитывает день недели
     if (Object.keys(processed).length === 0) {
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
@@ -322,7 +322,7 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    const processed = processApiData(raw);
+    const processed = processApiData(raw, true); // Для кастомного диапазона всегда включаем все данные
     if (Object.keys(processed).length === 0) {
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
       return;
@@ -399,7 +399,7 @@ function updateProjectData(projectName) {
     return;
   }
   
-  const processed = processProjectApiData(projectName, raw);
+  const processed = processProjectApiData(projectName, raw); // Автоматически учитывает день недели
   
   if (Object.keys(processed).length === 0) {
     console.log(`${projectName}: No valid data to process`);
@@ -471,7 +471,7 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    const processed = processApiData(raw);
+    const processed = processApiData(raw); // Автоматически учитывает день недели
     if (Object.keys(processed).length === 0) {
       ui.alert('No valid data to process.');
       return;

@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: описания ежедневных триггеров (кеширование 3 утра, обновление 5 утра)
+ * Menu Functions - ОБНОВЛЕНО: всегда сортирует листы + исправленная информация об автообновлении
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
@@ -12,16 +12,16 @@ function onOpen() {
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
       .addItem('🔄 Update All to Current', 'updateAllProjectsToCurrent')
       .addItem('🎯 Update Selected Projects', 'updateSelectedProjectsToCurrent')
-      .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
       .addSeparator()
       .addItem('⚙️ Open Settings Sheet', 'openSettingsSheet')
       .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
-      .addItem('✅ Validate Settings', 'validateSettingsDialog')
-      .addSeparator()
       .addItem('📊 System Status', 'showQuickStatus')
-      .addItem('🔍 Quick API Check', 'quickAPICheckAll')
-      .addItem('🐛 Debug Tools...', 'debugWizard')
       .addSeparator()
+      .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
+      .addItem('🔍 Quick API Check', 'quickAPICheckAll')
+      .addItem('🗑️ Clear Data...', 'clearDataWizard')
+      .addSeparator()
+      .addItem('🐛 Debug Single Project', 'debugSingleProject')
       .addItem('🐙 GitHub Repository', 'openGitHubRepo')
       .addToUi();
 }
@@ -75,6 +75,7 @@ function updateSelectedProjectsToCurrent() {
       }
     });
     
+    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
@@ -108,7 +109,6 @@ function refreshSettingsDialog() {
     message += `🔐 Bearer Token: ${settings.bearerToken ? 'Found' : 'Not Set'}\n`;
     message += `💾 Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
     message += `🔄 Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
-    message += `🎯 Target eROAS: ${Object.keys(settings.targetEROAS).length} projects configured\n`;
     
     try {
       syncTriggersWithSettings();
@@ -123,6 +123,25 @@ function refreshSettingsDialog() {
   }
 }
 
+function debugSingleProject() {
+  var p = showChoice('Select Project to Debug:', MENU_PROJECTS);
+  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
+}
+
+function clearDataWizard() {
+  var choice = showChoice('🗑️ Clear Data', ['Clear All Projects', 'Clear Single Project', 'View What Will Be Cleared']);
+  if (!choice) return;
+  
+  if (choice === 1) {
+    clearAllProjectsData();
+  } else if (choice === 2) {
+    var p = showChoice('Select Project:', MENU_PROJECTS);
+    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
+  } else {
+    SpreadsheetApp.getUi().alert('Info', 'Clear Data will:\n\n✓ Remove all report data\n✓ Preserve saved comments\n✓ Keep your settings\n\nComments can be restored after clearing.', SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
 function syncTriggersWithSettings() {
   try {
     var settings = loadSettingsFromSheet();
@@ -132,7 +151,7 @@ function syncTriggersWithSettings() {
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(3).everyDays(1).create();
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
       console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
@@ -140,6 +159,7 @@ function syncTriggersWithSettings() {
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
+      // ИЗМЕНЕНО: создаем триггер на каждый день в 5:00 AM
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
       console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
@@ -196,7 +216,13 @@ function showQuickStatus() {
     message += '✅ All triggers synchronized\n\n';
   }
   
-  message += '💡 TIP: Edit settings directly in Settings sheet';
+  // ОБНОВЛЕНО: корректная информация об автообновлении
+  message += '📅 AUTOMATION SCHEDULE:\n';
+  message += '• Auto Cache: Daily at 2:00 AM\n';
+  message += '• Auto Update: Daily at 5:00 AM\n';
+  message += '• Previous week data: Included starting from Tuesday\n\n';
+  
+  message += '💡 TIP: Use Settings sheet to configure all options';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
 }
@@ -208,22 +234,6 @@ function refreshMenu() {
     ui.alert('Menu Refreshed', 'Menu has been refreshed with current settings.', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Error refreshing menu: ' + e.toString(), ui.ButtonSet.OK);
-  }
-}
-
-function validateSettingsDialog() {
-  var ui = SpreadsheetApp.getUi();
-  var validation = validateSettings();
-  
-  if (validation.valid) {
-    ui.alert('✅ Settings Valid', 'All settings are configured correctly!', ui.ButtonSet.OK);
-  } else {
-    var message = '❌ Settings Issues Found:\n\n';
-    validation.issues.forEach(function(issue) {
-      message += '• ' + issue + '\n';
-    });
-    message += '\nOpen Settings sheet to fix these issues.';
-    ui.alert('Settings Validation', message, ui.ButtonSet.OK);
   }
 }
 
@@ -301,6 +311,7 @@ function updateAllProjectsToCurrent() {
       }
     });
     
+    // ИЗМЕНЕНО: всегда сортируем листы после обновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
@@ -629,8 +640,8 @@ function showSettingsStatus() {
     });
     
     message += '\n🤖 Automation:\n';
-    message += `• Auto Cache: ${settings.automation.autoCache ? 'Enabled (daily 3 AM CET)' : 'Disabled'}\n`;
-    message += `• Auto Update: ${settings.automation.autoUpdate ? 'Enabled (daily 5 AM CET)' : 'Disabled'}\n`;
+    message += `• Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
+    message += `• Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
     
     message += '\n📊 Growth Thresholds: Configured for all projects';
     
@@ -888,6 +899,7 @@ function runSelectedProjects(projects, days) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReport(projects[i].toUpperCase(), days);
   }
+  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
   sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -904,6 +916,7 @@ function runSelectedProjectsDateRange(projects, start, end) {
   for (var i = 0; i < projects.length; i++) {
     generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
   }
+  // ИЗМЕНЕНО: всегда сортируем листы после генерации отчетов
   sortProjectSheets();
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }

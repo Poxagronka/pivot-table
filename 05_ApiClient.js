@@ -1,5 +1,6 @@
 /**
  * API Client - ОПТИМИЗИРОВАНО для TRICKY: кеширование bundle ID и оптимизация Apps Database
+ * ОБНОВЛЕНО: данные за предыдущую неделю добавляются только после вторника
  */
 
 // Глобальный кеш для bundle ID extractions
@@ -310,14 +311,26 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   return bundleId;
 }
 
-function processApiData(rawData) {
+// ОБНОВЛЕНО: автоматическое определение включения предыдущей недели по дню недели
+function processApiData(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
 
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+  
+  // НОВОЕ: определяем начало предыдущей недели
+  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
+
+  // АВТОМАТИЧЕСКОЕ ОПРЕДЕЛЕНИЕ: включаем предыдущую неделю только со вторника
+  const dayOfWeek = today.getDay(); // 0 = воскресенье, 1 = понедельник, 2 = вторник, etc.
+  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0); // Вторник и позже, плюс воскресенье
 
   console.log(`Processing ${stats.length} records...`);
+  console.log(`Current week start: ${currentWeekStart}`);
+  console.log(`Last week start: ${lastWeekStart}`);
+  console.log(`Today: ${today.toDateString()}, Day of week: ${dayOfWeek}`);
+  console.log(`Include last week: ${shouldIncludeLastWeek}`);
 
   // ОПТИМИЗАЦИЯ: Для TRICKY загружаем Apps DB один раз
   let appsDbCache = null;
@@ -334,8 +347,13 @@ function processApiData(rawData) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
 
+      // ОБНОВЛЕНО: новая логика фильтрации недель
       if (weekKey >= currentWeekStart) {
-        return;
+        return; // Исключаем текущую неделю
+      }
+      
+      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) {
+        return; // Исключаем предыдущую неделю в понедельник
       }
 
       let campaign, app, metricsStartIndex;
@@ -574,12 +592,13 @@ function processApiData(rawData) {
   return appData;
 }
 
-function processProjectApiData(projectName, rawData) {
+// ОБНОВЛЕНО: автоматическое определение включения предыдущей недели
+function processProjectApiData(projectName, rawData, includeLastWeek = null) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   
   try {
-    const result = processApiData(rawData);
+    const result = processApiData(rawData, includeLastWeek);
     return result;
   } finally {
     setCurrentProject(originalProject);
