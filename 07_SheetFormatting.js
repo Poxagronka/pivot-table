@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: добавлена поддержка Overall + vertical align middle
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: убраны цвет и подчеркивание у гиперссылок TRICKY
  */
 
 function createEnhancedPivotTable(appData) {
@@ -177,7 +177,6 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
     
     formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
     
-    // ДОБАВЛЕНО: Получаем данные для гиперссылки из Apps Database
     let sourceAppDisplayName = sourceApp.sourceAppName;
     if (CURRENT_PROJECT === 'TRICKY') {
       try {
@@ -186,6 +185,7 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
         const appInfo = cache[sourceApp.sourceAppId];
         if (appInfo && appInfo.linkApp) {
           sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+          formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
         }
       } catch (e) {
         console.log('Error getting store link for source app:', e);
@@ -267,7 +267,6 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
   const columnWidths = getProjectColumnWidths();
   columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
-  // Устанавливаем vertical align middle для всей таблицы
   if (numRows > 1) {
     const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
     allDataRange.setVerticalAlignment('middle');
@@ -279,12 +278,13 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     growthStatusRange.setWrap(true).setHorizontalAlignment('left');
   }
 
-  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [];
+  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [];
   formatData.forEach(item => {
     if (item.type === 'APP') appRows.push(item.row);
     if (item.type === 'WEEK') weekRows.push(item.row);
     if (item.type === 'SOURCE_APP') sourceAppRows.push(item.row);
     if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
+    if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
   });
 
   appRows.forEach(r =>
@@ -312,6 +312,14 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
          .setBackground(COLORS.CAMPAIGN_ROW.background)
          .setFontSize(9)
   );
+
+  // ДОБАВЛЕНО: Убираем цвет и подчеркивание у гиперссылок
+  if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
+    hyperlinkRows.forEach(r => {
+      const linkCell = sheet.getRange(r, 2);
+      linkCell.setFontColor('#000000').setFontLine('none');
+    });
+  }
 
   if (numRows > 1) {
     sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
