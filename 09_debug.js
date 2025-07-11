@@ -1,5 +1,5 @@
 /**
- * Debug Functions - ОБНОВЛЕНО: добавлена поддержка проекта Overall
+ * Debug Functions - ОБНОВЛЕНО: поддержка унифицированных метрик
  */
 
 function debugReportGeneration() {
@@ -93,7 +93,7 @@ function debugConfiguration(debugSheet, projectName) {
     logDebug(debugSheet, 'Sheet ID: ' + config.SHEET_ID, 'INFO');
     logDebug(debugSheet, 'Sheet Name: ' + config.SHEET_NAME, 'INFO');
     logDebug(debugSheet, 'API URL: ' + config.API_URL, 'INFO');
-    logDebug(debugSheet, 'Target eROAS: ' + config.TARGET_EROAS + '%', 'INFO');
+    logDebug(debugSheet, 'Target eROAS D730: ' + config.TARGET_EROAS + '%', 'INFO');
     
     if (config.BEARER_TOKEN && config.BEARER_TOKEN.length > 50) {
       logDebug(debugSheet, 'Bearer Token: Найден (длина: ' + config.BEARER_TOKEN.length + ')', 'SUCCESS');
@@ -111,6 +111,13 @@ function debugConfiguration(debugSheet, projectName) {
       logDebug(debugSheet, '- Attribution Network HID: ALL NETWORKS (пустой массив)', 'INFO');
     }
     
+    // ОБНОВЛЕНО: унифицированные метрики
+    logDebug(debugSheet, 'УНИФИЦИРОВАННЫЕ МЕТРИКИ:', 'INFO');
+    logDebug(debugSheet, '✅ CPI, Installs, IPM, Spend', 'SUCCESS');
+    logDebug(debugSheet, '✅ RR D-1, ROAS D-1, RR D-7, ROAS D-7', 'SUCCESS');
+    logDebug(debugSheet, '✅ eARPU D365, eROAS D365, eROAS D730, eProfit D730', 'SUCCESS');
+    logDebug(debugSheet, '✅ Фильтрация: spend > 0 на уровне API (havingFilters)', 'SUCCESS');
+    
     // GROUP_BY analysis
     logDebug(debugSheet, 'GROUP_BY структура:', 'INFO');
     apiConfig.GROUP_BY.forEach((group, index) => {
@@ -124,7 +131,6 @@ function debugConfiguration(debugSheet, projectName) {
     } else if (projectName === 'TRICKY') {
       logDebug(debugSheet, '✅ TRICKY: Использует локальную группировку через Apps Database', 'SUCCESS');
       
-      // Проверка Apps Database
       try {
         const appsDb = new AppsDatabase('TRICKY');
         const cache = appsDb.loadFromCache();
@@ -158,7 +164,6 @@ function debugAPIRequest(debugSheet, projectName) {
       { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
     ];
     
-    // Для OVERALL не добавляем фильтр по ATTRIBUTION_NETWORK_HID если он пустой
     if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
       filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
     }
@@ -196,7 +201,7 @@ function debugAPIRequest(debugSheet, projectName) {
         filters: filters,
         groupBy: apiConfig.GROUP_BY,
         measures: apiConfig.MEASURES,
-        havingFilters: projectName === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
+        havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
         anonymizationMode: "OFF",
         topFilter: null,
         revenuePredictionVersion: "",
@@ -206,6 +211,8 @@ function debugAPIRequest(debugSheet, projectName) {
     };
     
     logDebug(debugSheet, 'Payload создан', 'SUCCESS', 'Размер: ' + JSON.stringify(payload).length + ' символов');
+    logDebug(debugSheet, '✅ УНИФИЦИРОВАННЫЕ МЕТРИКИ: ' + apiConfig.MEASURES.length + ' метрик', 'SUCCESS');
+    logDebug(debugSheet, '✅ ФИЛЬТРАЦИЯ: spend > 0 включена в havingFilters', 'SUCCESS');
     
     const options = {
       method: 'post',
@@ -282,13 +289,11 @@ function debugDataStructure(debugSheet, apiResponse) {
     if (Array.isArray(firstRecord)) {
       logDebug(debugSheet, 'Первая запись - массив с ' + firstRecord.length + ' элементами', 'INFO');
       
-      // Analyze each element in the first record
       firstRecord.forEach((item, index) => {
         if (item && typeof item === 'object') {
           const typename = item.__typename || 'неизвестный тип';
           let description = `Элемент [${index}]: ${typename}`;
           
-          // Special analysis for different types
           if (typename === 'StatsValue') {
             description += ` (value: ${item.value})`;
           } else if (typename === 'UaCampaign') {
@@ -297,21 +302,24 @@ function debugDataStructure(debugSheet, apiResponse) {
             description += ` (name: ${item.name}, platform: ${item.platform})`;
           } else if (typename === 'ForecastStatsItem') {
             description += ` (value: ${item.value})`;
+          } else if (typename === 'RetentionStatsValue') {
+            description += ` (value: ${item.value}, cohortSize: ${item.cohortSize})`;
           }
           
           logDebug(debugSheet, description, 'INFO');
         }
       });
       
-      // Проверка структуры данных для OVERALL и других проектов
-      logDebug(debugSheet, 'Проверка структуры данных:', 'SECTION');
+      // ОБНОВЛЕНО: проверка унифицированной структуры
+      logDebug(debugSheet, 'Проверка УНИФИЦИРОВАННОЙ структуры данных:', 'SECTION');
       if (CURRENT_PROJECT === 'OVERALL') {
-        if (firstRecord.length >= 2) {
+        if (firstRecord.length >= 14) { // date + app + 12 metrics
           const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
           const hasApp = firstRecord[1] && firstRecord[1].__typename === 'AppInfo';
           
           if (hasDate && hasApp) {
-            logDebug(debugSheet, '✅ OVERALL: Корректная структура [date, app, metrics...] - без кампаний', 'SUCCESS');
+            logDebug(debugSheet, '✅ OVERALL: Корректная структура [date, app, 12 metrics] - без кампаний', 'SUCCESS');
+            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 14)`, firstRecord.length === 14 ? 'SUCCESS' : 'WARNING');
           } else {
             logDebug(debugSheet, '❌ OVERALL: Неожиданная структура данных!', 'ERROR');
             logDebug(debugSheet, `- [0] date: ${firstRecord[0]?.__typename || 'отсутствует'}`, 'INFO');
@@ -321,13 +329,14 @@ function debugDataStructure(debugSheet, apiResponse) {
           logDebug(debugSheet, '❌ OVERALL: Недостаточно элементов в записи!', 'ERROR');
         }
       } else {
-        if (firstRecord.length >= 3) {
+        if (firstRecord.length >= 15) { // date + campaign + app + 12 metrics
           const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
           const hasCampaign = firstRecord[1] && firstRecord[1].__typename === 'UaCampaign';
           const hasApp = firstRecord[2] && firstRecord[2].__typename === 'AppInfo';
           
           if (hasDate && hasCampaign && hasApp) {
-            logDebug(debugSheet, '✅ Корректная структура [date, campaign, app, metrics...]', 'SUCCESS');
+            logDebug(debugSheet, '✅ Корректная структура [date, campaign, app, 12 metrics]', 'SUCCESS');
+            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 15)`, firstRecord.length === 15 ? 'SUCCESS' : 'WARNING');
             
             if (CURRENT_PROJECT === 'TRICKY') {
               logDebug(debugSheet, '✅ TRICKY: Будет группироваться локально через Apps Database', 'SUCCESS');
@@ -415,15 +424,20 @@ function debugDataProcessing(debugSheet, apiResponse) {
           return;
         }
         
-        // Check spend > 0
-        const spendIndex = CURRENT_PROJECT === 'OVERALL' ? 
-          metricsStartIndex + 2 : 
-          (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' ? 
-            metricsStartIndex + 2 : metricsStartIndex + 3);
+        // ОБНОВЛЕНО: проверяем унифицированные метрики
+        if (row.length < metricsStartIndex + 12) {
+          logDebug(debugSheet, `Запись ${index}: недостаточно метрик (${row.length - metricsStartIndex}/12)`, 'WARNING');
+          errorCount++;
+          return;
+        }
         
+        const spendIndex = metricsStartIndex + 3; // spend всегда на 4-й позиции среди метрик
         const spendValue = parseFloat(row[spendIndex]?.value) || 0;
+        
+        // Spend > 0 фильтрация теперь на уровне API, но проверяем для отладки
         if (spendValue <= 0) {
-          return; // Skip zero spend campaigns
+          logDebug(debugSheet, `Запись ${index}: spend = ${spendValue} (должно быть отфильтровано API)`, 'WARNING');
+          return;
         }
         
         const appKey = app.id;
@@ -447,7 +461,6 @@ function debugDataProcessing(debugSheet, apiResponse) {
         
         totalProcessed++;
         
-        // Для TRICKY - проверяем извлечение bundle ID
         if (CURRENT_PROJECT === 'TRICKY' && campaign) {
           let campaignName = 'Unknown';
           if (campaign.campaignName) {
@@ -475,7 +488,7 @@ function debugDataProcessing(debugSheet, apiResponse) {
           }
           
           const shortCampaignName = campaignName.length > 50 ? campaignName.substring(0, 50) + '...' : campaignName;
-          let recordInfo = `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}`;
+          let recordInfo = `Запись ${index}: ${app.name}, ${shortCampaignName}, ${date}, spend=${spendValue}`;
           
           if (CURRENT_PROJECT === 'TRICKY' && campaign) {
             const bundleId = extractBundleIdFromCampaign(campaignName);
@@ -500,6 +513,9 @@ function debugDataProcessing(debugSheet, apiResponse) {
     if (CURRENT_PROJECT === 'TRICKY') {
       logDebug(debugSheet, '- Bundle ID найдено: ' + bundleIdCount + ' из ' + totalProcessed, 'INFO');
     }
+    
+    logDebug(debugSheet, '✅ УНИФИЦИРОВАННАЯ ОБРАБОТКА: Все метрики обрабатываются одинаково', 'SUCCESS');
+    logDebug(debugSheet, '✅ API ФИЛЬТРАЦИЯ: spend > 0 фильтруется на уровне API', 'SUCCESS');
     
     if (Object.keys(processedData).length === 0) {
       logDebug(debugSheet, 'ПРОБЛЕМА: После обработки не осталось данных!', 'ERROR');
@@ -534,6 +550,7 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     const uniqueDates = new Set();
     const uniqueBundleIds = new Set();
     const campaignPatterns = new Set();
+    let spendFilteredCount = 0;
     
     stats.forEach(row => {
       if (Array.isArray(row)) {
@@ -551,6 +568,12 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         if (date) uniqueDates.add(date);
         if (app?.name) uniqueApps.add(app.name);
         
+        // Проверяем фильтрацию spend > 0
+        const metricsStartIndex = projectName === 'OVERALL' ? 2 : 3;
+        const spendIndex = metricsStartIndex + 3;
+        const spendValue = parseFloat(row[spendIndex]?.value) || 0;
+        if (spendValue > 0) spendFilteredCount++;
+        
         let campaignName = null;
         if (projectName !== 'OVERALL' && campaign) {
           if (campaign.campaignName) {
@@ -563,7 +586,6 @@ function debugFilters(debugSheet, apiResponse, projectName) {
         if (campaignName) {
           uniqueCampaigns.add(campaignName);
           
-          // Для TRICKY - проверяем bundle ID
           if (projectName === 'TRICKY') {
             const bundleId = extractBundleIdFromCampaign(campaignName);
             if (bundleId) {
@@ -599,6 +621,7 @@ function debugFilters(debugSheet, apiResponse, projectName) {
     }
     
     logDebug(debugSheet, '- Уникальных дат: ' + uniqueDates.size, 'INFO');
+    logDebug(debugSheet, '✅ SPEND ФИЛЬТРАЦИЯ: ' + spendFilteredCount + '/' + stats.length + ' записей прошли фильтр spend > 0', 'SUCCESS');
     
     if (projectName === 'TRICKY') {
       logDebug(debugSheet, '- Уникальных Bundle ID: ' + uniqueBundleIds.size, 'INFO');
@@ -621,7 +644,6 @@ function debugFilters(debugSheet, apiResponse, projectName) {
       logDebug(debugSheet, `Диапазон дат: ${sortedDates[0]} - ${sortedDates[sortedDates.length - 1]}`, 'INFO');
     }
     
-    // Project-specific analysis
     if (projectName === 'OVERALL') {
       logDebug(debugSheet, `${projectName}: Агрегированные данные по приложениям`, 'INFO');
       logDebug(debugSheet, `Network HID: ${apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS'}`, 'INFO');
@@ -684,20 +706,26 @@ function quickAPICheck() {
       const count = raw.data.analytics.richStats.stats.length;
       let message = `API работает: получено ${count} записей за последние 7 дней.`;
       
-      // Special check for OVERALL and TRICKY projects
       if (projectName === 'OVERALL') {
         const firstRecord = raw.data.analytics.richStats.stats[0];
-        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 2) {
+        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 14) {
           message += `\n✅ Структура данных корректна для app-level отчета.`;
+          message += `\n✅ Унифицированные метрики: ${firstRecord.length - 2} штук.`;
         } else {
           message += `\n⚠️ Структура данных может быть некорректной.`;
         }
       } else if (projectName === 'TRICKY') {
         const firstRecord = raw.data.analytics.richStats.stats[0];
-        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 3) {
+        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 15) {
           message += `\n✅ Структура данных корректна для локальной группировки.`;
+          message += `\n✅ Унифицированные метрики: ${firstRecord.length - 3} штук.`;
         } else {
           message += `\n⚠️ Структура данных может быть некорректной.`;
+        }
+      } else {
+        const firstRecord = raw.data.analytics.richStats.stats[0];
+        if (firstRecord && Array.isArray(firstRecord) && firstRecord.length >= 15) {
+          message += `\n✅ Унифицированные метрики: ${firstRecord.length - 3} штук.`;
         }
       }
       

@@ -1,14 +1,11 @@
 /**
- * Settings Sheet Management - ОБНОВЛЕНО: описания ежедневных триггеров (кеширование 3 утра, обновление 5 утра)
+ * Settings Sheet Management - ОБНОВЛЕНО: таргеты eROAS D730 вместо D365
  */
 
 var SETTINGS_SHEET_NAME = 'Settings';
 var SETTINGS_CACHE = null;
 var SETTINGS_CACHE_TIME = null;
 
-/**
- * Получить или создать лист настроек
- */
 function getOrCreateSettingsSheet() {
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
   let sheet = spreadsheet.getSheetByName(SETTINGS_SHEET_NAME);
@@ -22,9 +19,6 @@ function getOrCreateSettingsSheet() {
   return sheet;
 }
 
-/**
- * Создать красивый layout для настроек
- */
 function createSettingsLayout(sheet) {
   sheet.clear();
   
@@ -39,13 +33,15 @@ function createSettingsLayout(sheet) {
   sheet.getRange('B4:F4').merge();
   sheet.getRange('A4:A4').setBackground('#e8f0fe');
   
-  // Target eROAS
-  sheet.getRange('A6').setValue('🎯 TARGET eROAS (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold');
+  // Target eROAS D730
+  sheet.getRange('A6').setValue('🎯 TARGET eROAS D730 (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold');
   const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
   projects.forEach((proj, i) => {
     const row = 7 + i;
     sheet.getRange(`A${row}`).setValue(proj + ':');
-    sheet.getRange(`B${row}`).setValue(proj === 'TRICKY' ? 160 : 140);
+    // ОБНОВЛЕНО: новые дефолтные значения для eROAS D730
+    const defaultValue = proj === 'TRICKY' ? 250 : 150;
+    sheet.getRange(`B${row}`).setValue(defaultValue);
     sheet.getRange(`A${row}:A${row}`).setBackground('#e8f5e8');
   });
   
@@ -70,11 +66,11 @@ function createSettingsLayout(sheet) {
   projects.forEach((proj, i) => {
     const row = 22 + i;
     sheet.getRange(`A${row}`).setValue(proj + ':');
-    sheet.getRange(`B${row}`).setValue('spend:10,profit:5'); // Healthy Growth
-    sheet.getRange(`C${row}`).setValue('spendDrop:-5,profitGain:8'); // Efficiency Improvement
-    sheet.getRange(`D${row}`).setValue('profitDrop:-8'); // Inefficient Growth
-    sheet.getRange(`E${row}`).setValue('spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10'); // Scaling Down
-    sheet.getRange(`F${row}`).setValue('modSpend:3,modProfit:2,stable:2'); // Other
+    sheet.getRange(`B${row}`).setValue('spend:10,profit:5');
+    sheet.getRange(`C${row}`).setValue('spendDrop:-5,profitGain:8');
+    sheet.getRange(`D${row}`).setValue('profitDrop:-8');
+    sheet.getRange(`E${row}`).setValue('spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10');
+    sheet.getRange(`F${row}`).setValue('modSpend:3,modProfit:2,stable:2');
     sheet.getRange(`A${row}:A${row}`).setBackground('#fce4ec');
   });
   
@@ -92,14 +88,15 @@ function createSettingsLayout(sheet) {
   );
   sheet.getRange('A35:F37').setBackground('#f5f5f5').setWrap(true);
   
-  // Target eROAS Instructions
-  sheet.getRange('A39').setValue('🎯 Target eROAS:');
+  // Target eROAS Instructions - ОБНОВЛЕНО для D730
+  sheet.getRange('A39').setValue('🎯 Target eROAS D730:');
   sheet.getRange('A39').setFontWeight('bold');
   sheet.getRange('A40:F42').merge();
   sheet.getRange('A40').setValue(
-    '• Целевые значения eROAS для цветового кодирования в отчетах\n' +
+    '• Целевые значения eROAS D730 для цветового кодирования в отчетах\n' +
     '• Зеленый: ≥ вашего значения, Желтый: 120-ваше значение, Красный: <120%\n' +
-    '• Рекомендуемые значения: Tricky=160%, остальные=140%'
+    '• Динамические таргеты: TRICKY=250%, Business apps=140%, остальные=150%\n' +
+    '• Настройки влияют на условное форматирование столбца eROAS D730'
   );
   sheet.getRange('A40:F42').setBackground('#f5f5f5').setWrap(true);
   
@@ -140,11 +137,23 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A57').setFontWeight('bold');
   sheet.getRange('A58:F60').merge();
   sheet.getRange('A58').setValue(
-    '• Auto Cache: TRUE = автосохранение комментариев в 3:00 каждый день по CET\n' +
+    '• Auto Cache: TRUE = автосохранение комментариев в 2:00 каждый день по CET\n' +
     '• Auto Update: TRUE = автообновление всех проектов в 5:00 каждый день по CET\n' +
     '• После изменения используйте "🔄 Refresh Settings" в меню для синхронизации'
   );
   sheet.getRange('A58:F60').setBackground('#f5f5f5').setWrap(true);
+  
+  // Unified Metrics Info - НОВОЕ
+  sheet.getRange('A62').setValue('📊 Unified Metrics (New):');
+  sheet.getRange('A62').setFontWeight('bold');
+  sheet.getRange('A63:F65').merge();
+  sheet.getRange('A63').setValue(
+    '• Все проекты теперь используют унифицированный набор метрик\n' +
+    '• Добавлены: IPM, RR D-1, RR D-7, eROAS D730\n' +
+    '• Цветовое кодирование переведено на eROAS D730 вместо D365\n' +
+    '• Фильтрация: spend > 0 применяется на уровне API (havingFilters)'
+  );
+  sheet.getRange('A63:F65').setBackground('#f5f5f5').setWrap(true);
   
   // Настройка ширины колонок
   sheet.setColumnWidth(1, 120);
@@ -158,13 +167,9 @@ function createSettingsLayout(sheet) {
   sheet.getRange('B17:B18').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['TRUE', 'FALSE']).build());
 }
 
-/**
- * Загрузить настройки из листа (с кешированием)
- */
 function loadSettingsFromSheet() {
   const now = new Date().getTime();
   
-  // Кеш на 30 секунд
   if (SETTINGS_CACHE && SETTINGS_CACHE_TIME && (now - SETTINGS_CACHE_TIME) < 30000) {
     return SETTINGS_CACHE;
   }
@@ -181,7 +186,6 @@ function loadSettingsFromSheet() {
   
   console.log('Loading settings from sheet, total rows:', data.length);
   
-  // Поиск настроек в данных
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
     const label = row[0] ? row[0].toString().trim() : '';
@@ -204,7 +208,7 @@ function loadSettingsFromSheet() {
       console.log('Auto update setting:', settings.automation.autoUpdate);
     }
     
-    // Target eROAS - проверяем что мы в правильной секции (строки 7-14)
+    // Target eROAS D730 - проверяем что мы в правильной секции (строки 7-14)
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     projects.forEach(proj => {
       if (label === `${proj}:` && i >= 6 && i <= 15) { // eROAS section
@@ -212,9 +216,9 @@ function loadSettingsFromSheet() {
         if (!isNaN(numValue) && numValue >= 100 && numValue <= 500) {
           settings.targetEROAS[proj] = numValue;
         } else {
-          settings.targetEROAS[proj] = proj === 'TRICKY' ? 160 : 140;
+          settings.targetEROAS[proj] = proj === 'TRICKY' ? 250 : 150; // ОБНОВЛЕНО: новые дефолты
         }
-        console.log(`Target eROAS ${proj}:`, settings.targetEROAS[proj]);
+        console.log(`Target eROAS D730 ${proj}:`, settings.targetEROAS[proj]);
       }
     });
     
@@ -243,11 +247,7 @@ function loadSettingsFromSheet() {
   return settings;
 }
 
-/**
- * Парсинг расширенных growth thresholds из компактного формата
- */
 function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr, scalingStr, otherStr) {
-  // Парсим компактный формат: "key1:value1,key2:value2"
   function parseCompactFormat(str, defaults = {}) {
     const result = { ...defaults };
     if (!str) return result;
@@ -264,24 +264,14 @@ function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr
     return result;
   }
   
-  // Healthy Growth: "spend:10,profit:5"
   const healthy = parseCompactFormat(healthyStr, { spend: 10, profit: 5 });
-  
-  // Efficiency Improvement: "spendDrop:-5,profitGain:8"
   const efficiency = parseCompactFormat(efficiencyStr, { spendDrop: -5, profitGain: 8 });
-  
-  // Inefficient Growth: "profitDrop:-8"
   const inefficient = parseCompactFormat(inefficientStr, { profitDrop: -8 });
-  
-  // Scaling Down: "spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10"
   const scaling = parseCompactFormat(scalingStr, { 
     spendDrop: -15, efficientProfit: 0, moderateMin: -1, moderateMax: -10 
   });
-  
-  // Other: "modSpend:3,modProfit:2,stable:2"
   const other = parseCompactFormat(otherStr, { modSpend: 3, modProfit: 2, stable: 2 });
   
-  // Собираем в стандартный формат
   return {
     healthyGrowth: { 
       minSpendChange: healthy.spend || 10, 
@@ -321,21 +311,16 @@ function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr
   };
 }
 
-/**
- * Сохранить расширенные growth thresholds в компактном формате
- */
 function saveAdvancedGrowthThresholds(projectName, thresholds) {
   const sheet = getOrCreateSettingsSheet();
   const data = sheet.getDataRange().getValues();
   
-  // Конвертируем в компактный формат
   const healthyStr = `spend:${thresholds.healthyGrowth.minSpendChange},profit:${thresholds.healthyGrowth.minProfitChange}`;
   const efficiencyStr = `spendDrop:${thresholds.efficiencyImprovement.maxSpendDecline},profitGain:${thresholds.efficiencyImprovement.minProfitGrowth}`;
   const inefficientStr = `profitDrop:${thresholds.inefficientGrowth.maxProfitChange}`;
   const scalingStr = `spendDrop:${thresholds.scalingDown.maxSpendChange},efficientProfit:${thresholds.scalingDown.efficient.minProfitChange},moderateMin:${thresholds.scalingDown.moderate.minProfitDecline},moderateMax:${thresholds.scalingDown.moderate.maxProfitDecline}`;
   const otherStr = `modSpend:${thresholds.moderateGrowthSpend},modProfit:${thresholds.moderateGrowthProfit},stable:${thresholds.stable.maxAbsoluteChange}`;
   
-  // Находим строку проекта в секции growth thresholds
   for (let i = 0; i < data.length; i++) {
     const label = data[i][0] ? data[i][0].toString().trim() : '';
     
@@ -346,18 +331,13 @@ function saveAdvancedGrowthThresholds(projectName, thresholds) {
       sheet.getRange(i + 1, 5).setValue(scalingStr);
       sheet.getRange(i + 1, 6).setValue(otherStr);
       
-      // Очистить кеш
       clearSettingsCache();
       break;
     }
   }
 }
 
-/**
- * Заполнить дефолтные настройки
- */
 function populateDefaultSettings(sheet) {
-  // Перенести существующие настройки если есть
   try {
     const props = PropertiesService.getScriptProperties();
     const token = props.getProperty('BEARER_TOKEN');
@@ -365,26 +345,27 @@ function populateDefaultSettings(sheet) {
       sheet.getRange('B4').setValue(token);
     }
     
-    // Перенести target eROAS
+    // ОБНОВЛЕНО: новые дефолты для eROAS D730
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     projects.forEach((proj, i) => {
       const value = props.getProperty(`TARGET_EROAS_${proj}`);
       if (value) {
         sheet.getRange(`B${7 + i}`).setValue(parseInt(value));
+      } else {
+        // Установить новые дефолты
+        const defaultValue = proj === 'TRICKY' ? 250 : 150;
+        sheet.getRange(`B${7 + i}`).setValue(defaultValue);
       }
     });
     
-    // Перенести automation settings
     const autoCache = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
     const autoUpdate = props.getProperty('AUTO_UPDATE_ENABLED') === 'true';
     sheet.getRange('B17').setValue(autoCache ? 'TRUE' : 'FALSE');
     sheet.getRange('B18').setValue(autoUpdate ? 'TRUE' : 'FALSE');
     
-    // Заполнить дефолтные growth thresholds для всех проектов
     projects.forEach((proj, i) => {
       const row = 22 + i;
       
-      // Проверяем есть ли сохраненные настройки
       let existingThresholds = null;
       try {
         const savedThresholds = props.getProperty(`GROWTH_THRESHOLDS_${proj}`);
@@ -396,7 +377,6 @@ function populateDefaultSettings(sheet) {
       }
       
       if (existingThresholds) {
-        // Конвертируем существующие настройки в компактный формат
         const healthyStr = `spend:${existingThresholds.healthyGrowth?.minSpendChange || 10},profit:${existingThresholds.healthyGrowth?.minProfitChange || 5}`;
         const efficiencyStr = `spendDrop:${existingThresholds.efficiencyImprovement?.maxSpendDecline || -5},profitGain:${existingThresholds.efficiencyImprovement?.minProfitGrowth || 8}`;
         const inefficientStr = `profitDrop:${existingThresholds.inefficientGrowth?.maxProfitChange || -8}`;
@@ -409,7 +389,6 @@ function populateDefaultSettings(sheet) {
         sheet.getRange(`E${row}`).setValue(scalingStr);
         sheet.getRange(`F${row}`).setValue(otherStr);
       }
-      // Если существующих настроек нет, дефолтные значения уже установлены в createSettingsLayout
     });
     
   } catch (e) {
@@ -417,14 +396,10 @@ function populateDefaultSettings(sheet) {
   }
 }
 
-/**
- * Сохранить настройку в лист
- */
 function saveSettingToSheet(settingPath, value) {
   const sheet = getOrCreateSettingsSheet();
   const data = sheet.getDataRange().getValues();
   
-  // Инвалидировать кеш
   SETTINGS_CACHE = null;
   
   console.log(`Saving setting: ${settingPath} = ${value}`);
@@ -443,7 +418,7 @@ function saveSettingToSheet(settingPath, value) {
       const project = settingPath.split('.')[1];
       if (label === `${project}:` && i >= 6 && i <= 15) { // eROAS section
         sheet.getRange(i + 1, 2).setValue(value);
-        console.log(`Target eROAS ${project} saved at row ${i + 1}`);
+        console.log(`Target eROAS D730 ${project} saved at row ${i + 1}`);
         return;
       }
     }
@@ -464,9 +439,6 @@ function saveSettingToSheet(settingPath, value) {
   console.log(`Setting ${settingPath} not found in sheet`);
 }
 
-/**
- * Принудительно обновить настройки из листа (очистить кеш)
- */
 function refreshSettingsFromSheet() {
   clearSettingsCache();
   const settings = loadSettingsFromSheet();
@@ -474,9 +446,6 @@ function refreshSettingsFromSheet() {
   return settings;
 }
 
-/**
- * Обновить automation настройки прямо в листе (для UI)
- */
 function updateAutomationInSheet(autoCache, autoUpdate) {
   const sheet = getOrCreateSettingsSheet();
   const data = sheet.getDataRange().getValues();
@@ -493,23 +462,16 @@ function updateAutomationInSheet(autoCache, autoUpdate) {
     }
   }
   
-  // Очистить кеш чтобы обновления применились
   clearSettingsCache();
   
   console.log(`Automation updated: cache=${autoCache}, update=${autoUpdate}`);
 }
 
-/**
- * Очистить кеш настроек
- */
 function clearSettingsCache() {
   SETTINGS_CACHE = null;
   SETTINGS_CACHE_TIME = null;
 }
 
-/**
- * Открыть лист настроек
- */
 function openSettingsSheet() {
   const sheet = getOrCreateSettingsSheet();
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -517,9 +479,6 @@ function openSettingsSheet() {
   SpreadsheetApp.getUi().alert('Settings Sheet', 'Лист Settings открыт. Вы можете редактировать настройки прямо в таблице.\n\nИспользуйте "🔄 Refresh Settings" после изменений.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-/**
- * Валидация настроек
- */
 function validateSettings() {
   const settings = loadSettingsFromSheet();
   const issues = [];
@@ -531,11 +490,10 @@ function validateSettings() {
   Object.keys(settings.targetEROAS).forEach(proj => {
     const value = settings.targetEROAS[proj];
     if (value < 100 || value > 500) {
-      issues.push(`${proj}: Target eROAS вне допустимого диапазона (100-500%)`);
+      issues.push(`${proj}: Target eROAS D730 вне допустимого диапазона (100-500%)`);
     }
   });
   
-  // Валидация growth thresholds
   Object.keys(settings.growthThresholds).forEach(proj => {
     const thresholds = settings.growthThresholds[proj];
     if (!thresholds.healthyGrowth || !thresholds.scalingDown) {
@@ -549,9 +507,6 @@ function validateSettings() {
   };
 }
 
-/**
- * Создать пример настроек для конкретного проекта
- */
 function createExampleGrowthThresholds(projectName) {
   const sheet = getOrCreateSettingsSheet();
   const ui = SpreadsheetApp.getUi();
@@ -590,7 +545,6 @@ function createExampleGrowthThresholds(projectName) {
   else if (choice === ui.Button.CANCEL) selectedExample = examples.aggressive;
   else return;
   
-  // Применяем пример
   const data = sheet.getDataRange().getValues();
   for (let i = 0; i < data.length; i++) {
     const label = data[i][0] ? data[i][0].toString().trim() : '';
@@ -609,12 +563,8 @@ function createExampleGrowthThresholds(projectName) {
   }
 }
 
-/**
- * Экспорт настроек в JSON
- */
 function exportSettings() {
   const settings = loadSettingsFromSheet();
-  // Не экспортируем bearer token в целях безопасности
   const safeSettings = {
     targetEROAS: settings.targetEROAS,
     automation: settings.automation,

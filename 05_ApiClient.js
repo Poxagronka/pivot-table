@@ -1,9 +1,7 @@
 /**
- * API Client - ОПТИМИЗИРОВАНО для TRICKY: кеширование bundle ID и оптимизация Apps Database
- * ОБНОВЛЕНО: данные за предыдущую неделю добавляются только после вторника
+ * API Client - ОБНОВЛЕНО: унифицированные метрики + убрана проверка spend > 0
  */
 
-// Глобальный кеш для bundle ID extractions
 var BUNDLE_ID_CACHE = {};
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
@@ -56,7 +54,7 @@ function fetchCampaignData(dateRange) {
       filters: filters,
       groupBy: apiConfig.GROUP_BY,
       measures: apiConfig.MEASURES,
-      havingFilters: CURRENT_PROJECT === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
+      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
       anonymizationMode: "OFF",
       topFilter: null,
       revenuePredictionVersion: "",
@@ -146,7 +144,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
       filters: filters,
       groupBy: apiConfig.GROUP_BY,
       measures: apiConfig.MEASURES,
-      havingFilters: projectName === 'OVERALL' ? [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }] : [],
+      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
       anonymizationMode: "OFF",
       topFilter: null,
       revenuePredictionVersion: "",
@@ -257,11 +255,9 @@ function getGraphQLQuery() {
   }`;
 }
 
-// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: кеш для bundle ID и ленивая загрузка Apps DB
 function getOptimizedAppsDb() {
   const now = new Date().getTime();
   
-  // Кеш Apps DB на 10 минут
   if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 600000) {
     return APPS_DB_CACHE;
   }
@@ -276,7 +272,6 @@ function getOptimizedAppsDb() {
   return APPS_DB_CACHE;
 }
 
-// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: кешированное извлечение bundle ID
 function getCachedBundleId(campaignName) {
   if (BUNDLE_ID_CACHE[campaignName]) {
     return BUNDLE_ID_CACHE[campaignName];
@@ -287,7 +282,6 @@ function getCachedBundleId(campaignName) {
   return bundleId;
 }
 
-// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: быстрый lookup Apps Database
 function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   if (!bundleId || CURRENT_PROJECT !== 'TRICKY') {
     return bundleId || 'Unknown';
@@ -311,28 +305,22 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   return bundleId;
 }
 
-// ОБНОВЛЕНО: автоматическое определение включения предыдущей недели по дню недели
 function processApiData(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
 
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
-  
-  // НОВОЕ: определяем начало предыдущей недели
   const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
 
-  // АВТОМАТИЧЕСКОЕ ОПРЕДЕЛЕНИЕ: включаем предыдущую неделю только со вторника
-  const dayOfWeek = today.getDay(); // 0 = воскресенье, 1 = понедельник, 2 = вторник, etc.
-  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0); // Вторник и позже, плюс воскресенье
+  const dayOfWeek = today.getDay();
+  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
   console.log(`Processing ${stats.length} records...`);
   console.log(`Current week start: ${currentWeekStart}`);
   console.log(`Last week start: ${lastWeekStart}`);
-  console.log(`Today: ${today.toDateString()}, Day of week: ${dayOfWeek}`);
   console.log(`Include last week: ${shouldIncludeLastWeek}`);
 
-  // ОПТИМИЗАЦИЯ: Для TRICKY загружаем Apps DB один раз
   let appsDbCache = null;
   if (CURRENT_PROJECT === 'TRICKY') {
     appsDbCache = getOptimizedAppsDb();
@@ -347,13 +335,12 @@ function processApiData(rawData, includeLastWeek = null) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
 
-      // ОБНОВЛЕНО: новая логика фильтрации недель
       if (weekKey >= currentWeekStart) {
-        return; // Исключаем текущую неделю
+        return;
       }
       
       if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) {
-        return; // Исключаем предыдущую неделю в понедельник
+        return;
       }
 
       let campaign, app, metricsStartIndex;
@@ -368,38 +355,21 @@ function processApiData(rawData, includeLastWeek = null) {
         metricsStartIndex = 3;
       }
       
-      let metrics;
-      if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-        metrics = {
-          cpi: parseFloat(row[metricsStartIndex].value) || 0,
-          installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-          spend: parseFloat(row[metricsStartIndex + 2].value) || 0,
-          rrD1: parseFloat(row[metricsStartIndex + 3].value) || 0,
-          roas: parseFloat(row[metricsStartIndex + 4].value) || 0,
-          rrD7: parseFloat(row[metricsStartIndex + 5].value) || 0,
-          eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
-          eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
-          ipm: 0,
-          eArpuForecast: 0
-        };
-      } else {
-        metrics = {
-          cpi: parseFloat(row[metricsStartIndex].value) || 0,
-          installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-          ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
-          spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
-          roas: parseFloat(row[metricsStartIndex + 4].value) || 0,
-          eArpuForecast: parseFloat(row[metricsStartIndex + 5].value) || 0,
-          eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
-          eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
-          rrD1: 0,
-          rrD7: 0
-        };
-      }
-
-      if (metrics.spend <= 0) {
-        return;
-      }
+      // УНИФИЦИРОВАННАЯ ОБРАБОТКА МЕТРИК для всех проектов
+      const metrics = {
+        cpi: parseFloat(row[metricsStartIndex].value) || 0,         // 0: cpi
+        installs: parseInt(row[metricsStartIndex + 1].value) || 0,  // 1: installs
+        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,     // 2: ipm
+        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,   // 3: spend
+        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,    // 4: retention_rate D1
+        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,    // 5: roas D1
+        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,    // 6: retention_rate D7
+        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,  // 7: roas D7
+        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,  // 8: e_arpu_forecast D365
+        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,  // 9: e_roas_forecast D365
+        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0, // 10: e_profit_forecast D730
+        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0 // 11: e_roas_forecast D730
+      };
 
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
@@ -468,7 +438,6 @@ function processApiData(rawData, includeLastWeek = null) {
       };
 
       if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
-        // ОПТИМИЗАЦИЯ: используем кешированное извлечение bundle ID
         const bundleId = getCachedBundleId(campaignName);
         
         if (!trickyWeeklyData[appKey]) {
@@ -516,7 +485,6 @@ function processApiData(rawData, includeLastWeek = null) {
 
       processedCount++;
       
-      // Прогресс каждые 100 записей
       if (processedCount % 100 === 0) {
         console.log(`Processed ${processedCount}/${stats.length} records...`);
       }
@@ -526,7 +494,6 @@ function processApiData(rawData, includeLastWeek = null) {
     }
   });
 
-  // ОПТИМИЗИРОВАННАЯ ГРУППИРОВКА ДЛЯ TRICKY
   if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
     console.log('Optimized TRICKY grouping...');
     
@@ -546,7 +513,6 @@ function processApiData(rawData, includeLastWeek = null) {
       Object.keys(appInfo.weeks).forEach(weekKey => {
         const weekInfo = appInfo.weeks[weekKey];
         
-        // ОПТИМИЗАЦИЯ: группируем все кампании сразу по bundle ID
         const bundleGroups = {};
         weekInfo.campaigns.forEach(campaign => {
           const bundleId = campaign.extractedBundleId || 'unknown';
@@ -559,12 +525,10 @@ function processApiData(rawData, includeLastWeek = null) {
         const sourceApps = {};
         const sortedBundleIds = Object.keys(bundleGroups).sort();
         
-        // ОПТИМИЗАЦИЯ: батчевая обработка source apps
         sortedBundleIds.forEach(bundleId => {
           const campaigns = bundleGroups[bundleId];
           campaigns.sort((a, b) => b.spend - a.spend);
           
-          // ОПТИМИЗАЦИЯ: используем предзагруженный кеш
           const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
           
           sourceApps[bundleId] = {
@@ -592,7 +556,6 @@ function processApiData(rawData, includeLastWeek = null) {
   return appData;
 }
 
-// ОБНОВЛЕНО: автоматическое определение включения предыдущей недели
 function processProjectApiData(projectName, rawData, includeLastWeek = null) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -610,15 +573,8 @@ function extractGeoFromCampaign(campaignName) {
   
   if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
     const geoMap = {
-      '| USA |': 'USA',
-      '| MEX |': 'MEX',
-      '| AUS |': 'AUS',
-      '| DEU |': 'DEU',
-      '| JPN |': 'JPN',
-      '| KOR |': 'KOR',
-      '| BRA |': 'BRA',
-      '| CAN |': 'CAN',
-      '| GBR |': 'GBR'
+      '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
+      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR'
     };
 
     for (const [pattern, geo] of Object.entries(geoMap)) {
@@ -633,21 +589,11 @@ function extractGeoFromCampaign(campaignName) {
     return 'ALL';
   }
   
-  // Специальные паттерны для Google_Ads (APD кампании)
   if (CURRENT_PROJECT === 'GOOGLE_ADS') {
     const geoPatterns = [
-      // Точные совпадения (приоритет)
-      { pattern: 'LatAm', geo: 'LatAm' },
-      { pattern: 'UK,GE', geo: 'UK,GE' },
-      { pattern: 'BR (PT)', geo: 'BR' },
-      // Отдельные страны
-      { pattern: 'US ', geo: 'US' },
-      { pattern: ' US ', geo: 'US' },
-      { pattern: 'WW ', geo: 'WW' },
-      { pattern: ' WW ', geo: 'WW' },
-      { pattern: 'UK', geo: 'UK' },
-      { pattern: 'GE', geo: 'GE' },
-      { pattern: 'BR', geo: 'BR' }
+      { pattern: 'LatAm', geo: 'LatAm' }, { pattern: 'UK,GE', geo: 'UK,GE' }, { pattern: 'BR (PT)', geo: 'BR' },
+      { pattern: 'US ', geo: 'US' }, { pattern: ' US ', geo: 'US' }, { pattern: 'WW ', geo: 'WW' },
+      { pattern: ' WW ', geo: 'WW' }, { pattern: 'UK', geo: 'UK' }, { pattern: 'GE', geo: 'GE' }, { pattern: 'BR', geo: 'BR' }
     ];
     
     for (const {pattern, geo} of geoPatterns) {
@@ -658,24 +604,15 @@ function extractGeoFromCampaign(campaignName) {
     return 'OTHER';
   }
   
-  const geoPatterns = [
-    'WW_ru', 'WW_es', 'WW_de', 'WW_pt',
-    'Asia T1', 'T2-ES', 'T1-EN',
-    'LatAm', 'TopGeo', 'Europe',
-    'US', 'RU', 'UK', 'GE', 'FR', 'PT', 'ES', 'DE', 'T1', 'WW'
-  ];
-  
+  const geoPatterns = ['WW_ru', 'WW_es', 'WW_de', 'WW_pt', 'Asia T1', 'T2-ES', 'T1-EN', 'LatAm', 'TopGeo', 'Europe', 'US', 'RU', 'UK', 'GE', 'FR', 'PT', 'ES', 'DE', 'T1', 'WW'];
   const upperCampaignName = campaignName.toUpperCase();
   
   for (const pattern of geoPatterns) {
     const upperPattern = pattern.toUpperCase();
     
-    if (upperCampaignName.includes('_' + upperPattern + '_') ||
-        upperCampaignName.includes('-' + upperPattern + '-') ||
-        upperCampaignName.includes('_' + upperPattern) ||
-        upperCampaignName.includes('-' + upperPattern) ||
-        upperCampaignName.includes(upperPattern + '_') ||
-        upperCampaignName.includes(upperPattern + '-') ||
+    if (upperCampaignName.includes('_' + upperPattern + '_') || upperCampaignName.includes('-' + upperPattern + '-') ||
+        upperCampaignName.includes('_' + upperPattern) || upperCampaignName.includes('-' + upperPattern) ||
+        upperCampaignName.includes(upperPattern + '_') || upperCampaignName.includes(upperPattern + '-') ||
         upperCampaignName === upperPattern) {
       return pattern;
     }
@@ -742,7 +679,6 @@ function extractProjectGeoFromCampaign(projectName, campaignName) {
   }
 }
 
-// ОЧИСТКА КЕША при смене проекта
 function clearTrickyCaches() {
   BUNDLE_ID_CACHE = {};
   APPS_DB_CACHE = null;

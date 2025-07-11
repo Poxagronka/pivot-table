@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: убраны цвет и подчеркивание у гиперссылок TRICKY
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: унифицированные метрики + eROAS D730 таргеты
  */
 
 function createEnhancedPivotTable(appData) {
@@ -10,7 +10,7 @@ function createEnhancedPivotTable(appData) {
   else sheet.clear();
 
   const wow = calculateWoWMetrics(appData);
-  const headers = getProjectHeaders();
+  const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
 
@@ -69,7 +69,7 @@ function createEnhancedPivotTable(appData) {
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
-  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData);
+  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
 }
@@ -82,7 +82,7 @@ function createOverallPivotTable(appData) {
   else sheet.clear();
 
   const wow = calculateWoWMetrics(appData);
-  const headers = getProjectHeaders();
+  const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
 
@@ -117,13 +117,13 @@ function createOverallPivotTable(appData) {
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
-  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData);
+  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createOverallRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
 }
 
 function createOverallRowGrouping(sheet, tableData, appData) {
-  const numCols = getProjectHeaders().length;
+  const numCols = getUnifiedHeaders().length;
 
   try {
     let rowPointer = 2;
@@ -200,58 +200,34 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
 }
 
 function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    return [
-      'SOURCE_APP', sourceAppDisplayName, '', '',
-      totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
-      totals.avgRoas.toFixed(2), `${totals.avgRrD1.toFixed(1)}%`, `${totals.avgRrD7.toFixed(1)}%`,
-      `${totals.avgERoas.toFixed(0)}%`, totals.totalProfit.toFixed(2), profitWoW, status, ''
-    ];
-  } else {
-    return [
-      'SOURCE_APP', sourceAppDisplayName, '', '',
-      totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
-      totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), totals.avgArpu.toFixed(3),
-      `${totals.avgERoas.toFixed(0)}%`, totals.totalProfit.toFixed(2), profitWoW, status, ''
-    ];
-  }
+  return [
+    'SOURCE_APP', sourceAppDisplayName, '', '',
+    totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
+    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(1)}%`, `${totals.avgRrD7.toFixed(1)}%`,
+    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
+    totals.totalProfit.toFixed(2), profitWoW, status, ''
+  ];
 }
 
-function getProjectHeaders() {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    return [
-      'Level', 'Week Range / Source App', 'ID', 'GEO',
-      'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'RR D-1',
-      'RR D-7', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
-    ];
-  } else {
-    return [
-      'Level', 'Week Range / Source App', 'ID', 'GEO',
-      'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
-      'eARPU 365d', 'eROAS 365d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
-    ];
-  }
+function getUnifiedHeaders() {
+  return [
+    'Level', 'Week Range / Source App', 'ID', 'GEO',
+    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+  ];
 }
 
 function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    return [
-      'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
-      weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
-      weekTotals.avgRoas.toFixed(2), `${weekTotals.avgRrD1.toFixed(1)}%`, `${weekTotals.avgRrD7.toFixed(1)}%`,
-      `${weekTotals.avgERoas.toFixed(0)}%`, weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
-    ];
-  } else {
-    return [
-      'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
-      weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
-      weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), weekTotals.avgArpu.toFixed(3),
-      `${weekTotals.avgERoas.toFixed(0)}%`, weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
-    ];
-  }
+  return [
+    'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
+    weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
+    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(1)}%`, `${weekTotals.avgRrD7.toFixed(1)}%`,
+    weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, `${weekTotals.avgEROASD730.toFixed(0)}%`,
+    weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
+  ];
 }
 
-function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
+function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   const config = getCurrentConfig();
   
   const headerRange = sheet.getRange(1, 1, 1, numCols);
@@ -264,7 +240,7 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     .setFontSize(10)
     .setWrap(true);
 
-  const columnWidths = getProjectColumnWidths();
+  const columnWidths = getUnifiedColumnWidths();
   columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
   if (numRows > 1) {
@@ -313,7 +289,6 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
          .setFontSize(9)
   );
 
-  // ДОБАВЛЕНО: Убираем цвет и подчеркивание у гиперссылок
   if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
     hyperlinkRows.forEach(r => {
       const linkCell = sheet.getRange(r, 2);
@@ -325,35 +300,26 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData) {
     sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
     sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
     sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
-    
-    if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00');
-    } else {
-      sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
-      sheet.getRange(2, 11, numRows - 1, 1).setNumberFormat('$0.000');
-      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.00');
-    }
+    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
+    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
+    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
   }
 
-  applyConditionalFormatting(sheet, numRows);
+  applyConditionalFormatting(sheet, numRows, appData);
   sheet.hideColumns(1);
 }
 
-function getProjectColumnWidths() {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    return [
-      { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
-      { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
-      { c: 9, w: 60 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 75 },
-      { c: 13, w: 75 }, { c: 14, w: 85 }, { c: 15, w: 160 }, { c: 16, w: 250 }
-    ];
-  } else {
-    return TABLE_CONFIG.COLUMN_WIDTHS;
-  }
+function getUnifiedColumnWidths() {
+  return [
+    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
+    { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
+    { c: 9, w: 60 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 50 },
+    { c: 13, w: 75 }, { c: 14, w: 75 }, { c: 15, w: 75 }, { c: 16, w: 75 }, 
+    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 250 }
+  ];
 }
 
-function applyConditionalFormatting(sheet, numRows) {
-  const config = getCurrentConfig();
+function applyConditionalFormatting(sheet, numRows, appData) {
   const rules = [];
   
   if (numRows > 1) {
@@ -373,31 +339,62 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([spendRange]).build()
     );
 
-    const eroasColumn = 12;
+    // ОБНОВЛЕНО: eROAS D730 колонка (15) вместо D365 (14)
+    const eroasColumn = 15;
     const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
-    rules.push(
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) >= ${config.TARGET_EROAS})`)
-        .setBackground(COLORS.POSITIVE.background)
-        .setFontColor(COLORS.POSITIVE.fontColor)
-        .setRanges([eroasRange]).build()
-    );
-    rules.push(
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) < ${config.TARGET_EROAS})`)
-        .setBackground(COLORS.WARNING.background)
-        .setFontColor(COLORS.WARNING.fontColor)
-        .setRanges([eroasRange]).build()
-    );
-    rules.push(
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}2)), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}2,"%","")) < 120)`)
-        .setBackground(COLORS.NEGATIVE.background)
-        .setFontColor(COLORS.NEGATIVE.fontColor)
-        .setRanges([eroasRange]).build()
-    );
+    
+    // Динамические таргеты для каждой строки
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      let appName = '';
+      let targetEROAS = 150; // default
+      
+      if (level === 'APP') {
+        appName = data[i][1];
+        targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+      } else {
+        // Найти ближайшее APP выше текущей строки
+        for (let j = i - 1; j >= 1; j--) {
+          if (data[j][0] === 'APP') {
+            appName = data[j][1];
+            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+            break;
+          }
+        }
+      }
+      
+      const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
+      
+      // Зеленый: >= target
+      rules.push(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= ${targetEROAS})`)
+          .setBackground(COLORS.POSITIVE.background)
+          .setFontColor(COLORS.POSITIVE.fontColor)
+          .setRanges([cellRange]).build()
+      );
+      
+      // Желтый: 120 <= x < target
+      rules.push(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < ${targetEROAS})`)
+          .setBackground(COLORS.WARNING.background)
+          .setFontColor(COLORS.WARNING.fontColor)
+          .setRanges([cellRange]).build()
+      );
+      
+      // Красный: < 120
+      rules.push(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < 120)`)
+          .setBackground(COLORS.NEGATIVE.background)
+          .setFontColor(COLORS.NEGATIVE.fontColor)
+          .setRanges([cellRange]).build()
+      );
+    }
 
-    const profitColumn = 14;
+    const profitColumn = 17;
     const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -414,7 +411,7 @@ function applyConditionalFormatting(sheet, numRows) {
         .setRanges([profitRange]).build()
     );
 
-    const growthColumn = 15;
+    const growthColumn = 18;
     const growthRange = sheet.getRange(2, growthColumn, numRows - 1, 1);
     const statusColors = {
       "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
@@ -455,6 +452,10 @@ function calculateWeekTotals(campaigns) {
   const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
   const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
   const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
+  const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
+  const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
+  const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
+  const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
   
   const validForEROAS = campaigns.filter(c => 
     c.eRoasForecast >= 1 && 
@@ -469,25 +470,26 @@ function calculateWeekTotals(campaigns) {
     avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
   }
   
+  // НОВОЕ: eROAS D730
+  const validForEROASD730 = campaigns.filter(c => 
+    c.eRoasForecastD730 >= 1 && 
+    c.eRoasForecastD730 <= 1000 && 
+    c.spend > 0
+  );
+  
+  let avgEROASD730 = 0;
+  if (validForEROASD730.length > 0) {
+    const totalWeightedEROASD730 = validForEROASD730.reduce((sum, c) => sum + (c.eRoasForecastD730 * c.spend), 0);
+    const totalSpendForEROASD730 = validForEROASD730.reduce((sum, c) => sum + c.spend, 0);
+    avgEROASD730 = totalSpendForEROASD730 > 0 ? totalWeightedEROASD730 / totalSpendForEROASD730 : 0;
+  }
+  
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
-    const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
-    
-    return {
-      totalSpend, totalInstalls, avgCpi, avgRoas, avgERoas, totalProfit,
-      avgRrD1, avgRrD7, avgIpm: 0, avgArpu: 0
-    };
-  } else {
-    const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
-    const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
-    
-    return {
-      totalSpend, totalInstalls, avgCpi, avgRoas, avgERoas, totalProfit,
-      avgIpm, avgArpu, avgRrD1: 0, avgRrD7: 0
-    };
-  }
+  return {
+    totalSpend, totalInstalls, avgCpi, avgRoas, avgIpm, avgRrD1, avgRrD7,
+    avgArpu, avgERoas, avgEROASD730, totalProfit
+  };
 }
 
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
@@ -518,25 +520,17 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
 }
 
 function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
-  if (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') {
-    return [
-      'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
-      campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-      campaign.roas.toFixed(2), `${campaign.rrD1.toFixed(1)}%`, `${campaign.rrD7.toFixed(1)}%`,
-      `${campaign.eRoasForecast.toFixed(0)}%`, campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
-    ];
-  } else {
-    return [
-      'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
-      campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-      campaign.roas.toFixed(2), campaign.ipm.toFixed(1), campaign.eArpuForecast.toFixed(3),
-      `${campaign.eRoasForecast.toFixed(0)}%`, campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
-    ];
-  }
+  return [
+    'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
+    campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
+    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(1)}%`, `${campaign.rrD7.toFixed(1)}%`,
+    campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, `${campaign.eRoasForecastD730.toFixed(0)}%`,
+    campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
+  ];
 }
 
 function createRowGrouping(sheet, tableData, appData) {
-  const numCols = getProjectHeaders().length;
+  const numCols = getUnifiedHeaders().length;
 
   try {
     let rowPointer = 2;

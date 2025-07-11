@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ОБНОВЛЕНО: добавлена updateProjectData + логика предыдущей недели
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика на основе eROAS D730
  */
 
 function calculateWoWMetrics(appData) {
@@ -17,16 +17,13 @@ function calculateWoWMetrics(appData) {
       appWeekData[app.appName] = {};
       
       Object.values(app.weeks).forEach(week => {
-        // Calculate week-level metrics for app
         let allCampaigns = [];
         
         if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          // For TRICKY: collect all campaigns from all source apps (grouped by Apps Database)
           Object.values(week.sourceApps).forEach(sourceApp => {
             allCampaigns.push(...sourceApp.campaigns);
             
-            // Calculate source app level metrics using bundle ID as key
-            const sourceAppKey = sourceApp.sourceAppId; // This is the bundle ID
+            const sourceAppKey = sourceApp.sourceAppId;
             const sourceAppSpend = sourceApp.campaigns.reduce((s, c) => s + c.spend, 0);
             const sourceAppProfit = sourceApp.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
             
@@ -42,7 +39,6 @@ function calculateWoWMetrics(appData) {
               sourceAppName: sourceApp.sourceAppName
             };
             
-            // Store individual campaigns for campaign-level WoW
             sourceApp.campaigns.forEach(c => {
               if (c.campaignId) {
                 campaignData[`${c.campaignId}_${week.weekStart}`] = {
@@ -51,7 +47,7 @@ function calculateWoWMetrics(appData) {
                   sourceApp: c.sourceApp,
                   weekStart: week.weekStart,
                   spend: c.spend,
-                  eRoasForecast: c.eRoasForecast,
+                  eRoasForecastD730: c.eRoasForecastD730 || 0,
                   eProfitForecast: c.eProfitForecast,
                   installs: c.installs,
                   cpi: c.cpi,
@@ -65,13 +61,8 @@ function calculateWoWMetrics(appData) {
             });
           });
         } else if (CURRENT_PROJECT === 'OVERALL') {
-          // For OVERALL: use campaigns as app-level data (no actual campaigns)
           allCampaigns = week.campaigns || [];
-          
-          // For OVERALL, campaigns are virtual app-level data, so we don't store them in campaignData
-          // We only need app-level WoW metrics
         } else {
-          // For other projects: use campaigns directly
           allCampaigns = week.campaigns || [];
           
           allCampaigns.forEach(c => {
@@ -82,7 +73,7 @@ function calculateWoWMetrics(appData) {
                 sourceApp: c.sourceApp,
                 weekStart: week.weekStart,
                 spend: c.spend,
-                eRoasForecast: c.eRoasForecast,
+                eRoasForecastD730: c.eRoasForecastD730 || 0,
                 eProfitForecast: c.eProfitForecast,
                 installs: c.installs,
                 cpi: c.cpi,
@@ -96,14 +87,12 @@ function calculateWoWMetrics(appData) {
           });
         }
         
-        // Calculate app week totals
         const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
         const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
         appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
       });
     });
 
-    // Calculate campaign WoW (skip for OVERALL)
     const campaignWoW = {};
     if (CURRENT_PROJECT !== 'OVERALL') {
       const campaigns = {};
@@ -132,7 +121,6 @@ function calculateWoWMetrics(appData) {
       });
     }
 
-    // Calculate app week WoW
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
       const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
@@ -153,7 +141,6 @@ function calculateWoWMetrics(appData) {
       });
     });
 
-    // Calculate source app WoW (only for TRICKY with Apps Database grouping)
     const sourceAppWoW = {};
     if (CURRENT_PROJECT === 'TRICKY') {
       Object.keys(sourceAppData).forEach(bundleId => {
@@ -287,7 +274,7 @@ function generateReport(days) {
       return;
     }
     
-    const processed = processApiData(raw); // Автоматически учитывает день недели
+    const processed = processApiData(raw);
     if (Object.keys(processed).length === 0) {
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
@@ -295,7 +282,6 @@ function generateReport(days) {
     
     clearAllDataSilent();
     
-    // Для OVERALL используем специальную функцию создания таблицы
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
@@ -322,7 +308,7 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    const processed = processApiData(raw, true); // Для кастомного диапазона всегда включаем все данные
+    const processed = processApiData(raw, true);
     if (Object.keys(processed).length === 0) {
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
       return;
@@ -330,7 +316,6 @@ function generateReportForDateRange(startDate, endDate) {
     
     clearAllDataSilent();
     
-    // Для OVERALL используем специальную функцию создания таблицы
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
@@ -347,7 +332,6 @@ function generateReportForDateRange(startDate, endDate) {
   }
 }
 
-// НОВАЯ ФУНКЦИЯ: Обновление данных проекта до актуальных
 function updateProjectData(projectName) {
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -399,7 +383,7 @@ function updateProjectData(projectName) {
     return;
   }
   
-  const processed = processProjectApiData(projectName, raw); // Автоматически учитывает день недели
+  const processed = processProjectApiData(projectName, raw);
   
   if (Object.keys(processed).length === 0) {
     console.log(`${projectName}: No valid data to process`);
@@ -471,7 +455,7 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    const processed = processApiData(raw); // Автоматически учитывает день недели
+    const processed = processApiData(raw);
     if (Object.keys(processed).length === 0) {
       ui.alert('No valid data to process.');
       return;
@@ -479,7 +463,6 @@ function updateAllDataToCurrent() {
     
     clearAllDataSilent();
     
-    // Для OVERALL используем специальную функцию создания таблицы
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
