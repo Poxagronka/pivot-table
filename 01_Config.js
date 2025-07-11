@@ -1,16 +1,10 @@
 /**
- * Configuration file - ОБНОВЛЕНО: унифицированные метрики + динамические таргеты eROAS D730
+ * Configuration file - ОБНОВЛЕНО: таргеты по типам приложений
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Apps Database';
-
-// Дефолтные значения для eROAS D730 таргетов
-var DEFAULT_TARGET_EROAS = {
-  TRICKY: 250, MOLOCO: 150, REGULAR: 150, GOOGLE_ADS: 150,
-  APPLOVIN: 150, MINTEGRAL: 150, INCENT: 150, OVERALL: 150
-};
 
 function getBearerToken() {
   try {
@@ -38,24 +32,45 @@ function isBearerTokenConfigured() {
 function getTargetEROAS(projectName, appName = null) {
   try {
     const settings = loadSettingsFromSheet();
-    let baseTarget = settings.targetEROAS[projectName] || DEFAULT_TARGET_EROAS[projectName] || 150;
     
-    // Динамический таргет для приложений
+    // Определяем тип приложения по названию
     if (appName) {
-      if (projectName === 'TRICKY') {
-        return 250; // Фиксированный таргет для TRICKY
-      } else if (appName.toLowerCase().includes('business')) {
-        return 140; // Business приложения
-      } else {
-        return 150; // Остальные приложения
+      const appNameLower = appName.toLowerCase();
+      
+      if (appNameLower.includes('tricky') || appNameLower.includes('word') || appNameLower.includes('puzzle')) {
+        return settings.targetEROAS.tricky || 250;
       }
+      
+      if (appNameLower.includes('business') || appNameLower.includes('empire')) {
+        return settings.targetEROAS.business || 140;
+      }
+      
+      // CEG или любые другие приложения
+      return settings.targetEROAS.ceg || 150;
     }
     
-    return baseTarget;
+    // Если appName не передан, используем дефолты по проекту
+    if (projectName === 'TRICKY') {
+      return settings.targetEROAS.tricky || 250;
+    }
+    
+    return settings.targetEROAS.ceg || 150;
   } catch (e) {
     console.error('Error loading target eROAS:', e);
-    if (projectName === 'TRICKY') return 250;
-    return appName && appName.toLowerCase().includes('business') ? 140 : 150;
+    
+    // Fallback логика
+    if (appName) {
+      const appNameLower = appName.toLowerCase();
+      if (appNameLower.includes('tricky') || appNameLower.includes('word') || appNameLower.includes('puzzle')) {
+        return 250;
+      }
+      if (appNameLower.includes('business') || appNameLower.includes('empire')) {
+        return 140;
+      }
+      return 150;
+    }
+    
+    return projectName === 'TRICKY' ? 250 : 150;
   }
 }
 
@@ -109,7 +124,7 @@ function isAutoUpdateEnabled() {
   }
 }
 
-// Shortcut functions - обновлены для eROAS D730
+// Shortcut functions - обновлены для использования getTargetEROAS
 function getTrickyTargetEROAS(appName) { return getTargetEROAS('TRICKY', appName); }
 function getMolocoTargetEROAS(appName) { return getTargetEROAS('MOLOCO', appName); }
 function getRegularTargetEROAS(appName) { return getTargetEROAS('REGULAR', appName); }

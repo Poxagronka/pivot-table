@@ -1,5 +1,5 @@
 /**
- * Menu Functions - УПРОЩЕНО: убраны устаревшие функции после перехода на Settings лист
+ * Menu Functions - ОБНОВЛЕНО: добавлено принудительное обновление настроек
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
@@ -14,6 +14,7 @@ function onOpen() {
       .addSeparator()
       .addItem('⚙️ Open Settings Sheet', 'openSettingsSheet')
       .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
+      .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
       .addItem('📊 System Status', 'showQuickStatus')
       .addSeparator()
       .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
@@ -173,6 +174,7 @@ function refreshSettingsDialog() {
     message += `🔐 Bearer Token: ${settings.bearerToken ? 'Found' : 'Not Set'}\n`;
     message += `💾 Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
     message += `🔄 Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
+    message += `🎯 eROAS D730 Targets: Updated\n`;
     
     try {
       syncTriggersWithSettings();
@@ -199,7 +201,8 @@ function showQuickStatus() {
   var message = '📊 SYSTEM STATUS\n\n';
   message += `🔐 Bearer Token: ${tokenStatus}\n`;
   message += `💾 Auto Cache: ${cacheStatus}\n`;
-  message += `🔄 Auto Update: ${updateStatus}\n\n`;
+  message += `🔄 Auto Update: ${updateStatus}\n`;
+  message += `🎯 Metrics: Unified (eROAS D730)\n\n`;
   
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
@@ -234,7 +237,8 @@ function showQuickStatus() {
   message += '• Auto Update: Daily at 5:00 AM\n';
   message += '• Previous week data: Included starting from Tuesday\n\n';
   
-  message += '💡 TIP: Use Settings sheet to configure all options';
+  message += '💡 TIP: Use Settings sheet to configure all options\n';
+  message += '🔧 Use "Force Update Settings" if you have old targets';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
 }
