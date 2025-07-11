@@ -150,17 +150,17 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A12:I12').merge().setValue('📊 GROWTH THRESHOLDS').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(12, 30);
   
-  sheet.getRange('A13').setValue('Project').setFontWeight('bold').setWrap(true);
-  sheet.getRange('B13').setValue('🟢 Healthy\nGrowth\n(Spend/Profit %)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('C13').setValue('🟢 Efficiency\n(Spend/Profit %)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('D13').setValue('🔴 Warning\n(Profit %)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('E13').setValue('🔵 Scaling Down\n(Spend %)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('F13').setValue('🟡 Moderate\n(Spend/Profit %)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('G13').setValue('⚪ Stable\n(%)').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center').setFontSize(10);
-  sheet.getRange('H13').setValue('Status').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('I13').setValue('Modified').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('A13').setValue('Project').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('B13').setValue('🟢 Healthy Growth (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('C13').setValue('🟢 Efficiency (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('D13').setValue('🔴 Warning (Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('E13').setValue('🔵 Scaling Down (Spend %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('F13').setValue('🟡 Moderate (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('G13').setValue('⚪ Stable (%)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('H13').setValue('Status').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('I13').setValue('Modified').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
   sheet.getRange('A13:I13').setBackground('#f3e5f5');
-  sheet.setRowHeight(13, 45);
+  sheet.setRowHeight(13, 30);
   
   const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
   
@@ -245,12 +245,12 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A44:I46').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   sheet.setColumnWidth(1, 120);
-  sheet.setColumnWidth(2, 120);
-  sheet.setColumnWidth(3, 120);
-  sheet.setColumnWidth(4, 100);
-  sheet.setColumnWidth(5, 120);
-  sheet.setColumnWidth(6, 100);
-  sheet.setColumnWidth(7, 80);
+  sheet.setColumnWidth(2, 210);
+  sheet.setColumnWidth(3, 180);
+  sheet.setColumnWidth(4, 140);
+  sheet.setColumnWidth(5, 170);
+  sheet.setColumnWidth(6, 200);
+  sheet.setColumnWidth(7, 90);
   sheet.setColumnWidth(8, 80);
   sheet.setColumnWidth(9, 90);
   
