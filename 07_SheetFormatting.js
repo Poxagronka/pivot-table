@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: унифицированные метрики + eROAS D730 таргеты
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: унифицированные метрики + исправленная ширина столбцов
  */
 
 function createEnhancedPivotTable(appData) {
@@ -240,7 +240,7 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     .setFontSize(10)
     .setWrap(true);
 
-  const columnWidths = getUnifiedColumnWidths();
+  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
   columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
   if (numRows > 1) {
@@ -309,16 +309,6 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   sheet.hideColumns(1);
 }
 
-function getUnifiedColumnWidths() {
-  return [
-    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
-    { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
-    { c: 9, w: 60 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 50 },
-    { c: 13, w: 75 }, { c: 14, w: 75 }, { c: 15, w: 75 }, { c: 16, w: 75 }, 
-    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 250 }
-  ];
-}
-
 function applyConditionalFormatting(sheet, numRows, appData) {
   const rules = [];
   
@@ -339,22 +329,19 @@ function applyConditionalFormatting(sheet, numRows, appData) {
         .setRanges([spendRange]).build()
     );
 
-    // ОБНОВЛЕНО: eROAS D730 колонка (15) вместо D365 (14)
     const eroasColumn = 15;
     const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
     
-    // Динамические таргеты для каждой строки
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       let appName = '';
-      let targetEROAS = 150; // default
+      let targetEROAS = 150;
       
       if (level === 'APP') {
         appName = data[i][1];
         targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
       } else {
-        // Найти ближайшее APP выше текущей строки
         for (let j = i - 1; j >= 1; j--) {
           if (data[j][0] === 'APP') {
             appName = data[j][1];
@@ -366,7 +353,6 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
       
-      // Зеленый: >= target
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
           .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= ${targetEROAS})`)
@@ -375,7 +361,6 @@ function applyConditionalFormatting(sheet, numRows, appData) {
           .setRanges([cellRange]).build()
       );
       
-      // Желтый: 120 <= x < target
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
           .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < ${targetEROAS})`)
@@ -384,7 +369,6 @@ function applyConditionalFormatting(sheet, numRows, appData) {
           .setRanges([cellRange]).build()
       );
       
-      // Красный: < 120
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
           .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < 120)`)
@@ -470,7 +454,6 @@ function calculateWeekTotals(campaigns) {
     avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
   }
   
-  // НОВОЕ: eROAS D730
   const validForEROASD730 = campaigns.filter(c => 
     c.eRoasForecastD730 >= 1 && 
     c.eRoasForecastD730 <= 1000 && 

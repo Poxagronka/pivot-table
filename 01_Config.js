@@ -1,5 +1,5 @@
 /**
- * Configuration file - ОБНОВЛЕНО: таргеты по типам приложений
+ * Configuration file - ОБНОВЛЕНО: исправлена логика таргетов eROAS
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -33,44 +33,32 @@ function getTargetEROAS(projectName, appName = null) {
   try {
     const settings = loadSettingsFromSheet();
     
-    // Определяем тип приложения по названию
-    if (appName) {
-      const appNameLower = appName.toLowerCase();
-      
-      if (appNameLower.includes('tricky') || appNameLower.includes('word') || appNameLower.includes('puzzle')) {
-        return settings.targetEROAS.tricky || 250;
-      }
-      
-      if (appNameLower.includes('business') || appNameLower.includes('empire')) {
-        return settings.targetEROAS.business || 140;
-      }
-      
-      // CEG или любые другие приложения
-      return settings.targetEROAS.ceg || 150;
-    }
-    
-    // Если appName не передан, используем дефолты по проекту
+    // TRICKY проект - всегда 250%
     if (projectName === 'TRICKY') {
       return settings.targetEROAS.tricky || 250;
     }
     
+    // Приложения с "Business" в названии - всегда 140% 
+    if (appName && appName.toLowerCase().includes('business')) {
+      return settings.targetEROAS.business || 140;
+    }
+    
+    // Все остальное - 150%
     return settings.targetEROAS.ceg || 150;
+    
   } catch (e) {
     console.error('Error loading target eROAS:', e);
     
     // Fallback логика
-    if (appName) {
-      const appNameLower = appName.toLowerCase();
-      if (appNameLower.includes('tricky') || appNameLower.includes('word') || appNameLower.includes('puzzle')) {
-        return 250;
-      }
-      if (appNameLower.includes('business') || appNameLower.includes('empire')) {
-        return 140;
-      }
-      return 150;
+    if (projectName === 'TRICKY') {
+      return 250;
     }
     
-    return projectName === 'TRICKY' ? 250 : 150;
+    if (appName && appName.toLowerCase().includes('business')) {
+      return 140;
+    }
+    
+    return 150;
   }
 }
 
@@ -124,7 +112,6 @@ function isAutoUpdateEnabled() {
   }
 }
 
-// Shortcut functions - обновлены для использования getTargetEROAS
 function getTrickyTargetEROAS(appName) { return getTargetEROAS('TRICKY', appName); }
 function getMolocoTargetEROAS(appName) { return getTargetEROAS('MOLOCO', appName); }
 function getRegularTargetEROAS(appName) { return getTargetEROAS('REGULAR', appName); }
@@ -143,7 +130,6 @@ function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 
-// УНИФИЦИРОВАННЫЕ МЕТРИКИ для всех проектов
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 
   { id: "installs", day: null }, 
@@ -418,10 +404,10 @@ var TABLE_CONFIG = {
     'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 50 }, { c: 4, w: 50 },
-    { c: 5, w: 75 }, { c: 6, w: 80 }, { c: 7, w: 60 }, { c: 8, w: 60 },
-    { c: 9, w: 60 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 50 },
-    { c: 13, w: 75 }, { c: 14, w: 75 }, { c: 15, w: 75 }, { c: 16, w: 75 }, 
+    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 40 }, { c: 4, w: 40 },
+    { c: 5, w: 75 }, { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 55 },
+    { c: 9, w: 55 }, { c: 10, w: 55 }, { c: 11, w: 55 }, { c: 12, w: 55 },
+    { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 55 }, { c: 16, w: 75 }, 
     { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 250 }
   ]
 };

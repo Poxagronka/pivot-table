@@ -1,5 +1,5 @@
 /**
- * Settings Sheet Management - ОБНОВЛЕНО: таргеты по типам приложений вместо проектов
+ * Settings Sheet Management - ОБНОВЛЕНО: исправленная логика таргетов
  */
 
 var SETTINGS_SHEET_NAME = 'Settings';
@@ -25,7 +25,6 @@ function migrateExistingSettings(sheet) {
   const data = sheet.getDataRange().getValues();
   let needsUpdate = false;
   
-  // Проверяем есть ли старая структура по проектам или плохое форматирование
   let hasOldStructure = false;
   let hasOldFormatting = false;
   
@@ -37,12 +36,10 @@ function migrateExistingSettings(sheet) {
     }
   }
   
-  // Проверяем количество колонок - если меньше 8, то старое форматирование
   if (data.length > 0 && data[0].length < 8) {
     hasOldFormatting = true;
   }
   
-  // Проверяем есть ли заголовок с правильным форматированием
   let hasProperFormatting = false;
   for (let i = 0; i < Math.min(5, data.length); i++) {
     const cellValue = data[i][0] ? data[i][0].toString() : '';
@@ -53,7 +50,6 @@ function migrateExistingSettings(sheet) {
   }
   
   if (hasOldStructure || hasOldFormatting || !hasProperFormatting) {
-    // Сохраняем существующие значения
     let savedToken = '';
     let savedAutoCache = false;
     let savedAutoUpdate = false;
@@ -77,19 +73,30 @@ function migrateExistingSettings(sheet) {
       console.log('Error reading old settings:', e);
     }
     
-    // Полностью пересоздаем лист с новой структурой
     sheet.clear();
     createSettingsLayout(sheet);
     
-    // Восстанавливаем сохраненные значения
     if (savedToken) {
-      sheet.getRange('B4:H4').setValue(savedToken);
+      const tokenRow = findTokenRow(sheet);
+      if (tokenRow > 0) {
+        sheet.getRange(tokenRow, 2, 1, 7).merge().setValue(savedToken);
+      }
     }
-    sheet.getRange('B12').setValue(savedAutoCache ? 'TRUE' : 'FALSE');
-    sheet.getRange('B13').setValue(savedAutoUpdate ? 'TRUE' : 'FALSE');
+    sheet.getRange('B4').setValue(savedAutoCache ? 'TRUE' : 'FALSE');
+    sheet.getRange('B5').setValue(savedAutoUpdate ? 'TRUE' : 'FALSE');
     
-    console.log('Settings migrated to new UX-friendly structure');
+    console.log('Settings migrated to fixed targets structure');
   }
+}
+
+function findTokenRow(sheet) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString().trim() === 'Bearer Token:') {
+      return i + 1;
+    }
+  }
+  return -1;
 }
 
 function createSettingsLayout(sheet) {
@@ -100,34 +107,42 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A1:H1').setBackground('#1c4587').setFontColor('white').setFontWeight('bold').setFontSize(16).setHorizontalAlignment('center');
   sheet.setRowHeight(1, 40);
   
-  // Пустая строка
   sheet.setRowHeight(2, 20);
   
-  // API Settings
-  sheet.getRange('A3:H3').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  // Automation
+  sheet.getRange('A3:H3').merge().setValue('🤖 AUTOMATION').setBackground('#ff9800').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(3, 30);
   
-  sheet.getRange('A4').setValue('Bearer Token:').setFontWeight('bold');
-  sheet.getRange('B4:H4').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
-  sheet.getRange('A4:A4').setBackground('#e8f0fe');
-  sheet.getRange('B4:H4').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
+  sheet.getRange('A4').setValue('Auto Cache Enabled:').setFontWeight('bold');
+  sheet.getRange('B4').setValue('FALSE');
+  sheet.getRange('C4:H4').merge().setValue('Daily at 2:00 AM - saves comments automatically').setFontStyle('italic');
+  sheet.getRange('A4:A4').setBackground('#fff3e0');
+  sheet.getRange('B4:B4').setBackground('#f8f9fa');
+  sheet.getRange('C4:H4').setBackground('#f8f9fa');
   sheet.setRowHeight(4, 25);
   
-  // Пустая строка
-  sheet.setRowHeight(5, 15);
+  sheet.getRange('A5').setValue('Auto Update Enabled:').setFontWeight('bold');
+  sheet.getRange('B5').setValue('FALSE');
+  sheet.getRange('C5:H5').merge().setValue('Daily at 5:00 AM - updates all projects data').setFontStyle('italic');
+  sheet.getRange('A5:A5').setBackground('#fff3e0');
+  sheet.getRange('B5:B5').setBackground('#f8f9fa');
+  sheet.getRange('C5:H5').setBackground('#f8f9fa');
+  sheet.setRowHeight(5, 25);
+  
+  sheet.setRowHeight(6, 15);
   
   // Target eROAS D730 
-  sheet.getRange('A6:H6').merge().setValue('🎯 TARGET eROAS D730 (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(6, 30);
+  sheet.getRange('A7:H7').merge().setValue('🎯 TARGET eROAS D730 (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(7, 30);
   
   const appTypes = [
-    { name: 'Tricky Apps:', value: 250, desc: 'Word games, puzzles' },
-    { name: 'Business Empire:', value: 140, desc: 'Business simulation games' },
-    { name: 'CEG Apps:', value: 150, desc: 'All other apps' }
+    { name: 'TRICKY Project:', value: 250, desc: 'Весь лист Tricky' },
+    { name: 'Business Apps:', value: 140, desc: 'Приложения со словом "Business"' },
+    { name: 'Other Apps:', value: 150, desc: 'Все остальные приложения' }
   ];
   
   appTypes.forEach((appType, i) => {
-    const row = 7 + i;
+    const row = 8 + i;
     sheet.getRange(`A${row}`).setValue(appType.name).setFontWeight('bold');
     sheet.getRange(`B${row}`).setValue(appType.value).setHorizontalAlignment('center').setFontWeight('bold');
     sheet.getRange(`C${row}:H${row}`).merge().setValue(appType.desc).setFontStyle('italic');
@@ -137,51 +152,27 @@ function createSettingsLayout(sheet) {
     sheet.setRowHeight(row, 25);
   });
   
-  // Пустая строка
-  sheet.setRowHeight(10, 15);
-  
-  // Automation
-  sheet.getRange('A11:H11').merge().setValue('🤖 AUTOMATION').setBackground('#ff9800').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(11, 30);
-  
-  sheet.getRange('A12').setValue('Auto Cache Enabled:').setFontWeight('bold');
-  sheet.getRange('B12').setValue('FALSE');
-  sheet.getRange('C12:H12').merge().setValue('Daily at 2:00 AM - saves comments automatically').setFontStyle('italic');
-  sheet.getRange('A12:A12').setBackground('#fff3e0');
-  sheet.getRange('B12:B12').setBackground('#f8f9fa');
-  sheet.getRange('C12:H12').setBackground('#f8f9fa');
-  sheet.setRowHeight(12, 25);
-  
-  sheet.getRange('A13').setValue('Auto Update Enabled:').setFontWeight('bold');
-  sheet.getRange('B13').setValue('FALSE');
-  sheet.getRange('C13:H13').merge().setValue('Daily at 5:00 AM - updates all projects data').setFontStyle('italic');
-  sheet.getRange('A13:A13').setBackground('#fff3e0');
-  sheet.getRange('B13:B13').setBackground('#f8f9fa');
-  sheet.getRange('C13:H13').setBackground('#f8f9fa');
-  sheet.setRowHeight(13, 25);
-  
-  // Пустая строка
-  sheet.setRowHeight(14, 15);
+  sheet.setRowHeight(11, 15);
   
   // Advanced Growth Thresholds
-  sheet.getRange('A15:H15').merge().setValue('📊 GROWTH THRESHOLDS (Advanced)').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(15, 30);
+  sheet.getRange('A12:H12').merge().setValue('📊 GROWTH THRESHOLDS (Advanced)').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(12, 30);
   
-  // Заголовки с переносами
-  sheet.getRange('A16').setValue('Project').setFontWeight('bold').setWrap(true);
-  sheet.getRange('B16').setValue('Healthy\nGrowth').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('C16').setValue('Efficiency\nImprovement').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('D16').setValue('Inefficient\nGrowth').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('E16').setValue('Scaling\nDown').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('F16').setValue('Other\nThresholds').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('G16').setValue('Status').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('H16').setValue('Modified').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
-  sheet.getRange('A16:H16').setBackground('#f3e5f5');
-  sheet.setRowHeight(16, 35);
+  // Заголовки с увеличенной шириной
+  sheet.getRange('A13').setValue('Project').setFontWeight('bold').setWrap(true);
+  sheet.getRange('B13').setValue('Healthy Growth').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('C13').setValue('Efficiency').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('D13').setValue('Inefficient').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('E13').setValue('Scaling Down').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('F13').setValue('Other').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('G13').setValue('Status').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('H13').setValue('Modified').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
+  sheet.getRange('A13:H13').setBackground('#f3e5f5');
+  sheet.setRowHeight(13, 25);
   
   const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
   projects.forEach((proj, i) => {
-    const row = 17 + i;
+    const row = 14 + i;
     sheet.getRange(`A${row}`).setValue(proj).setFontWeight('bold');
     sheet.getRange(`B${row}`).setValue('spend:10,profit:5').setWrap(true);
     sheet.getRange(`C${row}`).setValue('spendDrop:-5,profitGain:8').setWrap(true);
@@ -193,64 +184,69 @@ function createSettingsLayout(sheet) {
     sheet.getRange(`A${row}:A${row}`).setBackground('#fce4ec');
     sheet.setRowHeight(row, 30);
     
-    // Добавляем границы
     sheet.getRange(`A${row}:H${row}`).setBorder(true, true, true, true, false, false, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
   });
   
-  // Пустая строка
-  sheet.setRowHeight(25, 20);
+  sheet.setRowHeight(22, 20);
   
   // Detailed Instructions
-  sheet.getRange('A26:H26').merge().setValue('📖 DETAILED INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(26, 30);
+  sheet.getRange('A23:H23').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(23, 30);
   
-  // API Instructions
-  sheet.getRange('A28').setValue('🔐 API Settings:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A29:H31').merge();
-  sheet.getRange('A29').setValue(
+  // Target eROAS Instructions
+  sheet.getRange('A24').setValue('🎯 Target eROAS Logic:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A25:H27').merge();
+  sheet.getRange('A25').setValue(
+    '• TRICKY проект: всегда 250% (весь лист)\n' +
+    '• Business приложения: 140% (со словом "Business" в любом проекте)\n' +
+    '• Все остальные: 150% (по умолчанию)'
+  );
+  sheet.getRange('A25:H27').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  
+  // Growth Thresholds Instructions
+  sheet.getRange('A29').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A30:H33').merge();
+  sheet.getRange('A30').setValue(
+    '🟢 HEALTHY: spend:X,profit:Y - оба условия выполняются\n' +
+    '🟢 EFFICIENCY: spendDrop:X,profitGain:Y - тратим меньше, зарабатываем больше\n' +
+    '🔴 INEFFICIENT: profitDrop:X - критическое падение прибыли\n' +
+    '🔵 SCALING DOWN: spendDrop:X - значительное сокращение спенда'
+  );
+  sheet.getRange('A30:H33').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  
+  sheet.setRowHeight(35, 20);
+  
+  // API Settings в конце
+  sheet.getRange('A36:H36').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(36, 30);
+  
+  sheet.getRange('A37').setValue('Bearer Token:').setFontWeight('bold');
+  sheet.getRange('B37:H37').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
+  sheet.getRange('A37:A37').setBackground('#e8f0fe');
+  sheet.getRange('B37:H37').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
+  sheet.setRowHeight(37, 25);
+  
+  sheet.getRange('A39:H41').merge();
+  sheet.getRange('A39').setValue(
     '• Bearer Token: Получите из app.appodeal.com → Settings → API\n' +
     '• Токен должен начинаться с "eyJ" и быть длиной 300+ символов\n' +
     '• Один токен работает для всех проектов'
   );
-  sheet.getRange('A29:H31').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A39:H41').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
-  // Target eROAS Instructions
-  sheet.getRange('A33').setValue('🎯 Target eROAS D730:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A34:H36').merge();
-  sheet.getRange('A34').setValue(
-    '• Taргеты по типам приложений для цветового кодирования\n' +
-    '• Tricky: 250% | Business Empire: 140% | CEG: 150%\n' +
-    '• Зеленый: ≥ таргета, Желтый: 120-таргет, Красный: <120%'
-  );
-  sheet.getRange('A34:H36').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
-  
-  // Growth Thresholds Instructions
-  sheet.getRange('A38').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A39:H45').merge();
-  sheet.getRange('A39').setValue(
-    '🟢 HEALTHY GROWTH (spend:X,profit:Y): оба условия выполняются\n' +
-    '🟢 EFFICIENCY IMPROVEMENT (spendDrop:X,profitGain:Y): тратим меньше, зарабатываем больше\n' +
-    '🔴 INEFFICIENT GROWTH (profitDrop:X): критическое падение прибыли\n' +
-    '🔵 SCALING DOWN (spendDrop:X): значительное сокращение спенда\n' +
-    '🟡 УМЕРЕННЫЕ: различные паттерны умеренного роста/спада\n' +
-    '⚪ STABLE: минимальные изменения'
-  );
-  sheet.getRange('A39:H45').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
-  
-  // Настройка ширины колонок для лучшего отображения
+  // Настройка ширины колонок
   sheet.setColumnWidth(1, 140);  // Project
-  sheet.setColumnWidth(2, 120);  // Healthy Growth
-  sheet.setColumnWidth(3, 140);  // Efficiency Improvement  
-  sheet.setColumnWidth(4, 100);  // Inefficient Growth
-  sheet.setColumnWidth(5, 200);  // Scaling Down
-  sheet.setColumnWidth(6, 140);  // Other Thresholds
+  sheet.setColumnWidth(2, 160);  // Healthy Growth  
+  sheet.setColumnWidth(3, 160);  // Efficiency
+  sheet.setColumnWidth(4, 120);  // Inefficient Growth
+  sheet.setColumnWidth(5, 220);  // Scaling Down
+  sheet.setColumnWidth(6, 160);  // Other
   sheet.setColumnWidth(7, 80);   // Status
   sheet.setColumnWidth(8, 100);  // Modified
   
   // Валидация для automation
-  sheet.getRange('B12:B13').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['TRUE', 'FALSE']).build());
+  sheet.getRange('B4:B5').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['TRUE', 'FALSE']).build());
   
-  // Замораживаем верхние строки для удобства
   sheet.setFrozenRows(3);
 }
 
@@ -288,26 +284,26 @@ function loadSettingsFromSheet() {
       settings.automation.autoUpdate = value.toUpperCase() === 'TRUE';
     }
     
-    // Target eROAS D730 по типам приложений с новыми названиями
-    if (label === 'Tricky Apps:' && i >= 6 && i <= 10) {
+    // Target eROAS D730 по новой логике
+    if (label === 'TRICKY Project:' && i >= 7 && i <= 11) {
       const numValue = parseInt(value);
       settings.targetEROAS.tricky = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 250;
     }
     
-    if (label === 'Business Empire:' && i >= 6 && i <= 10) {
+    if (label === 'Business Apps:' && i >= 7 && i <= 11) {
       const numValue = parseInt(value);
       settings.targetEROAS.business = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 140;
     }
     
-    if (label === 'CEG Apps:' && i >= 6 && i <= 10) {
+    if (label === 'Other Apps:' && i >= 7 && i <= 11) {
       const numValue = parseInt(value);
       settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
     }
     
-    // Advanced Growth Thresholds по проектам (номера строк изменились)
+    // Advanced Growth Thresholds по проектам
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     projects.forEach(proj => {
-      if (label === proj && i >= 16 && i <= 25) {
+      if (label === proj && i >= 13 && i <= 22) {
         const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
         const efficiencyValue = row[2] ? row[2].toString() : 'spendDrop:-5,profitGain:8';
         const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
@@ -396,15 +392,16 @@ function populateDefaultSettings(sheet) {
     const props = PropertiesService.getScriptProperties();
     const token = props.getProperty('BEARER_TOKEN');
     if (token) {
-      sheet.getRange('B4:H4').setValue(token);
+      const tokenRow = findTokenRow(sheet);
+      if (tokenRow > 0) {
+        sheet.getRange(tokenRow, 2, 1, 7).merge().setValue(token);
+      }
     }
-    
-    // Дефолтные значения уже установлены в createSettingsLayout
     
     const autoCache = props.getProperty('AUTO_CACHE_ENABLED') === 'true';
     const autoUpdate = props.getProperty('AUTO_UPDATE_ENABLED') === 'true';
-    sheet.getRange('B12').setValue(autoCache ? 'TRUE' : 'FALSE');
-    sheet.getRange('B13').setValue(autoUpdate ? 'TRUE' : 'FALSE');
+    sheet.getRange('B4').setValue(autoCache ? 'TRUE' : 'FALSE');
+    sheet.getRange('B5').setValue(autoUpdate ? 'TRUE' : 'FALSE');
     
     console.log('Default settings populated successfully');
   } catch (e) {
@@ -427,17 +424,17 @@ function saveSettingToSheet(settingPath, value) {
       return;
     }
     
-    if (settingPath === 'targetEROAS.tricky' && label === 'Tricky Apps:') {
+    if (settingPath === 'targetEROAS.tricky' && label === 'TRICKY Project:') {
       sheet.getRange(i + 1, 2).setValue(value);
       return;
     }
     
-    if (settingPath === 'targetEROAS.business' && label === 'Business Empire:') {
+    if (settingPath === 'targetEROAS.business' && label === 'Business Apps:') {
       sheet.getRange(i + 1, 2).setValue(value);
       return;
     }
     
-    if (settingPath === 'targetEROAS.ceg' && label === 'CEG Apps:') {
+    if (settingPath === 'targetEROAS.ceg' && label === 'Other Apps:') {
       sheet.getRange(i + 1, 2).setValue(value);
       return;
     }
@@ -469,12 +466,12 @@ function openSettingsSheet() {
   const sheet = getOrCreateSettingsSheet();
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
   spreadsheet.setActiveSheet(sheet);
-  SpreadsheetApp.getUi().alert('Settings Sheet', 'Лист Settings открыт с новым UX-дизайном!\n\n✨ Улучшенное форматирование\n📊 Четкая структура по разделам\n🎯 Таргеты по типам приложений\n\nИспользуйте "🔄 Refresh Settings" после изменений.', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('Settings Sheet', 'Лист Settings с исправленной логикой таргетов!\n\n🎯 TRICKY: 250% (весь проект)\n💼 Business: 140% (приложения с "Business")\n📱 Остальные: 150% (по умолчанию)\n\nИспользуйте "🔄 Refresh Settings" после изменений.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function forceUpdateSettingsSheet() {
   const ui = SpreadsheetApp.getUi();
-  const result = ui.alert('🔄 Force Update Settings', 'Принудительно обновить лист Settings?\n\nЭто создаст новую UX-структуру с улучшенным форматированием.', ui.ButtonSet.YES_NO);
+  const result = ui.alert('🔄 Force Update Settings', 'Принудительно обновить лист Settings?\n\nЭто создаст структуру с исправленной логикой таргетов.', ui.ButtonSet.YES_NO);
   
   if (result === ui.Button.YES) {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -489,6 +486,6 @@ function forceUpdateSettingsSheet() {
     populateDefaultSettings(sheet);
     clearSettingsCache();
     
-    ui.alert('✅ Updated', 'Лист Settings обновлен с новым UX!\n\n📊 Улучшенное форматирование\n🎯 Таргеты по типам:\n• Tricky Apps: 250%\n• Business Empire: 140%\n• CEG Apps: 150%\n\n💡 Лучшая читаемость и навигация', ui.ButtonSet.OK);
+    ui.alert('✅ Updated', 'Лист Settings обновлен с правильной логикой!\n\n🎯 Таргеты исправлены:\n• TRICKY проект: 250%\n• Business приложения: 140%\n• Остальные: 150%\n\nТеперь Applovin будет использовать правильные таргеты!', ui.ButtonSet.OK);
   }
 }
