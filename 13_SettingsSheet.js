@@ -91,7 +91,7 @@ function migrateExistingSettings(sheet) {
     sheet.getRange('B4').setValue(savedAutoCache ? 'TRUE' : 'FALSE');
     sheet.getRange('B5').setValue(savedAutoUpdate ? 'TRUE' : 'FALSE');
     
-    console.log('Settings migrated to fixed targets structure');
+    console.log('Settings migrated to separate triggers structure');
   }
 }
 
@@ -127,7 +127,7 @@ function createSettingsLayout(sheet) {
   
   sheet.getRange('A5').setValue('Auto Update Enabled:').setFontWeight('bold');
   sheet.getRange('B5').setValue('FALSE');
-  sheet.getRange('C5:I5').merge().setValue('Daily at 5:00 AM - updates all projects data').setFontStyle('italic');
+  sheet.getRange('C5:I5').merge().setValue('Staggered updates 4:00-7:30 AM (30min intervals)').setFontStyle('italic');
   sheet.getRange('A5:A5').setBackground('#fff3e0');
   sheet.getRange('B5:B5').setBackground('#f8f9fa');
   sheet.getRange('C5:I5').setBackground('#f8f9fa');
@@ -135,8 +135,35 @@ function createSettingsLayout(sheet) {
   
   sheet.setRowHeight(6, 15);
   
-  sheet.getRange('A7:I7').merge().setValue('🎯 TARGET eROAS D730 (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.getRange('A7:I7').merge().setValue('🕐 UPDATE SCHEDULE').setBackground('#4caf50').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(7, 30);
+  
+  const schedule = [
+    { project: 'TRICKY', time: '4:00 AM', desc: 'Heaviest project first' },
+    { project: 'MOLOCO', time: '4:30 AM', desc: 'APD campaigns' },
+    { project: 'REGULAR', time: '5:00 AM', desc: 'Non-tricky campaigns' },
+    { project: 'GOOGLE_ADS', time: '5:30 AM', desc: 'Google Ads network' },
+    { project: 'APPLOVIN', time: '6:00 AM', desc: 'AppLovin network' },
+    { project: 'MINTEGRAL', time: '6:30 AM', desc: 'Mintegral network' },
+    { project: 'INCENT', time: '7:00 AM', desc: 'Incentivized traffic' },
+    { project: 'OVERALL', time: '7:30 AM', desc: 'Aggregated app-level data' }
+  ];
+  
+  schedule.forEach((item, i) => {
+    const row = 8 + i;
+    sheet.getRange(`A${row}`).setValue(`${item.project}:`).setFontWeight('bold');
+    sheet.getRange(`B${row}`).setValue(item.time).setHorizontalAlignment('center').setFontWeight('bold').setFontColor('#1976d2');
+    sheet.getRange(`C${row}:I${row}`).merge().setValue(item.desc).setFontStyle('italic');
+    sheet.getRange(`A${row}:A${row}`).setBackground('#e8f5e8');
+    sheet.getRange(`B${row}:B${row}`).setBackground('#e3f2fd');
+    sheet.getRange(`C${row}:I${row}`).setBackground('#f8f9fa');
+    sheet.setRowHeight(row, 25);
+  });
+  
+  sheet.setRowHeight(16, 15);
+  
+  sheet.getRange('A17:I17').merge().setValue('🎯 TARGET eROAS D730 (%)').setBackground('#34a853').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(17, 30);
   
   const appTypes = [
     { name: 'TRICKY Project:', value: 250, desc: 'All data in TRICKY sheet' },
@@ -145,7 +172,7 @@ function createSettingsLayout(sheet) {
   ];
   
   appTypes.forEach((appType, i) => {
-    const row = 8 + i;
+    const row = 18 + i;
     sheet.getRange(`A${row}`).setValue(appType.name).setFontWeight('bold');
     sheet.getRange(`B${row}`).setValue(appType.value).setHorizontalAlignment('center').setFontWeight('bold');
     sheet.getRange(`C${row}:I${row}`).merge().setValue(appType.desc).setFontStyle('italic');
@@ -155,27 +182,27 @@ function createSettingsLayout(sheet) {
     sheet.setRowHeight(row, 25);
   });
   
-  sheet.setRowHeight(11, 15);
+  sheet.setRowHeight(21, 15);
   
-  sheet.getRange('A12:I12').merge().setValue('📊 GROWTH THRESHOLDS').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(12, 30);
+  sheet.getRange('A22:I22').merge().setValue('📊 GROWTH THRESHOLDS').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(22, 30);
   
-  sheet.getRange('A13').setValue('Project').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('B13').setValue('🟢 Healthy Growth (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('C13').setValue('🟢 Efficiency (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('D13').setValue('🔴 Warning (Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('E13').setValue('🔵 Scaling Down (Spend %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('F13').setValue('🟡 Moderate (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('G13').setValue('⚪ Stable (%)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('H13').setValue('Status').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('I13').setValue('Modified').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
-  sheet.getRange('A13:I13').setBackground('#f3e5f5');
-  sheet.setRowHeight(13, 30);
+  sheet.getRange('A23').setValue('Project').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('B23').setValue('🟢 Healthy Growth (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('C23').setValue('🟢 Efficiency (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('D23').setValue('🔴 Warning (Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('E23').setValue('🔵 Scaling Down (Spend %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('F23').setValue('🟡 Moderate (Spend/Profit %)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('G23').setValue('⚪ Stable (%)').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('H23').setValue('Status').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('I23').setValue('Modified').setFontWeight('bold').setWrap(false).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(9);
+  sheet.getRange('A23:I23').setBackground('#f3e5f5');
+  sheet.setRowHeight(23, 30);
   
   const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
   
   projects.forEach((proj, i) => {
-    const row = 14 + i;
+    const row = 24 + i;
     sheet.getRange(`A${row}`).setValue(proj).setFontWeight('bold');
     
     sheet.getRange(`B${row}`).setValue('+10\n+5').setHorizontalAlignment('center').setVerticalAlignment('middle')
@@ -204,23 +231,32 @@ function createSettingsLayout(sheet) {
     sheet.getRange(`A${row}:I${row}`).setBorder(true, true, true, true, false, false, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
   });
   
-  sheet.setRowHeight(22, 20);
+  sheet.setRowHeight(32, 20);
   
-  sheet.getRange('A23:I23').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(23, 30);
+  sheet.getRange('A33:I33').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(33, 30);
   
-  sheet.getRange('A24').setValue('🎯 How Target eROAS Works:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A25:I27').merge();
-  sheet.getRange('A25').setValue(
+  sheet.getRange('A34').setValue('🤖 Automation Benefits:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A35:I37').merge();
+  sheet.getRange('A35').setValue(
+    '• SEPARATE TRIGGERS: Each project updates independently\n' +
+    '• NO TIMEOUTS: 30-minute intervals prevent API overload\n' +
+    '• RELIABILITY: Failed project won\'t affect others'
+  );
+  sheet.getRange('A35:I37').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  
+  sheet.getRange('A39').setValue('🎯 How Target eROAS Works:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A40:I42').merge();
+  sheet.getRange('A40').setValue(
     '• TRICKY Project: Always 250% (entire sheet)\n' +
     '• Business Apps: 140% (apps with "Business" in name across all projects)\n' +
     '• Other Apps: 150% (default for everything else)'
   );
-  sheet.getRange('A25:I27').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A40:I42').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
-  sheet.getRange('A29').setValue('📊 Understanding Growth Thresholds:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A30:I38').merge();
-  sheet.getRange('A30').setValue(
+  sheet.getRange('A44').setValue('📊 Understanding Growth Thresholds:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A45:I53').merge();
+  sheet.getRange('A45').setValue(
     '🎯 HOW TO USE:\n' +
     '• Just edit the numbers directly in the cells!\n' +
     '• Numbers represent percentage thresholds\n' +
@@ -233,26 +269,26 @@ function createSettingsLayout(sheet) {
     '⚪ STABLE: Minimal change (e.g. ±2)\n\n' +
     '💡 TIP: After changing numbers, click Menu → 🔄 Refresh Settings'
   );
-  sheet.getRange('A30:I38').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false).setVerticalAlignment('top');
+  sheet.getRange('A45:I53').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false).setVerticalAlignment('top');
   
-  sheet.setRowHeight(40, 20);
+  sheet.setRowHeight(55, 20);
   
-  sheet.getRange('A41:I41').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(41, 30);
+  sheet.getRange('A56:I56').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(56, 30);
   
-  sheet.getRange('A42').setValue('Bearer Token:').setFontWeight('bold');
-  sheet.getRange('B42:I42').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
-  sheet.getRange('A42:A42').setBackground('#e8f0fe');
-  sheet.getRange('B42:I42').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
-  sheet.setRowHeight(42, 25);
+  sheet.getRange('A57').setValue('Bearer Token:').setFontWeight('bold');
+  sheet.getRange('B57:I57').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
+  sheet.getRange('A57:A57').setBackground('#e8f0fe');
+  sheet.getRange('B57:I57').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
+  sheet.setRowHeight(57, 25);
   
-  sheet.getRange('A44:I46').merge();
-  sheet.getRange('A44').setValue(
+  sheet.getRange('A59:I61').merge();
+  sheet.getRange('A59').setValue(
     '• Get your token from: app.appodeal.com → Settings → API\n' +
     '• Token should start with "eyJ" and be 300+ characters long\n' +
     '• One token works for all projects'
   );
-  sheet.getRange('A44:I46').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A59:I61').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   sheet.setColumnWidth(1, 120);
   sheet.setColumnWidth(2, 210);
@@ -276,7 +312,7 @@ function loadSettingsFromSheet() {
     return SETTINGS_CACHE;
   }
   
-  const cacheKey = 'SETTINGS_CACHE_V2';
+  const cacheKey = 'SETTINGS_CACHE_V3';
   const cache = CacheService.getScriptCache();
   const cachedData = cache.get(cacheKey);
   
@@ -325,24 +361,24 @@ function loadSettingsFromSheet() {
       settings.automation.autoUpdate = value.toUpperCase() === 'TRUE';
     }
     
-    if (label === 'TRICKY Project:' && i >= 7 && i <= 11) {
+    if (label === 'TRICKY Project:' && i >= 17 && i <= 21) {
       const numValue = parseInt(value);
       settings.targetEROAS.tricky = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 250;
     }
     
-    if (label === 'Business Apps:' && i >= 7 && i <= 11) {
+    if (label === 'Business Apps:' && i >= 17 && i <= 21) {
       const numValue = parseInt(value);
       settings.targetEROAS.business = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 140;
     }
     
-    if (label === 'Other Apps:' && i >= 7 && i <= 11) {
+    if (label === 'Other Apps:' && i >= 17 && i <= 21) {
       const numValue = parseInt(value);
       settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
     }
     
     const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     projects.forEach(proj => {
-      if (label === proj && i >= 13 && i <= 22) {
+      if (label === proj && i >= 23 && i <= 32) {
         const healthyCell = row[1] ? row[1].toString() : '+10\n+5';
         const efficiencyCell = row[2] ? row[2].toString() : '-5\n+8';
         const warningCell = row[3] ? row[3].toString() : '-8';
@@ -502,7 +538,6 @@ function saveSettingToSheet(settingPath, value) {
     if (settingPath.startsWith('growthThresholds.')) {
       const parts = settingPath.split('.');
       const project = parts[1];
-      const metric = parts[2];
       
       if (label === project) {
         const thresholds = value;
@@ -539,7 +574,7 @@ function clearSettingsCache() {
   BEARER_TOKEN_CACHE_TIME = null;
   
   const cache = CacheService.getScriptCache();
-  cache.remove('SETTINGS_CACHE_V2');
+  cache.remove('SETTINGS_CACHE_V3');
   cache.remove('BEARER_TOKEN');
 }
 
@@ -547,12 +582,12 @@ function openSettingsSheet() {
   const sheet = getOrCreateSettingsSheet();
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
   spreadsheet.setActiveSheet(sheet);
-  SpreadsheetApp.getUi().alert('Settings Sheet', 'Settings sheet opened!\n\n🎯 Fixed Target Logic:\n• TRICKY: 250% (entire project)\n• Business: 140% (apps with "Business")\n• Others: 150% (default)\n\nUse "🔄 Refresh Settings" after making changes.', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('Settings Sheet', 'Settings sheet opened!\n\n🤖 NEW: Separate triggers prevent timeouts\n🎯 Fixed Target Logic:\n• TRICKY: 250% (entire project)\n• Business: 140% (apps with "Business")\n• Others: 150% (default)\n\nUse "🔄 Refresh Settings" after making changes.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function forceUpdateSettingsSheet() {
   const ui = SpreadsheetApp.getUi();
-  const result = ui.alert('🔄 Force Update Settings', 'Force update the Settings sheet?\n\nThis will create the structure with fixed target logic.', ui.ButtonSet.YES_NO);
+  const result = ui.alert('🔄 Force Update Settings', 'Force update the Settings sheet?\n\nThis will create the structure with separate triggers logic.', ui.ButtonSet.YES_NO);
   
   if (result === ui.Button.YES) {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -567,6 +602,6 @@ function forceUpdateSettingsSheet() {
     populateDefaultSettings(sheet);
     clearSettingsCache();
     
-    ui.alert('✅ Updated', 'Settings sheet updated with correct logic!\n\n🎯 Fixed targets:\n• TRICKY project: 250%\n• Business apps: 140%\n• Others: 150%\n\nApplovin will now use correct targets!', ui.ButtonSet.OK);
+    ui.alert('✅ Updated', 'Settings sheet updated with separate triggers!\n\n🤖 NEW FEATURES:\n• Separate triggers for each project\n• 30-minute intervals prevent timeouts\n• More reliable automation\n\n🎯 Schedule: 4:00-7:30 AM', ui.ButtonSet.OK);
   }
 }

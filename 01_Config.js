@@ -148,6 +148,39 @@ function isAutoUpdateEnabled() {
   }
 }
 
+function getUpdateTriggersStatus() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    const updateFunctions = [
+      'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+      'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall'
+    ];
+    
+    const updateTriggers = triggers.filter(function(t) {
+      return updateFunctions.includes(t.getHandlerFunction());
+    });
+    
+    return {
+      enabled: isAutoUpdateEnabled(),
+      triggersCount: updateTriggers.length,
+      expectedCount: 8,
+      isComplete: updateTriggers.length === 8,
+      triggersList: updateTriggers.map(function(t) {
+        return t.getHandlerFunction();
+      })
+    };
+  } catch (e) {
+    console.error('Error getting update triggers status:', e);
+    return {
+      enabled: false,
+      triggersCount: 0,
+      expectedCount: 8,
+      isComplete: false,
+      triggersList: []
+    };
+  }
+}
+
 function loadSettingsFromSheetWithRetry(maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

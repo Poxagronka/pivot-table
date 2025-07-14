@@ -81,142 +81,156 @@ function recreateGrouping(sheet) {
 }
 
 function clearAllDataSilent() {
-  const maxRetries = 3;
-  const baseDelay = 5000;
+  const config = getCurrentConfig();
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  if (sheet && sheet.getLastRow() > 1) {
     try {
-      const config = getCurrentConfig();
-      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-      
-      Utilities.sleep(1000);
-      
-      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-      
-      if (oldSheet && oldSheet.getLastRow() > 1) {
-        try {
-          const cache = new CommentCache();
-          cache.syncCommentsFromSheet();
-          console.log('Comments cached before clearing sheet');
-        } catch (e) {
-          console.error('Error caching comments:', e);
-        }
-      }
-      
-      Utilities.sleep(2000);
-      
-      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
-      const newSheet = spreadsheet.insertSheet(tempSheetName);
-      
-      Utilities.sleep(1000);
-      
-      if (oldSheet) {
-        spreadsheet.deleteSheet(oldSheet);
-      }
-      
-      Utilities.sleep(1000);
-      
-      newSheet.setName(config.SHEET_NAME);
-      
-      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
-      return;
+      const cache = new CommentCache();
+      cache.syncCommentsFromSheet();
+      console.log('Comments cached before clearing sheet');
     } catch (e) {
-      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
-      
-      if (attempt === maxRetries) {
-        throw e;
-      }
-      
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      console.log(`Waiting ${delay}ms before retry...`);
-      Utilities.sleep(delay);
+      console.error('Error caching comments:', e);
+    }
+  }
+  
+  recreateSheetFast(spreadsheet, config.SHEET_NAME);
+}
+
+function clearProjectDataSilent(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (sheet && sheet.getLastRow() > 1) {
+    try {
+      const cache = new CommentCache(projectName);
+      cache.syncCommentsFromSheet();
+      console.log(`${projectName}: Comments cached before clearing sheet`);
+    } catch (e) {
+      console.error(`${projectName}: Error caching comments:`, e);
+    }
+  }
+  
+  recreateSheetFast(spreadsheet, config.SHEET_NAME);
+  console.log(`${projectName}: Sheet recreated`);
+}
+
+function clearProjectDataFast(projectName) {
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  
+  recreateSheetFast(spreadsheet, config.SHEET_NAME);
+  console.log(`${projectName}: Sheet recreated fast`);
+}
+
+function recreateSheetFast(spreadsheet, sheetName) {
+  try {
+    const oldSheet = spreadsheet.getSheetByName(sheetName);
+    if (oldSheet) {
+      spreadsheet.deleteSheet(oldSheet);
+    }
+    
+    const newSheet = spreadsheet.insertSheet(sheetName);
+    console.log(`Sheet ${sheetName} recreated`);
+  } catch (e) {
+    console.error(`Error recreating sheet ${sheetName}:`, e);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (sheet) {
+      sheet.clear();
+      console.log(`Fallback: Sheet ${sheetName} cleared`);
     }
   }
 }
 
-function clearProjectDataSilent(projectName) {
-  const maxRetries = 3;
-  const baseDelay = 5000;
+function updateProjectDataOptimized(projectName) {
+  console.log(`Starting optimized update for ${projectName}`);
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const config = getProjectConfig(projectName);
-      
-      Utilities.sleep(1000);
-      
-      let spreadsheet;
-      try {
-        spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-      } catch (e) {
-        console.error(`Cannot access spreadsheet: ${e}`);
-        if (attempt === maxRetries) throw e;
-        Utilities.sleep(baseDelay);
-        continue;
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No existing data to update`);
+    return;
+  }
+  
+  const cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheet();
+  console.log(`${projectName}: Comments cached`);
+  
+  const earliestDate = findEarliestWeekDate(sheet);
+  if (!earliestDate) {
+    console.log(`${projectName}: No week data found`);
+    return;
+  }
+  
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const endDate = new Date(today);
+  
+  if (dayOfWeek === 0) {
+    endDate.setDate(today.getDate() - 1);
+  } else {
+    endDate.setDate(today.getDate() - dayOfWeek);
+  }
+  
+  const dateRange = {
+    from: formatDateForAPI(earliestDate),
+    to: formatDateForAPI(endDate)
+  };
+  
+  console.log(`${projectName}: Fetching ${dateRange.from} to ${dateRange.to}`);
+  
+  const raw = fetchProjectCampaignData(projectName, dateRange);
+  
+  if (!raw.data?.analytics?.richStats?.stats?.length) {
+    console.log(`${projectName}: No API data`);
+    return;
+  }
+  
+  const processed = processProjectApiData(projectName, raw);
+  
+  if (Object.keys(processed).length === 0) {
+    console.log(`${projectName}: No valid processed data`);
+    return;
+  }
+  
+  clearProjectDataFast(projectName);
+  
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    if (projectName === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
+    cache.applyCommentsToSheet();
+  } finally {
+    setCurrentProject(originalProject);
+  }
+  
+  console.log(`${projectName}: Update completed successfully`);
+}
+
+function findEarliestWeekDate(sheet) {
+  const data = sheet.getDataRange().getValues();
+  let earliestDate = null;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === 'WEEK') {
+      const weekRange = data[i][1];
+      const startStr = weekRange.split(' - ')[0];
+      const startDate = new Date(startStr);
+      if (!earliestDate || startDate < earliestDate) {
+        earliestDate = startDate;
       }
-      
-      if (!spreadsheet) {
-        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
-      }
-      
-      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-      
-      if (oldSheet && oldSheet.getLastRow() > 1) {
-        try {
-          const cache = new CommentCache(projectName);
-          cache.syncCommentsFromSheet();
-          console.log(`${projectName}: Comments cached before clearing sheet`);
-        } catch (e) {
-          console.error(`${projectName}: Error caching comments:`, e);
-        }
-      }
-      
-      Utilities.sleep(2000);
-      
-      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
-      let newSheet;
-      
-      try {
-        newSheet = spreadsheet.insertSheet(tempSheetName);
-      } catch (e) {
-        console.error(`Error creating temp sheet: ${e}`);
-        if (attempt === maxRetries) throw e;
-        Utilities.sleep(baseDelay);
-        continue;
-      }
-      
-      Utilities.sleep(1000);
-      
-      if (oldSheet) {
-        try {
-          spreadsheet.deleteSheet(oldSheet);
-        } catch (e) {
-          console.error(`Error deleting old sheet: ${e}`);
-        }
-      }
-      
-      Utilities.sleep(1000);
-      
-      try {
-        newSheet.setName(config.SHEET_NAME);
-      } catch (e) {
-        console.error(`Error renaming sheet: ${e}`);
-        if (attempt === maxRetries) throw e;
-      }
-      
-      console.log(`${projectName}: Sheet recreated successfully`);
-      return;
-    } catch (e) {
-      console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
-      
-      if (attempt === maxRetries) {
-        throw e;
-      }
-      
-      const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
-      console.log(`Waiting ${delay}ms before retry...`);
-      Utilities.sleep(delay);
     }
   }
+  
+  return earliestDate;
 }
 
 function getOrCreateProjectSheet(projectName) {

@@ -24,73 +24,129 @@ function autoCacheAllProjects() {
   }
 }
 
-function autoUpdateAllProjects() {
-  console.log('=== AUTO UPDATE STARTED ===');
-  
+function autoUpdateTricky() {
+  console.log('=== AUTO UPDATE TRICKY STARTED ===');
   if (!isAutoUpdateEnabled()) {
-    console.log('Auto update is disabled in settings, skipping');
+    console.log('Auto update is disabled, skipping TRICKY');
     return;
   }
-  
-  clearSettingsCache();
   
   try {
-    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
-    var successCount = 0;
-    
-    projects.forEach(function(proj, index) {
-      try {
-        if (index > 0) {
-          console.log(`Waiting 10 seconds before updating ${proj}...`);
-          Utilities.sleep(10000);
-        }
-        
-        console.log(`Updating ${proj}...`);
-        updateProjectData(proj);
-        successCount++;
-        
-        console.log(`${proj} updated successfully`);
-        
-      } catch (e) {
-        console.error(`Error updating ${proj}:`, e);
-        
-        Utilities.sleep(5000);
-      }
-    });
-    
-    if (successCount > 0) {
-      try {
-        Utilities.sleep(5000);
-        sortProjectSheets();
-        console.log('Project sheets sorted after auto-update');
-      } catch (e) {
-        console.error('Error sorting sheets after auto-update:', e);
-      }
-    }
-    
-    console.log(`=== AUTO UPDATE COMPLETED: ${successCount}/${projects.length} projects updated ===`);
+    updateProjectDataOptimized('TRICKY');
+    console.log('=== AUTO UPDATE TRICKY COMPLETED ===');
   } catch (e) {
-    console.error('AUTO UPDATE FATAL ERROR:', e);
+    console.error('AUTO UPDATE TRICKY ERROR:', e);
   }
 }
 
-function cacheProjectComments(projectName) {
-  var config = getProjectConfig(projectName);
-  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No data to cache`);
+function autoUpdateMoloco() {
+  console.log('=== AUTO UPDATE MOLOCO STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping MOLOCO');
     return;
   }
   
-  var cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
-  
-  console.log(`${projectName}: Comments cached (groups unchanged)`);
+  try {
+    updateProjectDataOptimized('MOLOCO');
+    console.log('=== AUTO UPDATE MOLOCO COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE MOLOCO ERROR:', e);
+  }
 }
 
-function updateProjectData(projectName) {
+function autoUpdateRegular() {
+  console.log('=== AUTO UPDATE REGULAR STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping REGULAR');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('REGULAR');
+    console.log('=== AUTO UPDATE REGULAR COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE REGULAR ERROR:', e);
+  }
+}
+
+function autoUpdateGoogleAds() {
+  console.log('=== AUTO UPDATE GOOGLE_ADS STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping GOOGLE_ADS');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('GOOGLE_ADS');
+    console.log('=== AUTO UPDATE GOOGLE_ADS COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE GOOGLE_ADS ERROR:', e);
+  }
+}
+
+function autoUpdateApplovin() {
+  console.log('=== AUTO UPDATE APPLOVIN STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping APPLOVIN');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('APPLOVIN');
+    console.log('=== AUTO UPDATE APPLOVIN COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE APPLOVIN ERROR:', e);
+  }
+}
+
+function autoUpdateMintegral() {
+  console.log('=== AUTO UPDATE MINTEGRAL STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping MINTEGRAL');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('MINTEGRAL');
+    console.log('=== AUTO UPDATE MINTEGRAL COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE MINTEGRAL ERROR:', e);
+  }
+}
+
+function autoUpdateIncent() {
+  console.log('=== AUTO UPDATE INCENT STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping INCENT');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('INCENT');
+    console.log('=== AUTO UPDATE INCENT COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE INCENT ERROR:', e);
+  }
+}
+
+function autoUpdateOverall() {
+  console.log('=== AUTO UPDATE OVERALL STARTED ===');
+  if (!isAutoUpdateEnabled()) {
+    console.log('Auto update is disabled, skipping OVERALL');
+    return;
+  }
+  
+  try {
+    updateProjectDataOptimized('OVERALL');
+    console.log('=== AUTO UPDATE OVERALL COMPLETED ===');
+  } catch (e) {
+    console.error('AUTO UPDATE OVERALL ERROR:', e);
+  }
+}
+
+function updateProjectDataOptimized(projectName) {
+  console.log(`Starting optimized update for ${projectName}`);
+  
   var config = getProjectConfig(projectName);
   var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -100,18 +156,11 @@ function updateProjectData(projectName) {
     return;
   }
   
-  var earliestDate = null;
-  var data = sheet.getDataRange().getValues();
+  var cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheet();
+  console.log(`${projectName}: Comments cached`);
   
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === 'WEEK') {
-      var weekRange = data[i][1];
-      var startStr = weekRange.split(' - ')[0];
-      var startDate = new Date(startStr);
-      if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
-    }
-  }
-  
+  var earliestDate = findEarliestWeekDate(sheet);
   if (!earliestDate) {
     console.log(`${projectName}: No week data found`);
     return;
@@ -132,23 +181,23 @@ function updateProjectData(projectName) {
     to: formatDateForAPI(endDate)
   };
   
-  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
+  console.log(`${projectName}: Fetching ${dateRange.from} to ${dateRange.to}`);
   
   var raw = fetchProjectCampaignData(projectName, dateRange);
   
   if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No data returned from API`);
+    console.log(`${projectName}: No API data`);
     return;
   }
   
   var processed = processProjectApiData(projectName, raw);
   
   if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid data to process`);
+    console.log(`${projectName}: No valid processed data`);
     return;
   }
   
-  clearProjectDataSilent(projectName);
+  clearProjectDataFast(projectName);
   
   var originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -158,13 +207,57 @@ function updateProjectData(projectName) {
     } else {
       createEnhancedPivotTable(processed);
     }
-    var cache = new CommentCache(projectName);
     cache.applyCommentsToSheet();
   } finally {
     setCurrentProject(originalProject);
   }
   
-  console.log(`${projectName}: Update completed`);
+  console.log(`${projectName}: Update completed successfully`);
+}
+
+function findEarliestWeekDate(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var earliestDate = null;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === 'WEEK') {
+      var weekRange = data[i][1];
+      var startStr = weekRange.split(' - ')[0];
+      var startDate = new Date(startStr);
+      if (!earliestDate || startDate < earliestDate) {
+        earliestDate = startDate;
+      }
+    }
+  }
+  
+  return earliestDate;
+}
+
+function clearProjectDataFast(projectName) {
+  var config = getProjectConfig(projectName);
+  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (sheet) {
+    sheet.clear();
+    console.log(`${projectName}: Sheet cleared`);
+  }
+}
+
+function cacheProjectComments(projectName) {
+  var config = getProjectConfig(projectName);
+  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No data to cache`);
+    return;
+  }
+  
+  var cache = new CommentCache(projectName);
+  cache.syncCommentsFromSheet();
+  
+  console.log(`${projectName}: Comments cached`);
 }
 
 function saveAllCommentsToCache() {
@@ -212,34 +305,56 @@ function showAutomationStatus() {
   var updateEnabled = isAutoUpdateEnabled();
   
   var triggers = ScriptApp.getProjectTriggers();
-  var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-  var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
+  var updateTriggers = getUpdateTriggers();
   
   var msg = '📊 AUTOMATION STATUS\n\n';
   
   msg += '💾 AUTO CACHE:\n';
+  var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
   if (cacheEnabled && cacheTrigger) {
-    msg += '✅ Enabled - Runs daily at 2:00 AM\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
+    msg += '✅ Enabled - Daily at 2:00 AM\n';
   } else if (cacheEnabled && !cacheTrigger) {
-    msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
+    msg += '⚠️ Enabled but trigger missing\n';
   } else {
-    msg += '❌ Disabled\n• Comments must be saved manually\n';
+    msg += '❌ Disabled\n';
   }
   
-  msg += '\n🔄 AUTO UPDATE:\n';
-  if (updateEnabled && updateTrigger) {
-    msg += '✅ Enabled - Runs daily at 5:00 AM\n• Updates all project data\n• Includes previous week data starting from Tuesday\n• Preserves all comments\n• Sorts project sheets after update\n';
-  } else if (updateEnabled && !updateTrigger) {
-    msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
+  msg += '\n🔄 AUTO UPDATE (SEPARATE TRIGGERS):\n';
+  if (updateEnabled && updateTriggers.length === 8) {
+    msg += '✅ Enabled - Staggered updates:\n';
+    msg += '• TRICKY: 4:00 AM\n';
+    msg += '• MOLOCO: 4:30 AM\n';
+    msg += '• REGULAR: 5:00 AM\n';
+    msg += '• GOOGLE_ADS: 5:30 AM\n';
+    msg += '• APPLOVIN: 6:00 AM\n';
+    msg += '• MINTEGRAL: 6:30 AM\n';
+    msg += '• INCENT: 7:00 AM\n';
+    msg += '• OVERALL: 7:30 AM\n';
+  } else if (updateEnabled && updateTriggers.length > 0) {
+    msg += `⚠️ Partially configured (${updateTriggers.length}/8 triggers)\n`;
+  } else if (updateEnabled) {
+    msg += '⚠️ Enabled but triggers missing\n';
   } else {
-    msg += '❌ Disabled\n• Data must be updated manually\n';
+    msg += '❌ Disabled\n';
   }
   
-  msg += `\n⏱️ ACTIVE TRIGGERS:\n• Total triggers: ${triggers.length}\n• Cache triggers: ${triggers.filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; }).length}\n• Update triggers: ${triggers.filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; }).length}`;
-  
-  msg += '\n\n💡 TIP: Use Settings sheet to enable/disable automation';
+  msg += `\n⏱️ ACTIVE TRIGGERS: ${triggers.length} total\n`;
+  msg += `• Cache: ${triggers.filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; }).length}\n`;
+  msg += `• Update: ${updateTriggers.length}\n`;
   
   ui.alert('Automation Status', msg, ui.ButtonSet.OK);
+}
+
+function getUpdateTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var updateFunctions = [
+    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall'
+  ];
+  
+  return triggers.filter(function(t) {
+    return updateFunctions.includes(t.getHandlerFunction());
+  });
 }
 
 function enableAutoCache() {
@@ -251,7 +366,7 @@ function enableAutoCache() {
     ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
     saveSettingToSheet('automation.autoCache', true);
     
-    console.log('Auto cache enabled and saved to Settings sheet');
+    console.log('Auto cache enabled');
   } catch (e) {
     console.error('Failed to enable auto cache:', e);
     throw e;
@@ -266,7 +381,7 @@ function disableAutoCache() {
     
     saveSettingToSheet('automation.autoCache', false);
     
-    console.log('Auto cache disabled and saved to Settings sheet');
+    console.log('Auto cache disabled');
   } catch (e) {
     console.error('Failed to disable auto cache:', e);
     throw e;
@@ -275,14 +390,11 @@ function disableAutoCache() {
 
 function enableAutoUpdate() {
   try {
-    ScriptApp.getProjectTriggers()
-      .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
-      .forEach(function(t) { ScriptApp.deleteTrigger(t); });
-    
-    ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
+    clearAllUpdateTriggers();
+    createUpdateTriggers();
     saveSettingToSheet('automation.autoUpdate', true);
     
-    console.log('Auto update enabled and saved to Settings sheet');
+    console.log('Auto update enabled with separate triggers');
   } catch (e) {
     console.error('Failed to enable auto update:', e);
     throw e;
@@ -291,17 +403,56 @@ function enableAutoUpdate() {
 
 function disableAutoUpdate() {
   try {
-    ScriptApp.getProjectTriggers()
-      .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
-      .forEach(function(t) { ScriptApp.deleteTrigger(t); });
-    
+    clearAllUpdateTriggers();
     saveSettingToSheet('automation.autoUpdate', false);
     
-    console.log('Auto update disabled and saved to Settings sheet');
+    console.log('Auto update disabled');
   } catch (e) {
     console.error('Failed to disable auto update:', e);
     throw e;
   }
+}
+
+function clearAllUpdateTriggers() {
+  var updateFunctions = [
+    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall',
+    'autoUpdateAllProjects'
+  ];
+  
+  ScriptApp.getProjectTriggers()
+    .filter(function(t) { return updateFunctions.includes(t.getHandlerFunction()); })
+    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+}
+
+function createUpdateTriggers() {
+  var schedule = [
+    { func: 'autoUpdateTricky', hour: 4 },
+    { func: 'autoUpdateMoloco', hour: 4, minute: 30 },
+    { func: 'autoUpdateRegular', hour: 5 },
+    { func: 'autoUpdateGoogleAds', hour: 5, minute: 30 },
+    { func: 'autoUpdateApplovin', hour: 6 },
+    { func: 'autoUpdateMintegral', hour: 6, minute: 30 },
+    { func: 'autoUpdateIncent', hour: 7 },
+    { func: 'autoUpdateOverall', hour: 7, minute: 30 }
+  ];
+  
+  schedule.forEach(function(item) {
+    if (item.minute) {
+      ScriptApp.newTrigger(item.func)
+        .timeBased()
+        .everyDays(1)
+        .atHour(item.hour)
+        .nearMinute(item.minute)
+        .create();
+    } else {
+      ScriptApp.newTrigger(item.func)
+        .timeBased()
+        .everyDays(1)
+        .atHour(item.hour)
+        .create();
+    }
+  });
 }
 
 function syncTriggersWithSettings() {
@@ -310,7 +461,7 @@ function syncTriggersWithSettings() {
     var triggers = ScriptApp.getProjectTriggers();
     
     var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-    var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
+    var updateTriggers = getUpdateTriggers();
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
@@ -320,12 +471,13 @@ function syncTriggersWithSettings() {
       console.log('Deleted auto cache trigger');
     }
     
-    if (settings.automation.autoUpdate && !updateTrigger) {
-      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
-      console.log('Created auto update trigger');
-    } else if (!settings.automation.autoUpdate && updateTrigger) {
-      ScriptApp.deleteTrigger(updateTrigger);
-      console.log('Deleted auto update trigger');
+    if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
+      clearAllUpdateTriggers();
+      createUpdateTriggers();
+      console.log('Created separate update triggers');
+    } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
+      clearAllUpdateTriggers();
+      console.log('Deleted all update triggers');
     }
     
     console.log('Triggers synchronized with Settings sheet');
