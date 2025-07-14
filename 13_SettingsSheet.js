@@ -1,20 +1,30 @@
 var SETTINGS_SHEET_NAME = 'Settings';
 var SETTINGS_CACHE = null;
 var SETTINGS_CACHE_TIME = null;
+var SETTINGS_LOAD_LOCK = LockService.getScriptLock();
 
 function getOrCreateSettingsSheet() {
-  const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(SETTINGS_SHEET_NAME);
-  
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(SETTINGS_SHEET_NAME);
-    createSettingsLayout(sheet);
-    populateDefaultSettings(sheet);
-  } else {
-    migrateExistingSettings(sheet);
+  try {
+    SETTINGS_LOAD_LOCK.waitLock(10000);
+    
+    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(SETTINGS_SHEET_NAME);
+    
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(SETTINGS_SHEET_NAME);
+      createSettingsLayout(sheet);
+      populateDefaultSettings(sheet);
+    } else {
+      migrateExistingSettings(sheet);
+    }
+    
+    return sheet;
+  } catch (e) {
+    console.error('Error getting settings sheet:', e);
+    throw e;
+  } finally {
+    SETTINGS_LOAD_LOCK.releaseLock();
   }
-  
-  return sheet;
 }
 
 function migrateExistingSettings(sheet) {
@@ -262,11 +272,33 @@ function createSettingsLayout(sheet) {
 function loadSettingsFromSheet() {
   const now = new Date().getTime();
   
-  if (SETTINGS_CACHE && SETTINGS_CACHE_TIME && (now - SETTINGS_CACHE_TIME) < 30000) {
+  if (SETTINGS_CACHE && SETTINGS_CACHE_TIME && (now - SETTINGS_CACHE_TIME) < 60000) {
     return SETTINGS_CACHE;
   }
   
-  const sheet = getOrCreateSettingsSheet();
+  const cacheKey = 'SETTINGS_CACHE_V2';
+  const cache = CacheService.getScriptCache();
+  const cachedData = cache.get(cacheKey);
+  
+  if (cachedData) {
+    try {
+      const cached = JSON.parse(cachedData);
+      SETTINGS_CACHE = cached;
+      SETTINGS_CACHE_TIME = now;
+      return cached;
+    } catch (e) {
+      console.log('Error parsing cached settings:', e);
+    }
+  }
+  
+  let sheet;
+  try {
+    sheet = getOrCreateSettingsSheet();
+  } catch (e) {
+    console.error('Error getting settings sheet:', e);
+    return getDefaultSettingsValues();
+  }
+  
   const data = sheet.getDataRange().getValues();
   
   const settings = {
@@ -378,7 +410,31 @@ function loadSettingsFromSheet() {
   SETTINGS_CACHE = settings;
   SETTINGS_CACHE_TIME = now;
   
+  try {
+    cache.put(cacheKey, JSON.stringify(settings), 600);
+  } catch (e) {
+    console.log('Error caching settings:', e);
+  }
+  
   return settings;
+}
+
+function getDefaultSettingsValues() {
+  return {
+    bearerToken: '',
+    targetEROAS: { tricky: 250, business: 140, ceg: 150 },
+    automation: { autoCache: false, autoUpdate: false },
+    growthThresholds: {
+      TRICKY: getDefaultGrowthThresholds(),
+      MOLOCO: getDefaultGrowthThresholds(),
+      REGULAR: getDefaultGrowthThresholds(),
+      GOOGLE_ADS: getDefaultGrowthThresholds(),
+      APPLOVIN: getDefaultGrowthThresholds(),
+      MINTEGRAL: getDefaultGrowthThresholds(),
+      INCENT: getDefaultGrowthThresholds(),
+      OVERALL: getDefaultGrowthThresholds()
+    }
+  };
 }
 
 function populateDefaultSettings(sheet) {
@@ -404,10 +460,10 @@ function populateDefaultSettings(sheet) {
 }
 
 function saveSettingToSheet(settingPath, value) {
+  clearSettingsCache();
+  
   const sheet = getOrCreateSettingsSheet();
   const data = sheet.getDataRange().getValues();
-  
-  SETTINGS_CACHE = null;
   
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
@@ -479,6 +535,12 @@ function refreshSettingsFromSheet() {
 function clearSettingsCache() {
   SETTINGS_CACHE = null;
   SETTINGS_CACHE_TIME = null;
+  BEARER_TOKEN_CACHE = null;
+  BEARER_TOKEN_CACHE_TIME = null;
+  
+  const cache = CacheService.getScriptCache();
+  cache.remove('SETTINGS_CACHE_V2');
+  cache.remove('BEARER_TOKEN');
 }
 
 function openSettingsSheet() {

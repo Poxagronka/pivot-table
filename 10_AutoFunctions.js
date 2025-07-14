@@ -1,7 +1,3 @@
-/**
- * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы + учитывает день недели для предыдущей недели
- */
-
 function autoCacheAllProjects() {
   console.log('=== AUTO CACHE STARTED ===');
   
@@ -11,8 +7,11 @@ function autoCacheAllProjects() {
   }
   
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(function(proj) {
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(function(proj, index) {
       try {
+        if (index > 0) {
+          Utilities.sleep(2000);
+        }
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
       } catch (e) {
@@ -33,23 +32,35 @@ function autoUpdateAllProjects() {
     return;
   }
   
+  clearSettingsCache();
+  
   try {
     var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     var successCount = 0;
     
-    projects.forEach(function(proj) {
+    projects.forEach(function(proj, index) {
       try {
+        if (index > 0) {
+          console.log(`Waiting 10 seconds before updating ${proj}...`);
+          Utilities.sleep(10000);
+        }
+        
         console.log(`Updating ${proj}...`);
         updateProjectData(proj);
         successCount++;
+        
+        console.log(`${proj} updated successfully`);
+        
       } catch (e) {
         console.error(`Error updating ${proj}:`, e);
+        
+        Utilities.sleep(5000);
       }
     });
     
-    // ИЗМЕНЕНО: всегда сортируем листы после автообновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
+        Utilities.sleep(5000);
         sortProjectSheets();
         console.log('Project sheets sorted after auto-update');
       } catch (e) {
@@ -130,7 +141,6 @@ function updateProjectData(projectName) {
     return;
   }
   
-  // ОБНОВЛЕНО: processProjectApiData теперь автоматически учитывает день недели
   var processed = processProjectApiData(projectName, raw);
   
   if (Object.keys(processed).length === 0) {
@@ -269,7 +279,6 @@ function enableAutoUpdate() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // ИЗМЕНЕНО: автообновление каждый день в 5:00 AM
     ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
     saveSettingToSheet('automation.autoUpdate', true);
     
@@ -312,7 +321,6 @@ function syncTriggersWithSettings() {
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
-      // ИЗМЕНЕНО: создаем триггер на каждый день в 5:00 AM
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
       console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
