@@ -1,7 +1,3 @@
-/**
- * Menu Functions - ОБНОВЛЕНО: добавлено принудительное обновление настроек
- */
-
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
 
 function onOpen() {
@@ -16,6 +12,7 @@ function onOpen() {
       .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
       .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
       .addItem('📊 System Status', 'showQuickStatus')
+      .addItem('🔄 Recreate Triggers', 'recreateAllTriggers')
       .addSeparator()
       .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
       .addItem('🔍 Quick API Check', 'quickAPICheckAll')
@@ -206,7 +203,7 @@ function showQuickStatus() {
   
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-  var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
+  var updateTriggers = getUpdateTriggers();
   
   var cacheEnabled = isAutoCacheEnabled();
   var updateEnabled = isAutoUpdateEnabled();
@@ -218,11 +215,11 @@ function showQuickStatus() {
   if (!cacheEnabled && cacheTrigger) {
     syncIssues.push('• Cache trigger exists but disabled (will remove)');
   }
-  if (updateEnabled && !updateTrigger) {
-    syncIssues.push('• Update trigger missing (will auto-create)');
+  if (updateEnabled && updateTriggers.length !== 8) {
+    syncIssues.push('• Update triggers incomplete (will auto-create)');
   }
-  if (!updateEnabled && updateTrigger) {
-    syncIssues.push('• Update trigger exists but disabled (will remove)');
+  if (!updateEnabled && updateTriggers.length > 0) {
+    syncIssues.push('• Update triggers exist but disabled (will remove)');
   }
   
   if (syncIssues.length > 0) {
@@ -234,13 +231,32 @@ function showQuickStatus() {
   
   message += '📅 AUTOMATION SCHEDULE:\n';
   message += '• Auto Cache: Daily at 2:00 AM\n';
-  message += '• Auto Update: Daily at 5:00 AM\n';
-  message += '• Previous week data: Included starting from Tuesday\n\n';
+  message += '• Auto Update: Exact times (no ranges):\n';
+  message += '  - TRICKY: 5:00 AM\n';
+  message += '  - MOLOCO: 5:00 AM\n';
+  message += '  - REGULAR: 5:00 AM\n';
+  message += '  - GOOGLE_ADS: 5:00 AM\n';
+  message += '  - APPLOVIN: 5:00 AM\n';
+  message += '  - MINTEGRAL: 5:00 AM\n';
+  message += '  - INCENT: 6:00 AM\n';
+  message += '  - OVERALL: 6:00 AM\n\n';
   
-  message += '💡 TIP: Use Settings sheet to configure all options\n';
-  message += '🔧 Use "Force Update Settings" if you have old targets';
+  message += '💡 TIP: Use Settings sheet to configure targets and automation\n';
+  message += '🔧 Use "🔄 Recreate Triggers" if triggers show time ranges';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
+}
+
+function getUpdateTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var updateFunctions = [
+    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall'
+  ];
+  
+  return triggers.filter(function(t) {
+    return updateFunctions.includes(t.getHandlerFunction());
+  });
 }
 
 function quickAPICheckAll() {
@@ -396,7 +412,7 @@ function syncTriggersWithSettings() {
     var triggers = ScriptApp.getProjectTriggers();
     
     var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-    var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
+    var updateTriggers = getUpdateTriggers();
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
@@ -406,12 +422,13 @@ function syncTriggersWithSettings() {
       console.log('Deleted auto cache trigger');
     }
     
-    if (settings.automation.autoUpdate && !updateTrigger) {
-      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
-      console.log('Created auto update trigger');
-    } else if (!settings.automation.autoUpdate && updateTrigger) {
-      ScriptApp.deleteTrigger(updateTrigger);
-      console.log('Deleted auto update trigger');
+    if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
+      clearAllUpdateTriggers();
+      createUpdateTriggers();
+      console.log('Created update triggers with 10-minute intervals');
+    } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
+      clearAllUpdateTriggers();
+      console.log('Deleted all update triggers');
     }
     
     console.log('Triggers synchronized with Settings sheet');
@@ -419,6 +436,40 @@ function syncTriggersWithSettings() {
     console.error('Error syncing triggers with settings:', e);
     throw e;
   }
+}
+
+function clearAllUpdateTriggers() {
+  var updateFunctions = [
+    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall',
+    'autoUpdateAllProjects'
+  ];
+  
+  ScriptApp.getProjectTriggers()
+    .filter(function(t) { return updateFunctions.includes(t.getHandlerFunction()); })
+    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+}
+
+function createUpdateTriggers() {
+  var schedule = [
+    { func: 'autoUpdateTricky', hour: 5, minute: 0 },
+    { func: 'autoUpdateMoloco', hour: 5, minute: 10 },
+    { func: 'autoUpdateRegular', hour: 5, minute: 20 },
+    { func: 'autoUpdateGoogleAds', hour: 5, minute: 30 },
+    { func: 'autoUpdateApplovin', hour: 5, minute: 40 },
+    { func: 'autoUpdateMintegral', hour: 5, minute: 50 },
+    { func: 'autoUpdateIncent', hour: 6, minute: 0 },
+    { func: 'autoUpdateOverall', hour: 6, minute: 10 }
+  ];
+  
+  schedule.forEach(function(item) {
+    ScriptApp.newTrigger(item.func)
+      .timeBased()
+      .everyDays(1)
+      .atHour(item.hour)
+      .nearMinute(item.minute)
+      .create();
+  });
 }
 
 function updateProjectDataWithRetry(projectName, maxRetries = 2) {
@@ -694,4 +745,39 @@ function openGitHubRepo() {
   ).setWidth(400).setHeight(300);
   
   ui.showModalDialog(htmlOutput, 'Opening GitHub Repository...');
+}
+
+function recreateAllTriggers() {
+  var ui = SpreadsheetApp.getUi();
+  
+  var result = ui.alert('🔄 Recreate Triggers', 
+    'Recreate all automation triggers with exact timing?\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• TRICKY: 5:00 AM\n• MOLOCO: 5:00 AM\n• REGULAR: 5:00 AM\n• GOOGLE_ADS: 5:00 AM\n• APPLOVIN: 5:00 AM\n• MINTEGRAL: 5:00 AM\n• INCENT: 6:00 AM\n• OVERALL: 6:00 AM', 
+    ui.ButtonSet.YES_NO);
+  
+  if (result !== ui.Button.YES) return;
+  
+  try {
+    console.log('Recreating all triggers...');
+    
+    clearAllUpdateTriggers();
+    
+    var cacheEnabled = isAutoCacheEnabled();
+    var updateEnabled = isAutoUpdateEnabled();
+    
+    if (cacheEnabled) {
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      console.log('Cache trigger recreated');
+    }
+    
+    if (updateEnabled) {
+      createUpdateTriggers();
+      console.log('Update triggers recreated');
+    }
+    
+    ui.alert('✅ Triggers Recreated', 'All triggers have been recreated with exact timing!\n\n⏰ Schedule:\n• Cache: 2:00 AM daily\n• Updates: 5:00 AM (first 6) and 6:00 AM (last 2)', ui.ButtonSet.OK);
+    
+  } catch (e) {
+    console.error('Error recreating triggers:', e);
+    ui.alert('❌ Error', 'Error recreating triggers: ' + e.toString(), ui.ButtonSet.OK);
+  }
 }

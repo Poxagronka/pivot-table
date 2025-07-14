@@ -319,17 +319,17 @@ function showAutomationStatus() {
     msg += '❌ Disabled\n';
   }
   
-  msg += '\n🔄 AUTO UPDATE (SEPARATE TRIGGERS):\n';
+  msg += '\n🔄 AUTO UPDATE (EXACT TIME TRIGGERS):\n';
   if (updateEnabled && updateTriggers.length === 8) {
-    msg += '✅ Enabled - Staggered updates:\n';
-    msg += '• TRICKY: 4:00 AM\n';
-    msg += '• MOLOCO: 4:30 AM\n';
+    msg += '✅ Enabled - Exact times:\n';
+    msg += '• TRICKY: 5:00 AM\n';
+    msg += '• MOLOCO: 5:00 AM\n';
     msg += '• REGULAR: 5:00 AM\n';
-    msg += '• GOOGLE_ADS: 5:30 AM\n';
-    msg += '• APPLOVIN: 6:00 AM\n';
-    msg += '• MINTEGRAL: 6:30 AM\n';
-    msg += '• INCENT: 7:00 AM\n';
-    msg += '• OVERALL: 7:30 AM\n';
+    msg += '• GOOGLE_ADS: 5:00 AM\n';
+    msg += '• APPLOVIN: 5:00 AM\n';
+    msg += '• MINTEGRAL: 5:00 AM\n';
+    msg += '• INCENT: 6:00 AM\n';
+    msg += '• OVERALL: 6:00 AM\n';
   } else if (updateEnabled && updateTriggers.length > 0) {
     msg += `⚠️ Partially configured (${updateTriggers.length}/8 triggers)\n`;
   } else if (updateEnabled) {
@@ -394,7 +394,7 @@ function enableAutoUpdate() {
     createUpdateTriggers();
     saveSettingToSheet('automation.autoUpdate', true);
     
-    console.log('Auto update enabled with separate triggers');
+    console.log('Auto update enabled with exact time triggers');
   } catch (e) {
     console.error('Failed to enable auto update:', e);
     throw e;
@@ -423,36 +423,33 @@ function clearAllUpdateTriggers() {
   ScriptApp.getProjectTriggers()
     .filter(function(t) { return updateFunctions.includes(t.getHandlerFunction()); })
     .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  
+  console.log('Cleared all update triggers');
 }
 
 function createUpdateTriggers() {
   var schedule = [
-    { func: 'autoUpdateTricky', hour: 4 },
-    { func: 'autoUpdateMoloco', hour: 4, minute: 30 },
+    { func: 'autoUpdateTricky', hour: 5 },
+    { func: 'autoUpdateMoloco', hour: 5 },
     { func: 'autoUpdateRegular', hour: 5 },
-    { func: 'autoUpdateGoogleAds', hour: 5, minute: 30 },
-    { func: 'autoUpdateApplovin', hour: 6 },
-    { func: 'autoUpdateMintegral', hour: 6, minute: 30 },
-    { func: 'autoUpdateIncent', hour: 7 },
-    { func: 'autoUpdateOverall', hour: 7, minute: 30 }
+    { func: 'autoUpdateGoogleAds', hour: 5 },
+    { func: 'autoUpdateApplovin', hour: 5 },
+    { func: 'autoUpdateMintegral', hour: 5 },
+    { func: 'autoUpdateIncent', hour: 6 },
+    { func: 'autoUpdateOverall', hour: 6 }
   ];
   
-  schedule.forEach(function(item) {
-    if (item.minute) {
-      ScriptApp.newTrigger(item.func)
-        .timeBased()
-        .everyDays(1)
-        .atHour(item.hour)
-        .nearMinute(item.minute)
-        .create();
-    } else {
-      ScriptApp.newTrigger(item.func)
-        .timeBased()
-        .everyDays(1)
-        .atHour(item.hour)
-        .create();
-    }
+  schedule.forEach(function(item, index) {
+    ScriptApp.newTrigger(item.func)
+      .timeBased()
+      .everyDays(1)
+      .atHour(item.hour)
+      .create();
+    
+    console.log(`Created trigger for ${item.func} at ${item.hour}:00`);
   });
+  
+  console.log('All update triggers created');
 }
 
 function syncTriggersWithSettings() {
@@ -474,7 +471,7 @@ function syncTriggersWithSettings() {
     if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
       clearAllUpdateTriggers();
       createUpdateTriggers();
-      console.log('Created separate update triggers');
+      console.log('Created update triggers with exact times');
     } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
       clearAllUpdateTriggers();
       console.log('Deleted all update triggers');
@@ -489,4 +486,33 @@ function syncTriggersWithSettings() {
 function onSettingsChange() {
   clearSettingsCache();
   syncTriggersWithSettings();
+}
+
+function recreateAllTriggers() {
+  var ui = SpreadsheetApp.getUi();
+  
+  try {
+    console.log('Recreating all triggers...');
+    
+    clearAllUpdateTriggers();
+    
+    var cacheEnabled = isAutoCacheEnabled();
+    var updateEnabled = isAutoUpdateEnabled();
+    
+    if (cacheEnabled) {
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      console.log('Cache trigger recreated');
+    }
+    
+    if (updateEnabled) {
+      createUpdateTriggers();
+      console.log('Update triggers recreated');
+    }
+    
+    ui.alert('✅ Triggers Recreated', 'All triggers have been recreated with exact timing!\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• Updates: 5:00-6:10 AM (10min apart)', ui.ButtonSet.OK);
+    
+  } catch (e) {
+    console.error('Error recreating triggers:', e);
+    ui.alert('❌ Error', 'Error recreating triggers: ' + e.toString(), ui.ButtonSet.OK);
+  }
 }
