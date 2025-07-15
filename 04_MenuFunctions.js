@@ -33,7 +33,7 @@ function updateAllProjectsInBatches() {
   }
   
   var result = ui.alert('🔄 Update All Projects', 
-    'Update all projects in batches to avoid timeouts?\n\nBatch 1: TRICKY, MOLOCO, REGULAR, GOOGLE_ADS\nBatch 2: APPLOVIN, MINTEGRAL, INCENT, OVERALL\n\nThis will be slower but more reliable.', 
+    'Update all projects in optimized batches?\n\n• TRICKY: Optimized processing\n• Other projects: Standard processing\n\nThis will be slower but more reliable.', 
     ui.ButtonSet.YES_NO);
   
   if (result !== ui.Button.YES) return;
@@ -42,8 +42,8 @@ function updateAllProjectsInBatches() {
     var batch1 = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS'];
     var batch2 = ['APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     
-    console.log('Starting batch 1...');
-    var batch1Results = updateProjectBatch(batch1, 1);
+    console.log('Starting batch 1 with TRICKY optimizations...');
+    var batch1Results = updateProjectBatchOptimized(batch1, 1);
     
     if (batch1Results.successCount > 0) {
       console.log('Waiting 30 seconds before batch 2...');
@@ -51,7 +51,7 @@ function updateAllProjectsInBatches() {
     }
     
     console.log('Starting batch 2...');
-    var batch2Results = updateProjectBatch(batch2, 2);
+    var batch2Results = updateProjectBatchOptimized(batch2, 2);
     
     var totalSuccess = batch1Results.successCount + batch2Results.successCount;
     var totalErrors = batch1Results.errors.concat(batch2Results.errors);
@@ -65,7 +65,7 @@ function updateAllProjectsInBatches() {
       totalErrors.push(`Sorting: ${e.toString().substring(0, 50)}...`);
     }
     
-    var message = `✅ Batch update completed!\n\n• Successfully updated: ${totalSuccess}/8 projects`;
+    var message = `✅ Batch update completed!\n\n• Successfully updated: ${totalSuccess}/8 projects\n• TRICKY: Optimized processing used`;
     if (totalErrors.length > 0) {
       message += `\n• Errors:\n${totalErrors.join('\n')}`;
       message += '\n\n💡 TIP: Try updating failed projects individually.';
@@ -77,19 +77,25 @@ function updateAllProjectsInBatches() {
   }
 }
 
-function updateProjectBatch(projects, batchNumber) {
+function updateProjectBatchOptimized(projects, batchNumber) {
   var successCount = 0;
   var errors = [];
   
-  console.log(`=== BATCH ${batchNumber} START ===`);
+  console.log(`=== BATCH ${batchNumber} START (OPTIMIZED) ===`);
   
   projects.forEach(function(proj, index) {
     try {
       console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
       
+      if (proj === 'TRICKY') {
+        console.log('Using TRICKY optimized update...');
+        clearTrickyCaches();
+      }
+      
       if (index > 0) {
-        console.log('Waiting 8 seconds before next project...');
-        Utilities.sleep(8000);
+        const waitTime = proj === 'TRICKY' ? 12000 : 8000;
+        console.log(`Waiting ${waitTime/1000} seconds before next project...`);
+        Utilities.sleep(waitTime);
       }
       
       updateProjectDataOptimized(proj);
@@ -131,9 +137,14 @@ function updateSelectedProjectsToCurrent() {
     return;
   }
   
-  var result = ui.alert('🔄 Update Selected Projects', 
-    `Update ${selected.length} selected projects?\n\n${selected.join(', ')}\n\nThis may take several minutes.`, 
-    ui.ButtonSet.YES_NO);
+  var hasTricky = selected.some(function(proj) { return proj.toLowerCase() === 'tricky'; });
+  var message = `Update ${selected.length} selected projects?\n\n${selected.join(', ')}`;
+  if (hasTricky) {
+    message += '\n\n🚀 TRICKY will use optimized processing';
+  }
+  message += '\n\nThis may take several minutes.';
+  
+  var result = ui.alert('🔄 Update Selected Projects', message, ui.ButtonSet.YES_NO);
   
   if (result !== ui.Button.YES) return;
   
@@ -146,9 +157,15 @@ function updateSelectedProjectsToCurrent() {
         var projectName = proj.toUpperCase();
         console.log(`Updating ${projectName} (${index + 1}/${selected.length})...`);
         
+        if (projectName === 'TRICKY') {
+          console.log('Clearing TRICKY caches for optimization...');
+          clearTrickyCaches();
+        }
+        
         if (index > 0) {
-          console.log('Waiting 8 seconds before next project...');
-          Utilities.sleep(8000);
+          const waitTime = projectName === 'TRICKY' ? 12000 : 8000;
+          console.log(`Waiting ${waitTime/1000} seconds before next project...`);
+          Utilities.sleep(waitTime);
         }
         
         updateProjectDataOptimized(projectName);
@@ -181,6 +198,9 @@ function updateSelectedProjectsToCurrent() {
     }
     
     var message = `✅ Update completed!\n\n• Successfully updated: ${successCount}/${selected.length} projects`;
+    if (hasTricky) {
+      message += '\n• TRICKY: Optimized processing used';
+    }
     if (errors.length > 0) {
       message += `\n• Errors:\n${errors.join('\n')}`;
       message += '\n\n💡 TIP: Try updating problematic projects individually.';
@@ -207,8 +227,20 @@ function updateSingleProject() {
   
   try {
     console.log(`Updating single project: ${projectName}`);
+    
+    if (projectName === 'TRICKY') {
+      console.log('Using TRICKY optimized processing...');
+      clearTrickyCaches();
+    }
+    
     updateProjectDataOptimized(projectName);
-    ui.alert('✅ Success', `${projectName} updated successfully!`, ui.ButtonSet.OK);
+    
+    var successMessage = `${projectName} updated successfully!`;
+    if (projectName === 'TRICKY') {
+      successMessage += '\n\n🚀 Used optimized processing for faster performance';
+    }
+    
+    ui.alert('✅ Success', successMessage, ui.ButtonSet.OK);
   } catch (e) {
     console.error(`Error updating ${projectName}:`, e);
     var errorMsg = e.toString();
@@ -231,6 +263,7 @@ function refreshSettingsDialog() {
     message += `💾 Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
     message += `🔄 Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
     message += `🎯 eROAS D730 Targets: Updated\n`;
+    message += `🚀 TRICKY Optimizations: Available\n`;
     
     try {
       syncTriggersWithSettings();
@@ -258,7 +291,8 @@ function showQuickStatus() {
   message += `🔐 Bearer Token: ${tokenStatus}\n`;
   message += `💾 Auto Cache: ${cacheStatus}\n`;
   message += `🔄 Auto Update: ${updateStatus}\n`;
-  message += `🎯 Metrics: Unified (eROAS D730)\n\n`;
+  message += `🎯 Metrics: Unified (eROAS D730)\n`;
+  message += `🚀 TRICKY Optimizations: ✅ Active\n\n`;
   
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
@@ -291,7 +325,7 @@ function showQuickStatus() {
   message += '📅 AUTOMATION SCHEDULE:\n';
   message += '• Auto Cache: Daily at 2:00 AM\n';
   message += '• Auto Update: Exact times:\n';
-  message += '  - TRICKY: 5:00 AM\n';
+  message += '  - TRICKY: 5:00 AM (optimized)\n';
   message += '  - MOLOCO: 5:00 AM\n';
   message += '  - REGULAR: 5:00 AM\n';
   message += '  - GOOGLE_ADS: 5:00 AM\n';
@@ -302,6 +336,7 @@ function showQuickStatus() {
   
   message += '💡 TIP: Use "📈 Generate Report" for flexible periods (any number of days)\n';
   message += '🔧 Use "🔄 Update All" for batch processing or update projects individually\n';
+  message += '🚀 TRICKY uses optimized processing for better performance\n';
   message += '⚠️ Large periods (>180 days) may cause timeouts - use date ranges instead';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
@@ -335,6 +370,12 @@ function quickAPICheckAll() {
   projects.forEach(function(proj) {
     try {
       setCurrentProject(proj);
+      
+      if (proj === 'TRICKY') {
+        console.log('Clearing TRICKY caches for API check...');
+        clearTrickyCaches();
+      }
+      
       var dateRange = getDateRange(7);
       var raw = fetchCampaignData(dateRange);
       
@@ -342,7 +383,8 @@ function quickAPICheckAll() {
         results += `❌ ${proj}: No data\n`;
       } else {
         var count = raw.data.analytics.richStats.stats.length;
-        results += `✅ ${proj}: ${count} records\n`;
+        var optimizedNote = proj === 'TRICKY' ? ' (optimized)' : '';
+        results += `✅ ${proj}: ${count} records${optimizedNote}\n`;
       }
     } catch (e) {
       results += `❌ ${proj}: ${e.toString().substring(0, 30)}...\n`;
@@ -375,13 +417,13 @@ function smartReportWizard() {
   
   if (scope === 1) {
     if (period <= 3) {
-      quickGenerateAllForDays(days[period-1]);
+      quickGenerateAllForDaysOptimized(days[period-1]);
     } else if (period === 4) {
       var customDays = promptCustomDays();
-      if (customDays) quickGenerateAllForDays(customDays);
+      if (customDays) quickGenerateAllForDaysOptimized(customDays);
     } else {
       var dates = promptDateRange();
-      if (dates) runAllProjectsDateRange(dates.start, dates.end);
+      if (dates) runAllProjectsDateRangeOptimized(dates.start, dates.end);
     }
   } else if (scope === 2) {
     var project = showChoice('Select Project - Step 3/3', MENU_PROJECTS);
@@ -389,26 +431,26 @@ function smartReportWizard() {
     var projectName = MENU_PROJECTS[project-1].toUpperCase();
     
     if (period <= 3) {
-      generateProjectReport(projectName, days[period-1]);
+      generateProjectReportOptimized(projectName, days[period-1]);
     } else if (period === 4) {
       var customDays = promptCustomDays();
-      if (customDays) generateProjectReport(projectName, customDays);
+      if (customDays) generateProjectReportOptimized(projectName, customDays);
     } else {
       var dates = promptDateRange();
-      if (dates) generateProjectReportForDateRange(projectName, dates.start, dates.end);
+      if (dates) generateProjectReportForDateRangeOptimized(projectName, dates.start, dates.end);
     }
   } else {
     var selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
     if (!selected || selected.length === 0) return;
     
     if (period <= 3) {
-      runSelectedProjects(selected, days[period-1]);
+      runSelectedProjectsOptimized(selected, days[period-1]);
     } else if (period === 4) {
       var customDays = promptCustomDays();
-      if (customDays) runSelectedProjects(selected, customDays);
+      if (customDays) runSelectedProjectsOptimized(selected, customDays);
     } else {
       var dates = promptDateRange();
-      if (dates) runSelectedProjectsDateRange(selected, dates.start, dates.end);
+      if (dates) runSelectedProjectsDateRangeOptimized(selected, dates.start, dates.end);
     }
   }
 }
@@ -418,16 +460,16 @@ function clearDataWizard() {
   if (!choice) return;
   
   if (choice === 1) {
-    clearAllProjectsData();
+    clearAllProjectsDataOptimized();
   } else {
     var p = showChoice('Select Project:', MENU_PROJECTS);
-    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
+    if (p) clearProjectAllDataOptimized(MENU_PROJECTS[p-1].toUpperCase());
   }
 }
 
-function clearAllProjectsData() {
+function clearAllProjectsDataOptimized() {
   var ui = SpreadsheetApp.getUi();
-  if (ui.alert('Confirm Clear All', 'Clear data from ALL projects? Comments preserved.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  if (ui.alert('Confirm Clear All', 'Clear data from ALL projects? Comments preserved.\n\n🚀 TRICKY will use optimized clearing.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
     var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
@@ -435,6 +477,10 @@ function clearAllProjectsData() {
     
     projects.forEach(function(proj) {
       try {
+        if (proj === 'TRICKY') {
+          console.log('Clearing TRICKY with optimizations...');
+          clearTrickyCaches();
+        }
         clearProjectDataSilent(proj);
         successCount++;
       } catch (e) {
@@ -449,11 +495,21 @@ function clearAllProjectsData() {
   }
 }
 
-function clearProjectAllData(projectName) {
+function clearProjectAllDataOptimized(projectName) {
   var ui = SpreadsheetApp.getUi();
-  if (ui.alert(`Clear ${projectName} Data`, `Clear all ${projectName} data? Comments preserved.`, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  
+  var message = `Clear all ${projectName} data? Comments preserved.`;
+  if (projectName === 'TRICKY') {
+    message += '\n\n🚀 Will use optimized clearing process.';
+  }
+  
+  if (ui.alert(`Clear ${projectName} Data`, message, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
+    if (projectName === 'TRICKY') {
+      console.log('Clearing TRICKY with optimizations...');
+      clearTrickyCaches();
+    }
     clearProjectDataSilent(projectName);
     ui.alert('Success', `${projectName} data cleared. Comments preserved.`, ui.ButtonSet.OK);
   } catch (e) {
@@ -463,7 +519,7 @@ function clearProjectAllData(projectName) {
 
 function debugSingleProject() {
   var p = showChoice('Select Project to Debug:', MENU_PROJECTS);
-  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
+  if (p) debugProjectReportGenerationOptimized(MENU_PROJECTS[p-1].toUpperCase());
 }
 
 function syncTriggersWithSettings() {
@@ -485,7 +541,7 @@ function syncTriggersWithSettings() {
     if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
       clearAllUpdateTriggers();
       createUpdateTriggers();
-      console.log('Created update triggers');
+      console.log('Created update triggers with TRICKY optimizations');
     } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
       clearAllUpdateTriggers();
       console.log('Deleted all update triggers');
@@ -537,6 +593,10 @@ function updateProjectDataWithRetry(projectName, maxRetries = 2) {
   
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      if (projectName === 'TRICKY') {
+        console.log('Using TRICKY optimized update with retry...');
+        clearTrickyCaches();
+      }
       updateProjectDataOptimized(projectName);
       return;
     } catch (e) {
@@ -610,7 +670,8 @@ function promptCustomDays() {
   message += '• 180 days - Last 6 months\n';
   message += '• 365 days - Last year\n\n';
   message += '⚠️ Note: Large periods (>180 days) may cause timeouts\n';
-  message += '💡 Tip: Use "Date range" for specific periods or large datasets';
+  message += '💡 Tip: Use "Date range" for specific periods or large datasets\n';
+  message += '🚀 TRICKY uses optimized processing for better performance';
   
   var result = ui.prompt('Custom Days', message, ui.ButtonSet.OK_CANCEL);
   if (result.getSelectedButton() !== ui.Button.OK) return null;
@@ -675,7 +736,7 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date); 
 }
 
-function quickGenerateAllForDays(days) {
+function quickGenerateAllForDaysOptimized(days) {
   var ui = SpreadsheetApp.getUi();
   var success = 0;
   
@@ -683,53 +744,75 @@ function quickGenerateAllForDays(days) {
     for (var i = 0; i < MENU_PROJECTS.length; i++) {
       var p = MENU_PROJECTS[i];
       try { 
-        generateProjectReport(p.toUpperCase(), days); 
+        generateProjectReportOptimized(p.toUpperCase(), days); 
         success++; 
       } catch(e) { 
         console.error(e); 
       }
     }
     sortProjectSheets();
-    ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports', ui.ButtonSet.OK);
+    ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports (TRICKY optimized)', ui.ButtonSet.OK);
   } catch(e) {
     ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
   }
 }
 
-function runSelectedProjects(projects, days) {
+function runSelectedProjectsOptimized(projects, days) {
   for (var i = 0; i < projects.length; i++) {
-    generateProjectReport(projects[i].toUpperCase(), days);
+    generateProjectReportOptimized(projects[i].toUpperCase(), days);
   }
   sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports (TRICKY optimized)', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function runAllProjectsDateRange(start, end) {
+function runAllProjectsDateRangeOptimized(start, end) {
   for (var i = 0; i < MENU_PROJECTS.length; i++) {
-    generateProjectReportForDateRange(MENU_PROJECTS[i].toUpperCase(), start, end);
+    generateProjectReportForDateRangeOptimized(MENU_PROJECTS[i].toUpperCase(), start, end);
   }
   sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated (TRICKY optimized)', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function runSelectedProjectsDateRange(projects, start, end) {
+function runSelectedProjectsDateRangeOptimized(projects, start, end) {
   for (var i = 0; i < projects.length; i++) {
-    generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
+    generateProjectReportForDateRangeOptimized(projects[i].toUpperCase(), start, end);
   }
   sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports (TRICKY optimized)', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function generateProjectReport(projectName, days) { 
+function generateProjectReportOptimized(projectName, days) { 
   console.log(`Generating ${projectName} report for ${days} days`);
   if (days > 180) {
     console.log(`Warning: Large period (${days} days) - monitoring for timeouts`);
   }
+  
+  if (projectName === 'TRICKY') {
+    console.log('Using TRICKY optimized processing...');
+    clearTrickyCaches();
+  }
+  
   setCurrentProject(projectName); 
   generateReport(days); 
 }
-function generateProjectReportForDateRange(projectName, startDate, endDate) { setCurrentProject(projectName); generateReportForDateRange(startDate, endDate); }
-function debugProjectReportGeneration(projectName) { setCurrentProject(projectName); debugReportGeneration(); }
+
+function generateProjectReportForDateRangeOptimized(projectName, startDate, endDate) { 
+  if (projectName === 'TRICKY') {
+    console.log('Using TRICKY optimized processing for date range...');
+    clearTrickyCaches();
+  }
+  setCurrentProject(projectName); 
+  generateReportForDateRange(startDate, endDate); 
+}
+
+function debugProjectReportGenerationOptimized(projectName) { 
+  if (projectName === 'TRICKY') {
+    console.log('Using TRICKY optimized debug...');
+    clearTrickyCaches();
+  }
+  setCurrentProject(projectName); 
+  debugReportGeneration(); 
+}
 
 function appsDbWizard() {
   var ui = SpreadsheetApp.getUi();
@@ -743,25 +826,27 @@ function appsDbWizard() {
     setCurrentProject('TRICKY');
   }
   
-  var action = showChoice('📱 Apps Database Management', [
+  var action = showChoice('📱 Apps Database Management (Optimized)', [
     'View Cache Status',
     'Refresh Apps Database', 
     'View Sample Data',
     'Clear Cache',
-    'Debug Update Process'
+    'Debug Update Process',
+    'Clear Optimization Caches'
   ]);
   if (!action) return;
   
   switch(action) {
-    case 1: showAppsDbStatus(); break;
+    case 1: showAppsDbStatusOptimized(); break;
     case 2: refreshAppsDatabase(); break;
     case 3: showAppsDbSample(); break;
     case 4: clearAppsDbCache(); break;
     case 5: debugAppsDatabase(); break;
+    case 6: clearTrickyOptimizationCaches(); break;
   }
 }
 
-function showAppsDbStatus() {
+function showAppsDbStatusOptimized() {
   var ui = SpreadsheetApp.getUi();
   
   try {
@@ -769,7 +854,7 @@ function showAppsDbStatus() {
     var cache = appsDb.loadFromCache();
     var appCount = Object.keys(cache).length;
     
-    var message = '📱 APPS DATABASE STATUS\n\n';
+    var message = '📱 APPS DATABASE STATUS (OPTIMIZED)\n\n';
     message += '• Total Apps: ' + appCount + '\n';
     
     if (appCount > 0) {
@@ -779,7 +864,8 @@ function showAppsDbStatus() {
       message += '• Cache Sheet: ' + (appsDb.cacheSheet ? 'Found' : 'Missing') + '\n';
       
       var shouldUpdate = appsDb.shouldUpdateCache();
-      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>24h old)' : 'NO') + '\n\n';
+      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>24h old)' : 'NO') + '\n';
+      message += '• Optimization Cache: ' + (appsDb.optimizedCache ? 'Active' : 'Not Loaded') + '\n\n';
       
       message += 'SAMPLE ENTRIES:\n';
       var sampleCount = Math.min(3, bundleIds.length);
@@ -799,6 +885,19 @@ function showAppsDbStatus() {
   }
 }
 
+function clearTrickyOptimizationCaches() {
+  var ui = SpreadsheetApp.getUi();
+  
+  if (ui.alert('Clear Optimization Caches', 'Clear all TRICKY optimization caches?\n\nThis will force reloading on next use.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  
+  try {
+    clearTrickyCaches();
+    ui.alert('Success', 'TRICKY optimization caches cleared.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Error clearing caches: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
 function showAppsDbSample() {
   var ui = SpreadsheetApp.getUi();
   
@@ -812,7 +911,7 @@ function showAppsDbSample() {
       return;
     }
     
-    var message = '📱 APPS DATABASE SAMPLE\n\n';
+    var message = '📱 APPS DATABASE SAMPLE (OPTIMIZED)\n\n';
     var sampleCount = Math.min(5, bundleIds.length);
     
     for (var i = 0; i < sampleCount; i++) {
@@ -822,8 +921,10 @@ function showAppsDbSample() {
     }
     
     if (bundleIds.length > sampleCount) {
-      message += '... and ' + (bundleIds.length - sampleCount) + ' more apps';
+      message += '... and ' + (bundleIds.length - sampleCount) + ' more apps\n\n';
     }
+    
+    message += '🚀 Optimization cache: ' + (appsDb.optimizedCache ? 'Active' : 'Will load on demand');
     
     ui.alert('Apps Database Sample', message, ui.ButtonSet.OK);
   } catch (e) {
@@ -834,13 +935,14 @@ function showAppsDbSample() {
 function clearAppsDbCache() {
   var ui = SpreadsheetApp.getUi();
   
-  if (ui.alert('Clear Apps Database Cache', 'Clear cached app data? Will rebuild on next refresh.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  if (ui.alert('Clear Apps Database Cache', 'Clear cached app data? Will rebuild on next refresh.\n\n🚀 This will also clear optimization caches.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
     var appsDb = new AppsDatabase('TRICKY');
     if (appsDb.cacheSheet && appsDb.cacheSheet.getLastRow() > 1) {
       appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
-      ui.alert('Success', 'Apps Database cache cleared.', ui.ButtonSet.OK);
+      clearTrickyCaches();
+      ui.alert('Success', 'Apps Database cache and optimization caches cleared.', ui.ButtonSet.OK);
     } else {
       ui.alert('No Cache', 'Apps Database cache sheet not found.', ui.ButtonSet.OK);
     }
@@ -864,13 +966,13 @@ function recreateAllTriggers() {
   var ui = SpreadsheetApp.getUi();
   
   var result = ui.alert('🔄 Recreate Triggers', 
-    'Recreate all automation triggers?\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• Updates: 5:00-6:10 AM (10min apart)', 
+    'Recreate all automation triggers?\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• Updates: 5:00-6:10 AM (10min apart)\n🚀 TRICKY: Optimized processing', 
     ui.ButtonSet.YES_NO);
   
   if (result !== ui.Button.YES) return;
   
   try {
-    console.log('Recreating all triggers...');
+    console.log('Recreating all triggers with TRICKY optimizations...');
     
     clearAllUpdateTriggers();
     
@@ -884,10 +986,10 @@ function recreateAllTriggers() {
     
     if (updateEnabled) {
       createUpdateTriggers();
-      console.log('Update triggers recreated');
+      console.log('Update triggers recreated with TRICKY optimizations');
     }
     
-    ui.alert('✅ Triggers Recreated', 'All triggers recreated successfully!', ui.ButtonSet.OK);
+    ui.alert('✅ Triggers Recreated', 'All triggers recreated successfully!\n\n🚀 TRICKY optimizations: Active', ui.ButtonSet.OK);
     
   } catch (e) {
     console.error('Error recreating triggers:', e);

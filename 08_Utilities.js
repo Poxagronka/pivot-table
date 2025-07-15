@@ -137,7 +137,95 @@ function recreateSheetFast(spreadsheet, sheetName) {
 }
 
 function updateProjectDataOptimized(projectName) {
-  console.log(`Starting optimized update for ${projectName}`);
+  if (projectName === 'TRICKY') {
+    updateProjectDataOptimizedTricky();
+    return;
+  }
+  
+  updateProjectDataOptimizedStandard(projectName);
+}
+
+function updateProjectDataOptimizedTricky() {
+  console.log('=== STARTING TRICKY OPTIMIZED UPDATE ===');
+  
+  const config = getProjectConfig('TRICKY');
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log('TRICKY: No existing data to update');
+    return;
+  }
+  
+  console.log('TRICKY: Initializing optimized cache...');
+  const trickyCache = initTrickyOptimizedCache();
+  
+  console.log('TRICKY: Caching comments...');
+  const cache = new CommentCache('TRICKY');
+  cache.syncCommentsFromSheet();
+  
+  console.log('TRICKY: Finding earliest week date...');
+  const earliestDate = findEarliestWeekDate(sheet);
+  if (!earliestDate) {
+    console.log('TRICKY: No week data found');
+    return;
+  }
+  
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const endDate = new Date(today);
+  
+  if (dayOfWeek === 0) {
+    endDate.setDate(today.getDate() - 1);
+  } else {
+    endDate.setDate(today.getDate() - dayOfWeek);
+  }
+  
+  const dateRange = {
+    from: formatDateForAPI(earliestDate),
+    to: formatDateForAPI(endDate)
+  };
+  
+  console.log(`TRICKY: Fetching optimized data ${dateRange.from} to ${dateRange.to}`);
+  
+  const raw = fetchProjectCampaignData('TRICKY', dateRange);
+  
+  if (!raw.data?.analytics?.richStats?.stats?.length) {
+    console.log('TRICKY: No API data');
+    return;
+  }
+  
+  console.log('TRICKY: Processing API data with optimizations...');
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject('TRICKY');
+  
+  try {
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      console.log('TRICKY: No valid processed data');
+      return;
+    }
+    
+    console.log('TRICKY: Recreating sheet...');
+    recreateSheetFast(spreadsheet, config.SHEET_NAME);
+    
+    console.log('TRICKY: Creating optimized pivot table...');
+    createEnhancedPivotTable(processed);
+    
+    console.log('TRICKY: Applying cached comments...');
+    cache.applyCommentsToSheet();
+    
+    console.log('=== TRICKY OPTIMIZED UPDATE COMPLETED ===');
+    console.log(`TRICKY: Cache stats - ${trickyCache?.processed || 0} processed, ${trickyCache?.cacheHits || 0} cache hits`);
+    
+  } finally {
+    setCurrentProject(originalProject);
+  }
+}
+
+function updateProjectDataOptimizedStandard(projectName) {
+  console.log(`Starting standard update for ${projectName}`);
   
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
