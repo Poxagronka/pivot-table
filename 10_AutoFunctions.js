@@ -144,77 +144,6 @@ function autoUpdateOverall() {
   }
 }
 
-function updateProjectDataOptimized(projectName) {
-  console.log(`Starting optimized update for ${projectName}`);
-  
-  var config = getProjectConfig(projectName);
-  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No existing data to update`);
-    return;
-  }
-  
-  var cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
-  console.log(`${projectName}: Comments cached`);
-  
-  var earliestDate = findEarliestWeekDate(sheet);
-  if (!earliestDate) {
-    console.log(`${projectName}: No week data found`);
-    return;
-  }
-  
-  var today = new Date();
-  var dayOfWeek = today.getDay();
-  var endDate = new Date(today);
-  
-  if (dayOfWeek === 0) {
-    endDate.setDate(today.getDate() - 1);
-  } else {
-    endDate.setDate(today.getDate() - dayOfWeek);
-  }
-  
-  var dateRange = {
-    from: formatDateForAPI(earliestDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`${projectName}: Fetching ${dateRange.from} to ${dateRange.to}`);
-  
-  var raw = fetchProjectCampaignData(projectName, dateRange);
-  
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No API data`);
-    return;
-  }
-  
-  var processed = processProjectApiData(projectName, raw);
-  
-  if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid processed data`);
-    return;
-  }
-  
-  clearProjectDataFast(projectName);
-  
-  var originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    if (projectName === 'OVERALL') {
-      createOverallPivotTable(processed);
-    } else {
-      createEnhancedPivotTable(processed);
-    }
-    cache.applyCommentsToSheet();
-  } finally {
-    setCurrentProject(originalProject);
-  }
-  
-  console.log(`${projectName}: Update completed successfully`);
-}
-
 function findEarliestWeekDate(sheet) {
   var data = sheet.getDataRange().getValues();
   var earliestDate = null;
@@ -231,17 +160,6 @@ function findEarliestWeekDate(sheet) {
   }
   
   return earliestDate;
-}
-
-function clearProjectDataFast(projectName) {
-  var config = getProjectConfig(projectName);
-  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (sheet) {
-    sheet.clear();
-    console.log(`${projectName}: Sheet cleared`);
-  }
 }
 
 function cacheProjectComments(projectName) {

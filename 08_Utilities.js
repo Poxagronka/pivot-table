@@ -117,14 +117,6 @@ function clearProjectDataSilent(projectName) {
   console.log(`${projectName}: Sheet recreated`);
 }
 
-function clearProjectDataFast(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  console.log(`${projectName}: Sheet recreated fast`);
-}
-
 function recreateSheetFast(spreadsheet, sheetName) {
   try {
     const oldSheet = spreadsheet.getSheetByName(sheetName);
@@ -197,7 +189,7 @@ function updateProjectDataOptimized(projectName) {
     return;
   }
   
-  clearProjectDataFast(projectName);
+  recreateSheetFast(spreadsheet, config.SHEET_NAME);
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
