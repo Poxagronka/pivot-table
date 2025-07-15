@@ -53,7 +53,7 @@ function buildFilters(apiConfig) {
     {dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true}
   ];
   
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID?.length > 0) {
+  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID !== null && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID?.length > 0) {
     filters.push({dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true});
   }
   
@@ -200,8 +200,8 @@ function processOverallApiData(rawData, includeLastWeek = null) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
 
-      const networkId = network.id || 'unknown';
-      const networkName = network.value || 'Unknown Network';
+      const networkId = network.id || network.value || 'unknown';
+      const networkName = getNetworkDisplayName(networkId);
 
       if (!appData[appKey]) {
         appData[appKey] = {
@@ -245,6 +245,35 @@ function processOverallApiData(rawData, includeLastWeek = null) {
   });
 
   return appData;
+}
+
+function getNetworkDisplayName(networkId) {
+  const networkMap = {
+    'appgrowth_int': 'AppGrowth',
+    'inmobidsp_int': 'InMobidsp', 
+    'thespotlight_int': 'TheSpotlight',
+    'aura_int': 'Aura',
+    'moloco_int': 'Moloco',
+    'mintegral_int': 'Mintegral',
+    'googleadwords_int': 'Google Ads',
+    'applovin_int': 'AppLovin',
+    'ayetstudios_int': 'Ayet Studios',
+    'engagerewards_int': 'Engage Rewards',
+    'adjoe_int': 'Adjoe',
+    'mistplay_int': 'Mistplay',
+    '234187180623265792': 'AppGrowth',
+    '445856363109679104': 'Moloco',
+    '378302368699121664': 'Google Ads',
+    '261208778387488768': 'AppLovin',
+    '756604737398243328': 'Mintegral',
+    '1580763469207044096': 'Incent Network 1',
+    '932245122865692672': 'Incent Network 2',
+    '6958061424287416320': 'Incent Network 3',
+    '6070852297695428608': 'Incent Network 4',
+    '5354779956943519744': 'Incent Network 5'
+  };
+  
+  return networkMap[networkId] || networkId;
 }
 
 function extractOverallMetrics(row, startIndex) {

@@ -176,7 +176,7 @@ var PROJECT_CONFIGS = {
   APPLOVIN: { net: ["261208778387488768"], search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE" },
   MINTEGRAL: { net: ["756604737398243328"], search: null, group: "INSTALL_DATE" },
   INCENT: { net: ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"], search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE" },
-  OVERALL: { net: [], search: null, group: "DATE", special: true }
+  OVERALL: { net: null, search: null, group: "DATE", special: true }
 };
 
 var PROJECTS = {};

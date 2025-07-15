@@ -39,56 +39,31 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date);
 }
 
-function expandAllGroups(sheet) {
-  try {
-    const maxRows = sheet.getMaxRows();
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        sheet.getRange(1, 1, maxRows, 1).expandGroups();
-      } catch (e) {
-        break;
-      }
-    }
-  } catch (e) {}
-}
-
-function clearAllGroups(sheet) {
-  try {
-    const maxRows = sheet.getMaxRows();
-    let hasGroups = true;
-    let attempts = 0;
-    
-    while (hasGroups && attempts < 10) {
-      try {
-        sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
-        attempts++;
-      } catch (e) {
-        hasGroups = false;
-      }
-    }
-  } catch (e) {}
-}
-
-function recreateGrouping(sheet) {
-  expandAllGroups(sheet);
-  clearAllGroups(sheet);
-  const data = sheet.getDataRange().getValues();
-  createRowGrouping(sheet, data, null);
-}
-
 function clearAllDataSilent() {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
-  if (sheet && sheet.getLastRow() > 1) {
+  if (sheet) {
     try {
       const cache = new CommentCache();
       cache.syncCommentsFromSheet();
-    } catch (e) {}
+    } catch (e) {
+      console.log('Error syncing comments:', e);
+    }
+    
+    try {
+      spreadsheet.deleteSheet(sheet);
+    } catch (e) {
+      console.log('Error deleting sheet:', e);
+    }
   }
   
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
+  try {
+    spreadsheet.insertSheet(config.SHEET_NAME);
+  } catch (e) {
+    console.log('Error creating sheet:', e);
+  }
 }
 
 function clearProjectDataSilent(projectName) {
@@ -96,14 +71,26 @@ function clearProjectDataSilent(projectName) {
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
-  if (sheet && sheet.getLastRow() > 1) {
+  if (sheet) {
     try {
       const cache = new CommentCache(projectName);
       cache.syncCommentsFromSheet();
-    } catch (e) {}
+    } catch (e) {
+      console.log('Error syncing comments:', e);
+    }
+    
+    try {
+      spreadsheet.deleteSheet(sheet);
+    } catch (e) {
+      console.log('Error deleting sheet:', e);
+    }
   }
   
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
+  try {
+    spreadsheet.insertSheet(config.SHEET_NAME);
+  } catch (e) {
+    console.log('Error creating sheet:', e);
+  }
 }
 
 function recreateSheetFast(spreadsheet, sheetName) {
@@ -112,13 +99,9 @@ function recreateSheetFast(spreadsheet, sheetName) {
     if (oldSheet) {
       spreadsheet.deleteSheet(oldSheet);
     }
-    
-    const newSheet = spreadsheet.insertSheet(sheetName);
+    spreadsheet.insertSheet(sheetName);
   } catch (e) {
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (sheet) {
-      sheet.clear();
-    }
+    console.log('Error recreating sheet:', e);
   }
 }
 
@@ -267,52 +250,32 @@ function sortProjectSheets() {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
-    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
-    
-    const projectSheets = [];
-    const visibleOtherSheets = [];
-    const hiddenSheets = [];
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings'];
+    const targetSheets = [];
     
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
       const projectIndex = projectOrder.indexOf(sheetName);
-      const isHidden = sheet.isSheetHidden();
-      
       if (projectIndex !== -1) {
-        projectSheets.push({ sheet, index: projectIndex, name: sheetName });
-      } else if (isHidden) {
-        hiddenSheets.push({ sheet, name: sheetName });
-      } else {
-        visibleOtherSheets.push({ sheet, name: sheetName });
+        targetSheets.push({ sheet, index: projectIndex });
       }
     });
     
-    projectSheets.sort((a, b) => a.index - b.index);
-    visibleOtherSheets.sort((a, b) => a.name.localeCompare(b.name));
-    hiddenSheets.sort((a, b) => a.name.localeCompare(b.name));
-    
-    const finalOrder = [
-      ...projectSheets.map(item => item.sheet),
-      ...visibleOtherSheets.map(item => item.sheet),
-      ...hiddenSheets.map(item => item.sheet)
-    ];
+    targetSheets.sort((a, b) => a.index - b.index);
     
     let position = 1;
-    
-    finalOrder.forEach((sheet, index) => {
+    targetSheets.forEach(item => {
       try {
-        spreadsheet.setActiveSheet(sheet);
+        spreadsheet.setActiveSheet(item.sheet);
         spreadsheet.moveActiveSheet(position);
         position++;
-        
-        if (index < finalOrder.length - 1) {
-          Utilities.sleep(500);
-        }
-      } catch (e) {}
+      } catch (e) {
+        console.log('Error moving sheet:', e);
+      }
     });
     
   } catch (e) {
-    throw e;
+    console.log('Error sorting sheets:', e);
   }
 }
 

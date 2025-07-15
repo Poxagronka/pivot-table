@@ -278,96 +278,176 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
 }
 
 function createOverallPivotTable(appData) {
-  console.log('createOverallPivotTable: start');
+  console.log('createOverallPivotTable: batched processing start');
   const config = getCurrentConfig();
-  console.log('createOverallPivotTable: opening spreadsheet');
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  console.log('createOverallPivotTable: getting sheet');
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) {
-    console.log('createOverallPivotTable: creating new sheet');
-    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
-  }
+  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
 
   console.log('createOverallPivotTable: calculating WoW metrics');
   const wow = calculateWoWMetrics(appData);
-  console.log('createOverallPivotTable: WoW metrics calculated');
   const headers = getUnifiedHeaders();
-  const tableData = [headers];
-  const formatData = [];
-
-  const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
-  console.log(`createOverallPivotTable: processing ${appKeys.length} apps`);
   
-  const batchSize = 500; // Reduced batch size
-  const allRows = [];
-  let totalNetworks = 0;
+  console.log('createOverallPivotTable: writing headers');
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
+  let currentRow = 2;
+  let allFormatData = [];
+  
+  console.log(`createOverallPivotTable: processing ${appKeys.length} apps in batches`);
   
   appKeys.forEach((appKey, appIndex) => {
     const app = appData[appKey];
+    const appBatch = [];
+    const formatBatch = [];
     
-    formatData.push({ row: allRows.length + 2, type: 'APP' });
-    allRows.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    formatBatch.push({ row: currentRow, type: 'APP' });
+    appBatch.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
       const week = app.weeks[weekKey];
       
       const allNetworks = Object.values(week.networks || {});
-      totalNetworks += allNetworks.length;
-      
       const weekTotals = calculateNetworkTotals(allNetworks);
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      formatData.push({ row: allRows.length + 2, type: 'WEEK' });
-      allRows.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
+      formatBatch.push({ row: currentRow + appBatch.length, type: 'WEEK' });
+      appBatch.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
 
       const networkKeys = Object.keys(week.networks || {}).sort((a, b) => (week.networks[b].spend || 0) - (week.networks[a].spend || 0));
       
       networkKeys.forEach(networkKey => {
         const network = week.networks[networkKey];
-        
         const networkWoWKey = `${network.networkId}_${weekKey}`;
         const networkWoW = wow.networkWoW[networkWoWKey] || {};
         
-        formatData.push({ row: allRows.length + 2, type: 'NETWORK' });
-        
-        allRows.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
+        formatBatch.push({ row: currentRow + appBatch.length, type: 'NETWORK' });
+        appBatch.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
       });
     });
     
-    if ((appIndex + 1) % 5 === 0) {
-      console.log(`createOverallPivotTable: processed ${appIndex + 1}/${appKeys.length} apps`);
+    console.log(`createOverallPivotTable: writing app ${appIndex + 1}/${appKeys.length}: ${app.appName} (${appBatch.length} rows)`);
+    sheet.getRange(currentRow, 1, appBatch.length, headers.length).setValues(appBatch);
+    
+    allFormatData.push(...formatBatch.map(f => ({ ...f, row: f.row })));
+    currentRow += appBatch.length;
+    
+    if ((appIndex + 1) % 3 === 0 && appIndex < appKeys.length - 1) {
+      console.log('createOverallPivotTable: pause between batches');
+      Utilities.sleep(1000);
     }
   });
-
-  console.log(`createOverallPivotTable: total rows to write: ${allRows.length}, total networks: ${totalNetworks}`);
-
-  // Batch write
-  tableData.push(...allRows);
-  const totalRows = tableData.length;
-  
-  console.log('createOverallPivotTable: starting batch write');
-  for (let i = 0; i < totalRows; i += batchSize) {
-    const endRow = Math.min(i + batchSize, totalRows);
-    const batch = tableData.slice(i, endRow);
-    console.log(`createOverallPivotTable: writing batch ${i}-${endRow} of ${totalRows}`);
-    sheet.getRange(i + 1, 1, batch.length, headers.length).setValues(batch);
-    
-    if (endRow < totalRows) {
-      Utilities.sleep(200); // Increased sleep
-    }
-  }
   
   console.log('createOverallPivotTable: applying formatting');
-  applyEnhancedFormatting(sheet, totalRows, headers.length, formatData, appData);
+  applyOverallFormatting(sheet, currentRow - 1, headers.length, allFormatData, appData);
   
   console.log('createOverallPivotTable: creating row grouping');
-  createOverallRowGrouping(sheet, tableData, appData);
+  createOverallRowGroupingOptimized(sheet, appKeys, appData, currentRow - 1);
   
   sheet.setFrozenRows(1);
   console.log('createOverallPivotTable: done');
+}
+
+function applyOverallFormatting(sheet, numRows, numCols, formatData, appData) {
+  console.log('applyOverallFormatting: basic formatting');
+  const headerRange = sheet.getRange(1, 1, 1, numCols);
+  headerRange.setBackground(COLORS.HEADER.background).setFontColor(COLORS.HEADER.fontColor).setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(10).setWrap(true);
+
+  TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => sheet.setColumnWidth(col.c, col.w));
+
+  if (numRows > 1) {
+    sheet.getRange(2, 1, numRows - 1, numCols).setVerticalAlignment('middle');
+    sheet.getRange(2, numCols, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left');
+    sheet.getRange(2, numCols - 1, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left');
+  }
+
+  console.log('applyOverallFormatting: row colors');
+  const rowsByType = { app: [], week: [], network: [] };
+  
+  formatData.forEach(item => {
+    if (item.type === 'APP') rowsByType.app.push(item.row);
+    else if (item.type === 'WEEK') rowsByType.week.push(item.row);
+    else if (item.type === 'NETWORK') rowsByType.network.push(item.row);
+  });
+
+  const applyFormat = (rows, color, size = 10, weight = 'normal') => {
+    rows.forEach(r => sheet.getRange(r, 1, 1, numCols).setBackground(color.background).setFontColor(color.fontColor || 'black').setFontWeight(weight).setFontSize(size));
+  };
+
+  applyFormat(rowsByType.app, COLORS.APP_ROW, 10, 'bold');
+  applyFormat(rowsByType.week, COLORS.WEEK_ROW);
+  applyFormat(rowsByType.network, COLORS.NETWORK_ROW, 9);
+
+  console.log('applyOverallFormatting: number formats');
+  if (numRows > 1) {
+    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
+    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
+    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
+    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
+    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
+    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
+  }
+
+  sheet.hideColumns(1);
+}
+
+function createOverallRowGroupingOptimized(sheet, appKeys, appData, totalRows) {
+  console.log('createOverallRowGroupingOptimized: start');
+  try {
+    let rowPointer = 2;
+    const groupOperations = [];
+
+    appKeys.forEach(appKey => {
+      const app = appData[appKey];
+      const appStartRow = rowPointer;
+      rowPointer++;
+
+      const weekKeys = Object.keys(app.weeks).sort();
+      
+      weekKeys.forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        const weekStartRow = rowPointer;
+        rowPointer++;
+
+        const networkCount = week.networks ? Object.keys(week.networks).length : 0;
+        rowPointer += networkCount;
+
+        if (networkCount > 0) {
+          groupOperations.push({
+            type: 'week_group',
+            startRow: weekStartRow + 1,
+            count: networkCount
+          });
+        }
+      });
+
+      const appContentRows = rowPointer - appStartRow - 1;
+      if (appContentRows > 0) {
+        groupOperations.push({
+          type: 'app_group',
+          startRow: appStartRow + 1,
+          count: appContentRows
+        });
+      }
+    });
+
+    console.log(`createOverallRowGroupingOptimized: applying ${groupOperations.length} groups`);
+    groupOperations.forEach((op, index) => {
+      try {
+        sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
+        sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
+        
+        if ((index + 1) % 10 === 0) {
+          Utilities.sleep(100);
+        }
+      } catch (e) {}
+    });
+  } catch (e) {
+    console.log('createOverallRowGroupingOptimized: error', e);
+  }
 }
 
 function addNetworkRows(tableData, networks, weekKey, wow, formatData) {
@@ -435,6 +515,7 @@ function createOverallRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
     const sortedApps = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
+    const groupOperations = [];
 
     sortedApps.forEach(appKey => {
       const app = appData[appKey];
@@ -452,20 +533,29 @@ function createOverallRowGrouping(sheet, tableData, appData) {
         rowPointer += networkCount;
 
         if (networkCount > 0) {
-          try {
-            sheet.getRange(weekStartRow + 1, 1, networkCount, 1).shiftRowGroupDepth(1);
-            sheet.getRange(weekStartRow + 1, 1, networkCount, 1).collapseGroups();
-          } catch (e) {}
+          groupOperations.push({
+            type: 'week_group',
+            startRow: weekStartRow + 1,
+            count: networkCount
+          });
         }
       });
 
       const appContentRows = rowPointer - appStartRow - 1;
       if (appContentRows > 0) {
-        try {
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).shiftRowGroupDepth(1);
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
-        } catch (e) {}
+        groupOperations.push({
+          type: 'app_group',
+          startRow: appStartRow + 1,
+          count: appContentRows
+        });
       }
+    });
+
+    groupOperations.forEach(op => {
+      try {
+        sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
+        sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
+      } catch (e) {}
     });
   } catch (e) {}
 }
@@ -701,6 +791,7 @@ function createRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
     const sortedApps = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
+    const groupOperations = [];
 
     sortedApps.forEach(appKey => {
       const app = appData[appKey];
@@ -733,18 +824,20 @@ function createRowGrouping(sheet, tableData, appData) {
             weekContentRows += 1 + campaignCount;
             
             if (campaignCount > 0) {
-              try {
-                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
-                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).collapseGroups();
-              } catch (e) {}
+              groupOperations.push({
+                type: 'campaign_group',
+                startRow: sourceAppStartRow + 1,
+                count: campaignCount
+              });
             }
           });
           
           if (weekContentRows > 0) {
-            try {
-              sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).shiftRowGroupDepth(1);
-              sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).collapseGroups();
-            } catch (e) {}
+            groupOperations.push({
+              type: 'week_group',
+              startRow: weekStartRow + 1,
+              count: weekContentRows
+            });
           }
           
         } else if (CURRENT_PROJECT !== 'OVERALL') {
@@ -753,21 +846,30 @@ function createRowGrouping(sheet, tableData, appData) {
           weekContentRows = campaignCount;
           
           if (campaignCount > 0) {
-            try {
-              sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
-              sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).collapseGroups();
-            } catch (e) {}
+            groupOperations.push({
+              type: 'week_group',
+              startRow: weekStartRow + 1,
+              count: campaignCount
+            });
           }
         }
       });
 
       const appContentRows = rowPointer - appStartRow - 1;
       if (appContentRows > 0) {
-        try {
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).shiftRowGroupDepth(1);
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
-        } catch (e) {}
+        groupOperations.push({
+          type: 'app_group',
+          startRow: appStartRow + 1,
+          count: appContentRows
+        });
       }
+    });
+
+    groupOperations.forEach(op => {
+      try {
+        sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
+        sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
+      } catch (e) {}
     });
   } catch (e) {}
 }
