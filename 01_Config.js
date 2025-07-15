@@ -2,73 +2,64 @@ var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Apps Database';
 
-var BEARER_TOKEN_CACHE = null;
-var BEARER_TOKEN_CACHE_TIME = null;
-var FALLBACK_BEARER_TOKEN = null;
-
 function getBearerToken() {
   try {
-    const now = new Date().getTime();
-    if (BEARER_TOKEN_CACHE && BEARER_TOKEN_CACHE_TIME && (now - BEARER_TOKEN_CACHE_TIME) < 300000) return BEARER_TOKEN_CACHE;
-    
-    const cachedToken = CacheService.getScriptCache().get('BEARER_TOKEN');
-    if (cachedToken) {
-      BEARER_TOKEN_CACHE = cachedToken;
-      BEARER_TOKEN_CACHE_TIME = now;
-      return cachedToken;
-    }
-    
-    const settings = loadSettingsFromSheetWithRetry();
-    const token = settings.bearerToken || '';
-    
-    if (token && token.length > 50) {
-      BEARER_TOKEN_CACHE = token;
-      BEARER_TOKEN_CACHE_TIME = now;
-      FALLBACK_BEARER_TOKEN = token;
-      CacheService.getScriptCache().put('BEARER_TOKEN', token, 3600);
-    }
-    
-    return token;
+    const settings = loadSettingsFromSheet();
+    return settings.bearerToken || '';
   } catch (e) {
-    if (FALLBACK_BEARER_TOKEN) return FALLBACK_BEARER_TOKEN;
-    const props = PropertiesService.getScriptProperties();
-    const propToken = props.getProperty('BEARER_TOKEN');
-    return propToken || '';
+    console.error('Error loading bearer token:', e);
+    return '';
   }
 }
 
 function getBearerTokenStrict() {
   const token = getBearerToken();
-  if (!token || token.length < 50) throw new Error('Bearer token not configured. Please set it in Settings sheet.');
+  if (!token || token.length < 50) {
+    throw new Error('Bearer token not configured. Please set it in Settings sheet.');
+  }
   return token;
 }
 
-function isBearerTokenConfigured() { return getBearerToken().length > 50; }
-
-function clearTrickyCaches() {
-  BUNDLE_ID_CACHE = {};
-  APPS_DB_CACHE = null;
-  APPS_DB_CACHE_TIME = null;
+function isBearerTokenConfigured() {
+  const token = getBearerToken();
+  return token && token.length > 50;
 }
 
 function getTargetEROAS(projectName, appName = null) {
   try {
-    const settings = loadSettingsFromSheetWithRetry();
-    if (projectName === 'TRICKY') return settings.targetEROAS.tricky || 250;
-    if (appName && appName.toLowerCase().includes('business')) return settings.targetEROAS.business || 140;
+    const settings = loadSettingsFromSheet();
+    
+    if (projectName === 'TRICKY') {
+      return settings.targetEROAS.tricky || 250;
+    }
+    
+    if (appName && appName.toLowerCase().includes('business')) {
+      return settings.targetEROAS.business || 140;
+    }
+    
     return settings.targetEROAS.ceg || 150;
+    
   } catch (e) {
-    if (projectName === 'TRICKY') return 250;
-    if (appName && appName.toLowerCase().includes('business')) return 140;
+    console.error('Error loading target eROAS:', e);
+    
+    if (projectName === 'TRICKY') {
+      return 250;
+    }
+    
+    if (appName && appName.toLowerCase().includes('business')) {
+      return 140;
+    }
+    
     return 150;
   }
 }
 
 function getGrowthThresholds(projectName) {
   try {
-    const settings = loadSettingsFromSheetWithRetry();
+    const settings = loadSettingsFromSheet();
     return settings.growthThresholds[projectName] || getDefaultGrowthThresholds();
   } catch (e) {
+    console.error('Error loading growth thresholds:', e);
     return getDefaultGrowthThresholds();
   }
 }
@@ -96,53 +87,40 @@ function getDefaultGrowthThresholds() {
 }
 
 function isAutoCacheEnabled() {
-  try { return loadSettingsFromSheetWithRetry().automation.autoCache; } catch (e) { return false; }
+  try {
+    const settings = loadSettingsFromSheet();
+    return settings.automation.autoCache;
+  } catch (e) {
+    return false;
+  }
 }
 
 function isAutoUpdateEnabled() {
-  try { return loadSettingsFromSheetWithRetry().automation.autoUpdate; } catch (e) { return false; }
-}
-
-function getUpdateTriggersStatus() {
   try {
-    const triggers = ScriptApp.getProjectTriggers();
-    const updateFunctions = ['autoUpdateTricky','autoUpdateMoloco','autoUpdateRegular','autoUpdateGoogleAds','autoUpdateApplovin','autoUpdateMintegral','autoUpdateIncent','autoUpdateOverall'];
-    const updateTriggers = triggers.filter(t => updateFunctions.includes(t.getHandlerFunction()));
-    return {
-      enabled: isAutoUpdateEnabled(),
-      triggersCount: updateTriggers.length,
-      expectedCount: 8,
-      isComplete: updateTriggers.length === 8,
-      triggersList: updateTriggers.map(t => t.getHandlerFunction())
-    };
+    const settings = loadSettingsFromSheet();
+    return settings.automation.autoUpdate;
   } catch (e) {
-    return { enabled: false, triggersCount: 0, expectedCount: 8, isComplete: false, triggersList: [] };
+    return false;
   }
 }
 
-function loadSettingsFromSheetWithRetry(maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try { return loadSettingsFromSheet(); } catch (e) {
-      if (attempt === maxRetries) return getDefaultSettings();
-      Utilities.sleep(1000 * attempt);
-    }
-  }
-}
+function getTrickyTargetEROAS(appName) { return getTargetEROAS('TRICKY', appName); }
+function getMolocoTargetEROAS(appName) { return getTargetEROAS('MOLOCO', appName); }
+function getRegularTargetEROAS(appName) { return getTargetEROAS('REGULAR', appName); }
+function getGoogleAdsTargetEROAS(appName) { return getTargetEROAS('GOOGLE_ADS', appName); }
+function getApplovinTargetEROAS(appName) { return getTargetEROAS('APPLOVIN', appName); }
+function getMintegralTargetEROAS(appName) { return getTargetEROAS('MINTEGRAL', appName); }
+function getIncentTargetEROAS(appName) { return getTargetEROAS('INCENT', appName); }
+function getOverallTargetEROAS(appName) { return getTargetEROAS('OVERALL', appName); }
 
-function getDefaultSettings() {
-  return {
-    bearerToken: FALLBACK_BEARER_TOKEN || '',
-    targetEROAS: { tricky: 250, business: 140, ceg: 150 },
-    automation: { autoCache: false, autoUpdate: false },
-    growthThresholds: Object.fromEntries(['TRICKY','MOLOCO','REGULAR','GOOGLE_ADS','APPLOVIN','MINTEGRAL','INCENT','OVERALL'].map(p => [p, getDefaultGrowthThresholds()]))
-  };
-}
-
-['Tricky','Moloco','Regular','GoogleAds','Applovin','Mintegral','Incent','Overall'].forEach(p => {
-  const P = p.toUpperCase().replace('GOOGLEADS','GOOGLE_ADS');
-  this[`get${p}TargetEROAS`] = appName => getTargetEROAS(P, appName);
-  this[`get${p}GrowthThresholds`] = () => getGrowthThresholds(P);
-});
+function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
+function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
+function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
+function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS'); }
+function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
+function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
+function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
+function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 
@@ -159,105 +137,283 @@ var UNIFIED_MEASURES = [
   { id: "e_roas_forecast", day: 730 }
 ];
 
-var BASE_API_CONFIG = {
-  OPERATION_NAME: "RichStats",
-  FILTERS: {
-    ATTRIBUTION_PARTNER: ["Stack"],
-    ATTRIBUTION_CAMPAIGN_SEARCH: null
-  },
-  MEASURES: UNIFIED_MEASURES
-};
+var OVERALL_MEASURES = [
+  { id: "cpi", day: null },
+  { id: "installs", day: null },
+  { id: "spend", day: null },
+  { id: "retention_rate", day: 1 },
+  { id: "roas", day: 1 },
+  { id: "retention_rate", day: 7 },
+  { id: "e_roas_forecast", day: 365 },
+  { id: "e_profit_forecast", day: 730 }
+];
 
-var PROJECT_CONFIGS = {
-  TRICKY: { net: ["234187180623265792"], search: "/tricky/i", group: "INSTALL_DATE" },
-  MOLOCO: { net: ["445856363109679104"], search: null, group: "INSTALL_DATE" },
-  REGULAR: { net: ["234187180623265792"], search: "!/tricky/i", group: "INSTALL_DATE" },
-  GOOGLE_ADS: { net: ["378302368699121664"], search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE" },
-  APPLOVIN: { net: ["261208778387488768"], search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE" },
-  MINTEGRAL: { net: ["756604737398243328"], search: null, group: "INSTALL_DATE" },
-  INCENT: { net: ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"], search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE" },
-  OVERALL: { net: null, search: "!/test_creo|creo_test|SL|TL|RnD|adq/i", group: "DATE", special: true }
-};
-
-var PROJECTS = {};
-Object.keys(PROJECT_CONFIGS).forEach(proj => {
-  const cfg = PROJECT_CONFIGS[proj];
-  const users = proj === 'OVERALL' || proj === 'GOOGLE_ADS' || proj === 'APPLOVIN' || proj === 'INCENT' 
-    ? ["79950","127168","157350","150140"] 
-    : ["79950","127168","157350","150140","11628","233863","239157"];
-  
-  PROJECTS[proj] = {
-    SHEET_NAME: proj === 'GOOGLE_ADS' ? 'Google_Ads' : proj.charAt(0) + proj.slice(1).toLowerCase(),
+var PROJECTS = {
+  TRICKY: {
+    SHEET_NAME: 'Tricky',
     API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: eval(`get${proj.charAt(0) + proj.slice(1).toLowerCase().replace('_a','A')}TargetEROAS`),
-    GROWTH_THRESHOLDS: eval(`get${proj.charAt(0) + proj.slice(1).toLowerCase().replace('_a','A')}GrowthThresholds`),
+    TARGET_EROAS: getTrickyTargetEROAS,
+    GROWTH_THRESHOLDS: getTrickyGrowthThresholds,
     BEARER_TOKEN: getBearerTokenStrict,
-    COMMENTS_CACHE_SHEET: `CommentsCache_${proj === 'GOOGLE_ADS' ? 'Google_Ads' : proj.charAt(0) + proj.slice(1).toLowerCase()}`,
-    APPS_CACHE_SHEET: proj === 'TRICKY' ? 'AppsCache_Tricky' : null,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
+    APPS_CACHE_SHEET: 'AppsCache_Tricky',
     API_CONFIG: {
-      ...BASE_API_CONFIG,
+      OPERATION_NAME: "RichStats",
       FILTERS: {
-        ...BASE_API_CONFIG.FILTERS,
-        USER: users,
-        ATTRIBUTION_NETWORK_HID: cfg.net,
-        ATTRIBUTION_CAMPAIGN_SEARCH: cfg.search
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "/tricky/i"
       },
-      GROUP_BY: cfg.special 
-        ? [{ dimension: cfg.group, timeBucket: "WEEK" }, { dimension: "ATTRIBUTION_NETWORK_HID" }, { dimension: "APP" }]
-        : [{ dimension: cfg.group, timeBucket: "WEEK" }, { dimension: "ATTRIBUTION_CAMPAIGN_HID" }, { dimension: "APP" }]
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
     }
-  };
-});
+  },
+  
+  MOLOCO: {
+    SHEET_NAME: 'Moloco',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getMolocoTargetEROAS,
+    GROWTH_THRESHOLDS: getMolocoGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["445856363109679104"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  REGULAR: {
+    SHEET_NAME: 'Regular',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getRegularTargetEROAS,
+    GROWTH_THRESHOLDS: getRegularGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/tricky/i"
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  GOOGLE_ADS: {
+    SHEET_NAME: 'Google_Ads',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getGoogleAdsTargetEROAS,
+    GROWTH_THRESHOLDS: getGoogleAdsGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Google_Ads',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["378302368699121664"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  APPLOVIN: {
+    SHEET_NAME: 'Applovin',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getApplovinTargetEROAS,
+    GROWTH_THRESHOLDS: getApplovinGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["261208778387488768"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  MINTEGRAL: {
+    SHEET_NAME: 'Mintegral',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getMintegralTargetEROAS,
+    GROWTH_THRESHOLDS: getMintegralGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Mintegral',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140","11628","233863","239157"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["756604737398243328"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  INCENT: {
+    SHEET_NAME: 'Incent',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getIncentTargetEROAS,
+    GROWTH_THRESHOLDS: getIncentGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: UNIFIED_MEASURES
+    }
+  },
+
+  OVERALL: {
+    SHEET_NAME: 'Overall',
+    API_URL: 'https://app.appodeal.com/graphql',
+    TARGET_EROAS: getOverallTargetEROAS,
+    GROWTH_THRESHOLDS: getOverallGrowthThresholds,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Overall',
+    API_CONFIG: {
+      OPERATION_NAME: "RichStats",
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: [],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null
+      },
+      GROUP_BY: [
+        { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_NETWORK_HID" },
+        { dimension: "APP" }
+      ],
+      MEASURES: OVERALL_MEASURES
+    }
+  }
+};
 
 var CURRENT_PROJECT = 'TRICKY';
 
 function getCurrentConfig() {
-  const p = PROJECTS[CURRENT_PROJECT];
   return {
     SHEET_ID: MAIN_SHEET_ID,
-    SHEET_NAME: p.SHEET_NAME,
-    API_URL: p.API_URL,
-    TARGET_EROAS: p.TARGET_EROAS(),
-    GROWTH_THRESHOLDS: p.GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: p.BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: p.COMMENTS_CACHE_SHEET,
-    APPS_CACHE_SHEET: p.APPS_CACHE_SHEET
+    SHEET_NAME: PROJECTS[CURRENT_PROJECT].SHEET_NAME,
+    API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
+    TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS(),
+    GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
+    BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN(),
+    COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].APPS_CACHE_SHEET || null
   };
 }
 
-function getCurrentApiConfig() { return PROJECTS[CURRENT_PROJECT].API_CONFIG; }
+function getCurrentApiConfig() {
+  return PROJECTS[CURRENT_PROJECT].API_CONFIG;
+}
 
 function getProjectConfig(projectName) {
-  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
-  const p = PROJECTS[projectName];
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
+  }
   return {
     SHEET_ID: MAIN_SHEET_ID,
-    SHEET_NAME: p.SHEET_NAME,
-    API_URL: p.API_URL,
-    TARGET_EROAS: p.TARGET_EROAS(),
-    GROWTH_THRESHOLDS: p.GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: p.BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: p.COMMENTS_CACHE_SHEET,
-    APPS_CACHE_SHEET: p.APPS_CACHE_SHEET
+    SHEET_NAME: PROJECTS[projectName].SHEET_NAME,
+    API_URL: PROJECTS[projectName].API_URL,
+    TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS(),
+    GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
+    BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN(),
+    COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: PROJECTS[projectName].APPS_CACHE_SHEET || null
   };
 }
 
 function getProjectApiConfig(projectName) {
-  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
+  }
   return PROJECTS[projectName].API_CONFIG;
 }
 
 function setCurrentProject(projectName) {
-  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
-  if (CURRENT_PROJECT === 'TRICKY' || projectName === 'TRICKY') {
-    try { clearTrickyCaches(); } catch (e) {}
+  if (!PROJECTS[projectName]) {
+    throw new Error('Unknown project: ' + projectName);
   }
+  
+  if (CURRENT_PROJECT === 'TRICKY' || projectName === 'TRICKY') {
+    try {
+      clearTrickyCaches();
+    } catch (e) {
+      console.log('Cache clear function not available');
+    }
+  }
+  
   CURRENT_PROJECT = projectName;
 }
 
 var TABLE_CONFIG = {
-  HEADERS: ['Level','Week Range / Source App','ID','GEO','Spend','Spend WoW %','Installs','CPI','ROAS D-1','IPM','RR D-1','RR D-7','eARPU 365d','eROAS 365d','eROAS 730d','eProfit 730d','eProfit 730d WoW %','Growth Status','Comments'],
-  COLUMN_WIDTHS: [[1,80],[2,300],[3,40],[4,40],[5,75],[6,55],[7,55],[8,55],[9,55],[10,55],[11,55],[12,55],[13,55],[14,55],[15,55],[16,75],[17,85],[18,160],[19,250]].map(([c,w]) => ({c,w}))
+  HEADERS: [
+    'Level', 'Week Range / Source App', 'ID', 'GEO',
+    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+  ],
+  COLUMN_WIDTHS: [
+    { c: 1, w: 80 }, { c: 2, w: 300 }, { c: 3, w: 40 }, { c: 4, w: 40 },
+    { c: 5, w: 75 }, { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 55 },
+    { c: 9, w: 55 }, { c: 10, w: 55 }, { c: 11, w: 55 }, { c: 12, w: 55 },
+    { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 55 }, { c: 16, w: 75 }, 
+    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 250 }
+  ]
 };
 
 var COLORS = {
