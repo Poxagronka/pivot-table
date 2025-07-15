@@ -1,9 +1,6 @@
 function createEnhancedPivotTable(appData) {
-  if (CURRENT_PROJECT === 'TRICKY') {
-    createTrickyOptimizedPivotTable(appData);
-  } else {
-    createStandardEnhancedPivotTable(appData);
-  }
+  if (CURRENT_PROJECT === 'TRICKY') createTrickyOptimizedPivotTable(appData);
+  else createStandardEnhancedPivotTable(appData);
 }
 
 function createTrickyOptimizedPivotTable(appData) {
@@ -24,10 +21,7 @@ function createTrickyOptimizedPivotTable(appData) {
     const app = appData[appKey];
     
     formatData.push({ row: tableData.length + 1, type: 'APP' });
-    const emptyRow = new Array(headers.length).fill('');
-    emptyRow[0] = 'APP';
-    emptyRow[1] = app.appName;
-    tableData.push(emptyRow);
+    tableData.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
@@ -44,23 +38,15 @@ function createTrickyOptimizedPivotTable(appData) {
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-      const status = weekWoW.growthStatus || '';
-      
-      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
-      tableData.push(weekRow);
+      tableData.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
       
       addTrickyOptimizedSourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData, hyperlinkData);
     });
   });
 
-  const range = sheet.getRange(1, 1, tableData.length, headers.length);
-  range.setValues(tableData);
-  
+  sheet.getRange(1, 1, tableData.length, headers.length).setValues(tableData);
   applyTrickyOptimizedFormatting(sheet, tableData.length, headers.length, formatData, appData, hyperlinkData);
   createTrickyOptimizedRowGrouping(sheet, tableData, appData);
-  
   sheet.setFrozenRows(1);
 }
 
@@ -82,10 +68,6 @@ function addTrickyOptimizedSourceAppRows(tableData, sourceApps, weekKey, wow, fo
     const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
     const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
     
-    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const status = sourceAppWoW.growthStatus || '';
-    
     formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
     
     let sourceAppDisplayName = sourceApp.sourceAppName;
@@ -95,8 +77,7 @@ function addTrickyOptimizedSourceAppRows(tableData, sourceApps, weekKey, wow, fo
       hyperlinkData.push({ row: tableData.length + 1, col: 2 });
     }
     
-    const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
-    tableData.push(sourceAppRow);
+    tableData.push(createSourceAppRow(sourceAppDisplayName, sourceAppTotals, sourceAppWoW.spendChangePercent ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '', sourceAppWoW.eProfitChangePercent ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '', sourceAppWoW.growthStatus || ''));
     
     addTrickyOptimizedCampaignRows(tableData, sourceApp.campaigns, weekKey, wow, formatData);
   });
@@ -109,14 +90,9 @@ function addTrickyOptimizedCampaignRows(tableData, campaigns, weekKey, wow, form
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
-    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const growthStatus = campaignWoW.growthStatus || '';
-    
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    const campaignRow = createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus);
-    tableData.push(campaignRow);
+    tableData.push(createCampaignRow(campaign, campaignIdValue, campaignWoW.spendChangePercent ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '', campaignWoW.eProfitChangePercent ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '', campaignWoW.growthStatus || ''));
   });
 }
 
@@ -138,10 +114,7 @@ function applyTrickyOptimizedFormatting(sheet, numRows, numCols, formatData, app
 function createTrickyOptimizedRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
-    const sortedApps = Object.keys(appData).sort((a, b) => 
-      appData[a].appName.localeCompare(appData[b].appName)
-    );
-
+    const sortedApps = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
     const groupOperations = [];
 
     sortedApps.forEach(appKey => {
@@ -203,11 +176,10 @@ function createTrickyOptimizedRowGrouping(sheet, tableData, appData) {
       }
     });
     
-    groupOperations.forEach((op, index) => {
+    groupOperations.forEach(op => {
       try {
-        const range = sheet.getRange(op.startRow, 1, op.count, 1);
-        range.shiftRowGroupDepth(1);
-        range.collapseGroups();
+        sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
+        sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
       } catch (e) {}
     });
     
@@ -230,10 +202,7 @@ function createStandardEnhancedPivotTable(appData) {
     const app = appData[appKey];
     
     formatData.push({ row: tableData.length + 1, type: 'APP' });
-    const emptyRow = new Array(headers.length).fill('');
-    emptyRow[0] = 'APP';
-    emptyRow[1] = app.appName;
-    tableData.push(emptyRow);
+    tableData.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
@@ -251,12 +220,7 @@ function createStandardEnhancedPivotTable(appData) {
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-        const status = weekWoW.growthStatus || '';
-        
-        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
-        tableData.push(weekRow);
+        tableData.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
         
         addStandardSourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData);
         
@@ -265,21 +229,14 @@ function createStandardEnhancedPivotTable(appData) {
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-        const status = weekWoW.growthStatus || '';
-        
-        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
-        tableData.push(weekRow);
+        tableData.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
         
         addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData);
       }
     });
   });
 
-  const range = sheet.getRange(1, 1, tableData.length, headers.length);
-  range.setValues(tableData);
-  
+  sheet.getRange(1, 1, tableData.length, headers.length).setValues(tableData);
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
@@ -299,10 +256,6 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
     const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
     const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
     
-    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const status = sourceAppWoW.growthStatus || '';
-    
     formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
     
     let sourceAppDisplayName = sourceApp.sourceAppName;
@@ -318,69 +271,109 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
       } catch (e) {}
     }
     
-    const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
-    tableData.push(sourceAppRow);
+    tableData.push(createSourceAppRow(sourceAppDisplayName, sourceAppTotals, sourceAppWoW.spendChangePercent ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '', sourceAppWoW.eProfitChangePercent ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '', sourceAppWoW.growthStatus || ''));
     
     addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData);
   });
 }
 
 function createOverallPivotTable(appData) {
+  console.log('createOverallPivotTable: start');
   const config = getCurrentConfig();
+  console.log('createOverallPivotTable: opening spreadsheet');
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  console.log('createOverallPivotTable: getting sheet');
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  if (!sheet) {
+    console.log('createOverallPivotTable: creating new sheet');
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  }
 
+  console.log('createOverallPivotTable: calculating WoW metrics');
   const wow = calculateWoWMetrics(appData);
+  console.log('createOverallPivotTable: WoW metrics calculated');
   const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
 
   const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
-  appKeys.forEach(appKey => {
+  console.log(`createOverallPivotTable: processing ${appKeys.length} apps`);
+  
+  const batchSize = 500; // Reduced batch size
+  const allRows = [];
+  let totalNetworks = 0;
+  
+  appKeys.forEach((appKey, appIndex) => {
     const app = appData[appKey];
     
-    formatData.push({ row: tableData.length + 1, type: 'APP' });
-    const emptyRow = new Array(headers.length).fill('');
-    emptyRow[0] = 'APP';
-    emptyRow[1] = app.appName;
-    tableData.push(emptyRow);
+    formatData.push({ row: allRows.length + 2, type: 'APP' });
+    allRows.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
       const week = app.weeks[weekKey];
       
       const allNetworks = Object.values(week.networks || {});
+      totalNetworks += allNetworks.length;
+      
       const weekTotals = calculateNetworkTotals(allNetworks);
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-      const status = weekWoW.growthStatus || '';
-      
-      formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
-      tableData.push(weekRow);
+      formatData.push({ row: allRows.length + 2, type: 'WEEK' });
+      allRows.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
 
-      addNetworkRows(tableData, week.networks, weekKey, wow, formatData);
+      const networkKeys = Object.keys(week.networks || {}).sort((a, b) => (week.networks[b].spend || 0) - (week.networks[a].spend || 0));
+      
+      networkKeys.forEach(networkKey => {
+        const network = week.networks[networkKey];
+        
+        const networkWoWKey = `${network.networkId}_${weekKey}`;
+        const networkWoW = wow.networkWoW[networkWoWKey] || {};
+        
+        formatData.push({ row: allRows.length + 2, type: 'NETWORK' });
+        
+        allRows.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
+      });
     });
+    
+    if ((appIndex + 1) % 5 === 0) {
+      console.log(`createOverallPivotTable: processed ${appIndex + 1}/${appKeys.length} apps`);
+    }
   });
 
-  const range = sheet.getRange(1, 1, tableData.length, headers.length);
-  range.setValues(tableData);
+  console.log(`createOverallPivotTable: total rows to write: ${allRows.length}, total networks: ${totalNetworks}`);
+
+  // Batch write
+  tableData.push(...allRows);
+  const totalRows = tableData.length;
   
-  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
+  console.log('createOverallPivotTable: starting batch write');
+  for (let i = 0; i < totalRows; i += batchSize) {
+    const endRow = Math.min(i + batchSize, totalRows);
+    const batch = tableData.slice(i, endRow);
+    console.log(`createOverallPivotTable: writing batch ${i}-${endRow} of ${totalRows}`);
+    sheet.getRange(i + 1, 1, batch.length, headers.length).setValues(batch);
+    
+    if (endRow < totalRows) {
+      Utilities.sleep(200); // Increased sleep
+    }
+  }
+  
+  console.log('createOverallPivotTable: applying formatting');
+  applyEnhancedFormatting(sheet, totalRows, headers.length, formatData, appData);
+  
+  console.log('createOverallPivotTable: creating row grouping');
   createOverallRowGrouping(sheet, tableData, appData);
+  
   sheet.setFrozenRows(1);
+  console.log('createOverallPivotTable: done');
 }
 
 function addNetworkRows(tableData, networks, weekKey, wow, formatData) {
   if (!networks) return;
   
-  const networkKeys = Object.keys(networks).sort((a, b) => {
-    return networks[b].spend - networks[a].spend;
-  });
+  const networkKeys = Object.keys(networks).sort((a, b) => networks[b].spend - networks[a].spend);
   
   networkKeys.forEach(networkKey => {
     const network = networks[networkKey];
@@ -388,14 +381,9 @@ function addNetworkRows(tableData, networks, weekKey, wow, formatData) {
     const networkWoWKey = `${network.networkId}_${weekKey}`;
     const networkWoW = wow.networkWoW[networkWoWKey] || {};
     
-    const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const status = networkWoW.growthStatus || '';
-    
     formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
     
-    const networkRow = createNetworkRow(network, spendWoW, profitWoW, status);
-    tableData.push(networkRow);
+    tableData.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
   });
 }
 
@@ -426,11 +414,7 @@ function calculateNetworkTotals(networks) {
   const avgRrD1 = networks.length ? networks.reduce((s, n) => s + (n.rrD1 || 0), 0) / networks.length : 0;
   const avgRrD7 = networks.length ? networks.reduce((s, n) => s + (n.rrD7 || 0), 0) / networks.length : 0;
   
-  const validForEROAS = networks.filter(n => 
-    n.eRoasForecast >= 1 && 
-    n.eRoasForecast <= 1000 && 
-    n.spend > 0
-  );
+  const validForEROAS = networks.filter(n => n.eRoasForecast >= 1 && n.eRoasForecast <= 1000 && n.spend > 0);
   
   let avgERoas = 0;
   if (validForEROAS.length > 0) {
@@ -450,9 +434,7 @@ function calculateNetworkTotals(networks) {
 function createOverallRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
-    const sortedApps = Object.keys(appData).sort((a, b) => 
-      appData[a].appName.localeCompare(appData[b].appName)
-    );
+    const sortedApps = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
 
     sortedApps.forEach(appKey => {
       const app = appData[appKey];
@@ -499,11 +481,7 @@ function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, s
 }
 
 function getUnifiedHeaders() {
-  return [
-    'Level', 'Week Range / Source App', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
-  ];
+  return ['Level','Week Range / Source App','ID','GEO','Spend','Spend WoW %','Installs','CPI','ROAS D-1','IPM','RR D-1','RR D-7','eARPU 365d','eROAS 365d','eROAS 730d','eProfit 730d','eProfit 730d WoW %','Growth Status','Comments'];
 }
 
 function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
@@ -518,14 +496,7 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
 
 function applyBasicFormatting(sheet, numRows, numCols) {
   const headerRange = sheet.getRange(1, 1, 1, numCols);
-  headerRange
-    .setBackground(COLORS.HEADER.background)
-    .setFontColor(COLORS.HEADER.fontColor)
-    .setFontWeight('bold')
-    .setHorizontalAlignment('center')
-    .setVerticalAlignment('middle')
-    .setFontSize(10)
-    .setWrap(true);
+  headerRange.setBackground(COLORS.HEADER.background).setFontColor(COLORS.HEADER.fontColor).setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(10).setWrap(true);
 
   TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
@@ -548,42 +519,18 @@ function applyRowFormatting(sheet, formatData, numCols) {
     else if (item.type === 'HYPERLINK') rowsByType.hyperlink.push(item.row);
   });
 
-  rowsByType.app.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.APP_ROW.background)
-         .setFontColor(COLORS.APP_ROW.fontColor)
-         .setFontWeight('bold')
-         .setFontSize(10)
-  );
+  const applyFormat = (rows, color, size = 10, weight = 'normal') => {
+    rows.forEach(r => sheet.getRange(r, 1, 1, numCols).setBackground(color.background).setFontColor(color.fontColor || 'black').setFontWeight(weight).setFontSize(size));
+  };
 
-  rowsByType.week.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.WEEK_ROW.background)
-         .setFontSize(10)
-  );
-
-  rowsByType.network.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.NETWORK_ROW.background)
-         .setFontSize(9)
-  );
-
-  rowsByType.sourceApp.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.SOURCE_APP_ROW.background)
-         .setFontSize(9)
-  );
-
-  rowsByType.campaign.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.CAMPAIGN_ROW.background)
-         .setFontSize(9)
-  );
+  applyFormat(rowsByType.app, COLORS.APP_ROW, 10, 'bold');
+  applyFormat(rowsByType.week, COLORS.WEEK_ROW);
+  applyFormat(rowsByType.network, COLORS.NETWORK_ROW, 9);
+  applyFormat(rowsByType.sourceApp, COLORS.SOURCE_APP_ROW, 9);
+  applyFormat(rowsByType.campaign, COLORS.CAMPAIGN_ROW, 9);
 
   if (rowsByType.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
-    rowsByType.hyperlink.forEach(r => {
-      sheet.getRange(r, 2).setFontColor('#000000').setFontLine('none');
-    });
+    rowsByType.hyperlink.forEach(r => sheet.getRange(r, 2).setFontColor('#000000').setFontLine('none'));
   }
 }
 
@@ -612,16 +559,8 @@ function applyConditionalFormatting(sheet, numRows, appData) {
   if (numRows > 1) {
     const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
     rules.push(
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenTextContains('%').whenNumberGreaterThan(0)
-        .setBackground(COLORS.POSITIVE.background)
-        .setFontColor(COLORS.POSITIVE.fontColor)
-        .setRanges([spendRange]).build(),
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenTextContains('%').whenNumberLessThan(0)
-        .setBackground(COLORS.NEGATIVE.background)
-        .setFontColor(COLORS.NEGATIVE.fontColor)
-        .setRanges([spendRange]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenTextContains('%').whenNumberGreaterThan(0).setBackground(COLORS.POSITIVE.background).setFontColor(COLORS.POSITIVE.fontColor).setRanges([spendRange]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextContains('%').whenNumberLessThan(0).setBackground(COLORS.NEGATIVE.background).setFontColor(COLORS.NEGATIVE.fontColor).setRanges([spendRange]).build()
     );
 
     const eroasColumn = 15;
@@ -649,37 +588,17 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       const colLetter = String.fromCharCode(64 + eroasColumn);
       
       rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= ${targetEROAS})`)
-          .setBackground(COLORS.POSITIVE.background)
-          .setFontColor(COLORS.POSITIVE.fontColor)
-          .setRanges([cellRange]).build(),
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < ${targetEROAS})`)
-          .setBackground(COLORS.WARNING.background)
-          .setFontColor(COLORS.WARNING.fontColor)
-          .setRanges([cellRange]).build(),
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < 120)`)
-          .setBackground(COLORS.NEGATIVE.background)
-          .setFontColor(COLORS.NEGATIVE.fontColor)
-          .setRanges([cellRange]).build()
+        SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= ${targetEROAS})`).setBackground(COLORS.POSITIVE.background).setFontColor(COLORS.POSITIVE.fontColor).setRanges([cellRange]).build(),
+        SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < ${targetEROAS})`).setBackground(COLORS.WARNING.background).setFontColor(COLORS.WARNING.fontColor).setRanges([cellRange]).build(),
+        SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < 120)`).setBackground(COLORS.NEGATIVE.background).setFontColor(COLORS.NEGATIVE.fontColor).setRanges([cellRange]).build()
       );
     }
 
     const profitColumn = 17;
     const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
     rules.push(
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenTextContains('%').whenNumberGreaterThan(0)
-        .setBackground(COLORS.POSITIVE.background)
-        .setFontColor(COLORS.POSITIVE.fontColor)
-        .setRanges([profitRange]).build(),
-      SpreadsheetApp.newConditionalFormatRule()
-        .whenTextContains('%').whenNumberLessThan(0)
-        .setBackground(COLORS.NEGATIVE.background)
-        .setFontColor(COLORS.NEGATIVE.fontColor)
-        .setRanges([profitRange]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenTextContains('%').whenNumberGreaterThan(0).setBackground(COLORS.POSITIVE.background).setFontColor(COLORS.POSITIVE.fontColor).setRanges([profitRange]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextContains('%').whenNumberLessThan(0).setBackground(COLORS.NEGATIVE.background).setFontColor(COLORS.NEGATIVE.fontColor).setRanges([profitRange]).build()
     );
 
     const growthColumn = 18;
@@ -705,13 +624,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
     };
 
     Object.entries(statusColors).forEach(([status, colors]) => {
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenTextContains(status)
-          .setBackground(colors.background)
-          .setFontColor(colors.fontColor)
-          .setRanges([growthRange]).build()
-      );
+      rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextContains(status).setBackground(colors.background).setFontColor(colors.fontColor).setRanges([growthRange]).build());
     });
   }
   
@@ -728,11 +641,7 @@ function calculateWeekTotals(campaigns) {
   const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
   const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
   
-  const validForEROAS = campaigns.filter(c => 
-    c.eRoasForecast >= 1 && 
-    c.eRoasForecast <= 1000 && 
-    c.spend > 0
-  );
+  const validForEROAS = campaigns.filter(c => c.eRoasForecast >= 1 && c.eRoasForecast <= 1000 && c.spend > 0);
   
   let avgERoas = 0;
   if (validForEROAS.length > 0) {
@@ -741,11 +650,7 @@ function calculateWeekTotals(campaigns) {
     avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
   }
   
-  const validForEROASD730 = campaigns.filter(c => 
-    c.eRoasForecastD730 >= 1 && 
-    c.eRoasForecastD730 <= 1000 && 
-    c.spend > 0
-  );
+  const validForEROASD730 = campaigns.filter(c => c.eRoasForecastD730 >= 1 && c.eRoasForecastD730 <= 1000 && c.spend > 0);
   
   let avgEROASD730 = 0;
   if (validForEROASD730.length > 0) {
@@ -776,14 +681,9 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
-    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const growthStatus = campaignWoW.growthStatus || '';
-    
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    const campaignRow = createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus);
-    tableData.push(campaignRow);
+    tableData.push(createCampaignRow(campaign, campaignIdValue, campaignWoW.spendChangePercent ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '', campaignWoW.eProfitChangePercent ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '', campaignWoW.growthStatus || ''));
   });
 }
 
@@ -800,9 +700,7 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
 function createRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
-    const sortedApps = Object.keys(appData).sort((a, b) => 
-      appData[a].appName.localeCompare(appData[b].appName)
-    );
+    const sortedApps = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
 
     sortedApps.forEach(appKey => {
       const app = appData[appKey];

@@ -49,6 +49,7 @@ class CommentCache {
     let currentApp = '';
     let currentWeek = '';
     let currentSourceApp = '';
+    let currentNetwork = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
@@ -60,9 +61,11 @@ class CommentCache {
         currentApp = nameOrRange;
         currentWeek = '';
         currentSourceApp = '';
+        currentNetwork = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
         currentSourceApp = '';
+        currentNetwork = '';
         if (comment) {
           commentsToSave.push({
             appName: currentApp,
@@ -70,6 +73,18 @@ class CommentCache {
             level: 'WEEK',
             comment: comment,
             identifier: null,
+            sourceApp: null
+          });
+        }
+      } else if (level === 'NETWORK' && currentApp && currentWeek) {
+        currentNetwork = nameOrRange;
+        if (comment) {
+          commentsToSave.push({
+            appName: currentApp,
+            weekRange: currentWeek,
+            level: 'NETWORK',
+            comment: comment,
+            identifier: currentNetwork,
             sourceApp: null
           });
         }
@@ -208,6 +223,7 @@ class CommentCache {
     let currentApp = '';
     let currentWeek = '';
     let currentSourceApp = '';
+    let currentNetwork = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
@@ -218,13 +234,22 @@ class CommentCache {
         currentApp = nameOrRange;
         currentWeek = '';
         currentSourceApp = '';
+        currentNetwork = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
         currentSourceApp = '';
+        currentNetwork = '';
         const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
         const weekComment = comments[weekKey];
         if (weekComment) {
           commentUpdates.push({ row: i + 1, comment: weekComment });
+        }
+      } else if (level === 'NETWORK' && currentApp && currentWeek) {
+        currentNetwork = nameOrRange;
+        const networkKey = this.getCommentKey(currentApp, currentWeek, 'NETWORK', currentNetwork);
+        const networkComment = comments[networkKey];
+        if (networkComment) {
+          commentUpdates.push({ row: i + 1, comment: networkComment });
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
         currentSourceApp = nameOrRange;
@@ -277,6 +302,20 @@ function collapseAllGroupsRecursively(sheet) {
   
   let totalCollapsed = 0;
   
+  if (groups.networks && groups.networks.length > 0) {
+    let networkCollapsed = 0;
+    groups.networks.forEach((group, index) => {
+      try {
+        sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
+        networkCollapsed++;
+        SpreadsheetApp.flush();
+        Utilities.sleep(50);
+      } catch (e) {
+      }
+    });
+    totalCollapsed += networkCollapsed;
+  }
+  
   if (groups.sourceApps.length > 0) {
     let sourceAppCollapsed = 0;
     groups.sourceApps.forEach((group, index) => {
@@ -320,18 +359,28 @@ function identifyGroups(data) {
   const groups = {
     apps: [],
     weeks: [],
-    sourceApps: []
+    sourceApps: [],
+    networks: []
   };
   
   let currentApp = null;
   let appStartRow = null;
   let weekStartRow = null;
   let sourceAppStartRow = null;
+  let networkStartRow = null;
   
   for (let i = 1; i < data.length; i++) {
     const level = data[i][0];
     
     if (level === 'APP') {
+      if (networkStartRow !== null && i > networkStartRow + 1) {
+        groups.networks.push({
+          start: networkStartRow + 1,
+          count: i - networkStartRow - 1,
+          app: currentApp
+        });
+      }
+      
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
         groups.sourceApps.push({
           start: sourceAppStartRow + 1,
@@ -360,8 +409,17 @@ function identifyGroups(data) {
       appStartRow = i;
       weekStartRow = null;
       sourceAppStartRow = null;
+      networkStartRow = null;
       
     } else if (level === 'WEEK') {
+      if (networkStartRow !== null && i > networkStartRow + 1) {
+        groups.networks.push({
+          start: networkStartRow + 1,
+          count: i - networkStartRow - 1,
+          app: currentApp
+        });
+      }
+      
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
         groups.sourceApps.push({
           start: sourceAppStartRow + 1,
@@ -380,6 +438,18 @@ function identifyGroups(data) {
       
       weekStartRow = i;
       sourceAppStartRow = null;
+      networkStartRow = null;
+      
+    } else if (level === 'NETWORK') {
+      if (networkStartRow !== null && i > networkStartRow + 1) {
+        groups.networks.push({
+          start: networkStartRow + 1,
+          count: i - networkStartRow - 1,
+          app: currentApp
+        });
+      }
+      
+      networkStartRow = i;
       
     } else if (level === 'SOURCE_APP') {
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
@@ -395,6 +465,14 @@ function identifyGroups(data) {
     } else if (level === 'CAMPAIGN') {
       continue;
     }
+  }
+  
+  if (networkStartRow !== null && data.length > networkStartRow + 1) {
+    groups.networks.push({
+      start: networkStartRow + 1,
+      count: data.length - networkStartRow - 1,
+      app: currentApp
+    });
   }
   
   if (sourceAppStartRow !== null && data.length > sourceAppStartRow + 1) {

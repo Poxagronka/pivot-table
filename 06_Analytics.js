@@ -1,13 +1,21 @@
 function calculateWoWMetrics(appData) {
+  console.log('calculateWoWMetrics: start');
   if (!appData || typeof appData !== 'object') {
     return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
   }
 
   try {
+    // For OVERALL project, simplify processing
+    if (CURRENT_PROJECT === 'OVERALL') {
+      return calculateOverallWoWMetrics(appData);
+    }
+    
     const campaignData = {};
     const appWeekData = {};
     const sourceAppData = {};
-    const networkData = {};
+
+    const appCount = Object.keys(appData).length;
+    console.log(`calculateWoWMetrics: processing ${appCount} apps`);
 
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
@@ -15,34 +23,7 @@ function calculateWoWMetrics(appData) {
       Object.values(app.weeks).forEach(week => {
         let allCampaigns = [];
         
-        if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-          Object.values(week.networks).forEach(network => {
-            if (!networkData[network.networkId]) {
-              networkData[network.networkId] = {};
-            }
-            
-            networkData[network.networkId][week.weekStart] = {
-              weekStart: week.weekStart,
-              spend: network.spend,
-              profit: network.eProfitForecast,
-              networkId: network.networkId,
-              networkName: network.networkName
-            };
-          });
-          
-          const networkTotals = Object.values(week.networks).reduce((acc, network) => {
-            acc.spend += network.spend || 0;
-            acc.profit += network.eProfitForecast || 0;
-            return acc;
-          }, { spend: 0, profit: 0 });
-          
-          appWeekData[app.appName][week.weekStart] = { 
-            weekStart: week.weekStart, 
-            spend: networkTotals.spend, 
-            profit: networkTotals.profit 
-          };
-          
-        } else if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
           Object.values(week.sourceApps).forEach(sourceApp => {
             allCampaigns.push(...sourceApp.campaigns);
             
@@ -108,41 +89,39 @@ function calculateWoWMetrics(appData) {
           });
         }
         
-        if (CURRENT_PROJECT !== 'OVERALL') {
-          const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
-          const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-          appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
-        }
+        const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+        const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
       });
     });
 
-    const campaignWoW = {};
-    if (CURRENT_PROJECT !== 'OVERALL') {
-      const campaigns = {};
-      Object.values(campaignData).forEach(d => {
-        if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
-        campaigns[d.campaignId].push(d);
-      });
+    console.log('calculateWoWMetrics: calculating changes');
 
-      Object.keys(campaigns).forEach(campaignId => {
-        campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-        campaigns[campaignId].forEach((curr, i) => {
-          const key = `${campaignId}_${curr.weekStart}`;
-          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-          
-          if (i > 0) {
-            const prev = campaigns[campaignId][i - 1];
-            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-            const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
-            campaignWoW[key] = { 
-              spendChangePercent: spendPct, 
-              eProfitChangePercent: profitPct, 
-              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
-            };
-          }
-        });
+    const campaignWoW = {};
+    const campaigns = {};
+    Object.values(campaignData).forEach(d => {
+      if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
+      campaigns[d.campaignId].push(d);
+    });
+
+    Object.keys(campaigns).forEach(campaignId => {
+      campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+      campaigns[campaignId].forEach((curr, i) => {
+        const key = `${campaignId}_${curr.weekStart}`;
+        campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+        
+        if (i > 0) {
+          const prev = campaigns[campaignId][i - 1];
+          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+          const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
+          campaignWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
+          };
+        }
       });
-    }
+    });
 
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
@@ -186,32 +165,101 @@ function calculateWoWMetrics(appData) {
       });
     }
 
-    const networkWoW = {};
-    if (CURRENT_PROJECT === 'OVERALL') {
-      Object.keys(networkData).forEach(networkId => {
-        const weeks = Object.values(networkData[networkId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-        weeks.forEach((curr, i) => {
-          const key = `${networkId}_${curr.weekStart}`;
-          networkWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-          
-          if (i > 0) {
-            const prev = weeks[i - 1];
-            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-            networkWoW[key] = { 
-              spendChangePercent: spendPct, 
-              eProfitChangePercent: profitPct, 
-              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
-            };
-          }
-        });
-      });
-    }
-
-    return { campaignWoW, appWeekWoW, sourceAppWoW, networkWoW };
+    console.log('calculateWoWMetrics: done');
+    return { campaignWoW, appWeekWoW, sourceAppWoW, networkWoW: {} };
   } catch (e) {
+    console.error('calculateWoWMetrics error:', e);
     return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
   }
+}
+
+function calculateOverallWoWMetrics(appData) {
+  console.log('calculateOverallWoWMetrics: optimized for OVERALL');
+  const appWeekData = {};
+  const networkData = {};
+
+  // Process data more efficiently
+  Object.values(appData).forEach(app => {
+    appWeekData[app.appName] = {};
+    
+    Object.values(app.weeks).forEach(week => {
+      let weekSpend = 0;
+      let weekProfit = 0;
+      
+      if (week.networks) {
+        Object.values(week.networks).forEach(network => {
+          weekSpend += network.spend || 0;
+          weekProfit += network.eProfitForecast || 0;
+          
+          // Network data
+          if (!networkData[network.networkId]) {
+            networkData[network.networkId] = {};
+          }
+          
+          networkData[network.networkId][week.weekStart] = {
+            weekStart: week.weekStart,
+            spend: network.spend,
+            profit: network.eProfitForecast,
+            networkId: network.networkId,
+            networkName: network.networkName
+          };
+        });
+      }
+      
+      appWeekData[app.appName][week.weekStart] = { 
+        weekStart: week.weekStart, 
+        spend: weekSpend, 
+        profit: weekProfit 
+      };
+    });
+  });
+
+  console.log('calculateOverallWoWMetrics: calculating WoW changes');
+
+  // Calculate app week WoW
+  const appWeekWoW = {};
+  Object.keys(appWeekData).forEach(appName => {
+    const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+    weeks.forEach((curr, i) => {
+      const key = `${appName}_${curr.weekStart}`;
+      appWeekWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+      
+      if (i > 0) {
+        const prev = weeks[i - 1];
+        const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+        const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+        appWeekWoW[key] = { 
+          spendChangePercent: spendPct, 
+          eProfitChangePercent: profitPct, 
+          growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+        };
+      }
+    });
+  });
+
+  // Calculate network WoW
+  const networkWoW = {};
+  Object.keys(networkData).forEach(networkId => {
+    const weeks = Object.values(networkData[networkId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+    weeks.forEach((curr, i) => {
+      const key = `${networkId}_${curr.weekStart}`;
+      networkWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+      
+      if (i > 0) {
+        const prev = weeks[i - 1];
+        const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+        const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+        networkWoW[key] = { 
+          spendChangePercent: spendPct, 
+          eProfitChangePercent: profitPct, 
+          growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+        };
+      }
+    });
+  });
+
+  console.log('calculateOverallWoWMetrics: done');
+  return { campaignWoW: {}, appWeekWoW, sourceAppWoW: {}, networkWoW };
 }
 
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
@@ -309,67 +357,99 @@ function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJEC
 }
 
 function generateReport(days) {
+  console.log(`generateReport: start for ${CURRENT_PROJECT}, days: ${days}`);
   try {
+    console.log('generateReport: getting date range');
     const dateRange = getDateRange(days);
+    console.log(`generateReport: date range: ${dateRange.from} to ${dateRange.to}`);
+    
+    console.log('generateReport: fetching data');
     const raw = fetchCampaignData(dateRange);
     
     if (!raw.data?.analytics?.richStats?.stats?.length) {
+      console.log('generateReport: no data found');
       SpreadsheetApp.getUi().alert('No data found for the specified period.');
       return;
     }
     
+    console.log(`generateReport: processing ${raw.data.analytics.richStats.stats.length} records`);
     const processed = processApiData(raw);
-    if (Object.keys(processed).length === 0) {
+    
+    const processedCount = Object.keys(processed).length;
+    console.log(`generateReport: processed ${processedCount} apps`);
+    
+    if (processedCount === 0) {
+      console.log('generateReport: no valid data after processing');
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
     }
     
+    console.log('generateReport: clearing old data');
     clearAllDataSilent();
     
+    console.log('generateReport: creating pivot table');
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
     
+    console.log('generateReport: applying comments');
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
+    
+    console.log('generateReport: done');
   } catch (e) {
+    console.error('generateReport error:', e);
     SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
 function generateReportForDateRange(startDate, endDate) {
+  console.log(`generateReportForDateRange: ${CURRENT_PROJECT}, ${startDate} to ${endDate}`);
   const ui = SpreadsheetApp.getUi();
   
   try {
     const dateRange = { from: startDate, to: endDate };
+    console.log('generateReportForDateRange: fetching data');
     const raw = fetchCampaignData(dateRange);
     
     if (!raw.data?.analytics?.richStats?.stats?.length) {
+      console.log('generateReportForDateRange: no data found');
       ui.alert('No Data', 'No data found for the selected date range.', ui.ButtonSet.OK);
       return;
     }
     
+    console.log(`generateReportForDateRange: processing ${raw.data.analytics.richStats.stats.length} records`);
     const processed = processApiData(raw, true);
-    if (Object.keys(processed).length === 0) {
+    
+    const processedCount = Object.keys(processed).length;
+    console.log(`generateReportForDateRange: processed ${processedCount} apps`);
+    
+    if (processedCount === 0) {
+      console.log('generateReportForDateRange: no valid data after processing');
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
       return;
     }
     
+    console.log('generateReportForDateRange: clearing old data');
     clearAllDataSilent();
     
+    console.log('generateReportForDateRange: creating pivot table');
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
     
+    console.log('generateReportForDateRange: applying comments');
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
     
+    console.log('generateReportForDateRange: done');
     ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
   } catch (e) {
+    console.error('generateReportForDateRange error:', e);
     ui.alert('Error', 'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n1. Your internet connection\n2. The API token is still valid\n3. Try a smaller date range', ui.ButtonSet.OK);
   }
 }
