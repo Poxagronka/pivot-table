@@ -405,6 +405,7 @@ var PROJECTS = {
       },
       GROUP_BY: [
         { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_NETWORK_HID" },
         { dimension: "APP" }
       ],
       MEASURES: UNIFIED_MEASURES
@@ -487,6 +488,7 @@ var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
+  NETWORK_ROW: { background: '#f0f8ff' },
   SOURCE_APP_ROW: { background: '#f0f8ff' },
   CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },

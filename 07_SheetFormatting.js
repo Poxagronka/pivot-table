@@ -350,7 +350,8 @@ function createOverallPivotTable(appData) {
     weekKeys.forEach(weekKey => {
       const week = app.weeks[weekKey];
       
-      const weekTotals = calculateWeekTotals(week.campaigns);
+      const allNetworks = Object.values(week.networks || {});
+      const weekTotals = calculateNetworkTotals(allNetworks);
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
@@ -361,6 +362,8 @@ function createOverallPivotTable(appData) {
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
       const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
       tableData.push(weekRow);
+
+      addNetworkRows(tableData, week.networks, weekKey, wow, formatData);
     });
   });
 
@@ -370,6 +373,78 @@ function createOverallPivotTable(appData) {
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createOverallRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
+}
+
+function addNetworkRows(tableData, networks, weekKey, wow, formatData) {
+  if (!networks) return;
+  
+  const networkKeys = Object.keys(networks).sort((a, b) => {
+    return networks[b].spend - networks[a].spend;
+  });
+  
+  networkKeys.forEach(networkKey => {
+    const network = networks[networkKey];
+    
+    const networkWoWKey = `${network.networkId}_${weekKey}`;
+    const networkWoW = wow.networkWoW[networkWoWKey] || {};
+    
+    const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
+    const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const status = networkWoW.growthStatus || '';
+    
+    formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
+    
+    const networkRow = createNetworkRow(network, spendWoW, profitWoW, status);
+    tableData.push(networkRow);
+  });
+}
+
+function createNetworkRow(network, spendWoW, profitWoW, status) {
+  const installs = network.installs || 0;
+  const spend = network.spend || 0;
+  const cpi = installs > 0 ? spend / installs : 0;
+  const rrD1 = network.rrD1 || 0;
+  const roas = network.roas || 0;
+  const rrD7 = network.rrD7 || 0;
+  const eRoasForecast = network.eRoasForecast || 0;
+  const eProfitForecast = network.eProfitForecast || 0;
+  
+  return [
+    'NETWORK', network.networkName, '', 'ALL',
+    spend.toFixed(2), spendWoW, installs, cpi.toFixed(3),
+    roas.toFixed(2), '0.0', `${rrD1.toFixed(1)}%`, `${rrD7.toFixed(1)}%`,
+    '0.000', `${eRoasForecast.toFixed(0)}%`, `${eRoasForecast.toFixed(0)}%`,
+    eProfitForecast.toFixed(2), profitWoW, status, ''
+  ];
+}
+
+function calculateNetworkTotals(networks) {
+  const totalSpend = networks.reduce((s, n) => s + (n.spend || 0), 0);
+  const totalInstalls = networks.reduce((s, n) => s + (n.installs || 0), 0);
+  const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
+  const avgRoas = networks.length ? networks.reduce((s, n) => s + (n.roas || 0), 0) / networks.length : 0;
+  const avgRrD1 = networks.length ? networks.reduce((s, n) => s + (n.rrD1 || 0), 0) / networks.length : 0;
+  const avgRrD7 = networks.length ? networks.reduce((s, n) => s + (n.rrD7 || 0), 0) / networks.length : 0;
+  
+  const validForEROAS = networks.filter(n => 
+    n.eRoasForecast >= 1 && 
+    n.eRoasForecast <= 1000 && 
+    n.spend > 0
+  );
+  
+  let avgERoas = 0;
+  if (validForEROAS.length > 0) {
+    const totalWeightedEROAS = validForEROAS.reduce((sum, n) => sum + (n.eRoasForecast * n.spend), 0);
+    const totalSpendForEROAS = validForEROAS.reduce((sum, n) => sum + n.spend, 0);
+    avgERoas = totalSpendForEROAS > 0 ? totalWeightedEROAS / totalSpendForEROAS : 0;
+  }
+  
+  const totalProfit = networks.reduce((s, n) => s + (n.eProfitForecast || 0), 0);
+
+  return {
+    totalSpend, totalInstalls, avgCpi, avgRoas, avgIpm: 0, avgRrD1, avgRrD7,
+    avgArpu: 0, avgERoas, avgEROASD730: avgERoas, totalProfit
+  };
 }
 
 function createOverallRowGrouping(sheet, tableData, appData) {
@@ -385,13 +460,28 @@ function createOverallRowGrouping(sheet, tableData, appData) {
       rowPointer++;
 
       const sortedWeeks = Object.keys(app.weeks).sort();
-      const weekCount = sortedWeeks.length;
-      rowPointer += weekCount;
+      
+      sortedWeeks.forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        const weekStartRow = rowPointer;
+        rowPointer++;
 
-      if (weekCount > 0) {
+        const networkCount = week.networks ? Object.keys(week.networks).length : 0;
+        rowPointer += networkCount;
+
+        if (networkCount > 0) {
+          try {
+            sheet.getRange(weekStartRow + 1, 1, networkCount, 1).shiftRowGroupDepth(1);
+            sheet.getRange(weekStartRow + 1, 1, networkCount, 1).collapseGroups();
+          } catch (e) {}
+        }
+      });
+
+      const appContentRows = rowPointer - appStartRow - 1;
+      if (appContentRows > 0) {
         try {
-          sheet.getRange(appStartRow + 1, 1, weekCount, 1).shiftRowGroupDepth(1);
-          sheet.getRange(appStartRow + 1, 1, weekCount, 1).collapseGroups();
+          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).shiftRowGroupDepth(1);
+          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
         } catch (e) {}
       }
     });
@@ -447,11 +537,12 @@ function applyBasicFormatting(sheet, numRows, numCols) {
 }
 
 function applyRowFormatting(sheet, formatData, numCols) {
-  const rowsByType = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [] };
+  const rowsByType = { app: [], week: [], network: [], sourceApp: [], campaign: [], hyperlink: [] };
   
   formatData.forEach(item => {
     if (item.type === 'APP') rowsByType.app.push(item.row);
     else if (item.type === 'WEEK') rowsByType.week.push(item.row);
+    else if (item.type === 'NETWORK') rowsByType.network.push(item.row);
     else if (item.type === 'SOURCE_APP') rowsByType.sourceApp.push(item.row);
     else if (item.type === 'CAMPAIGN') rowsByType.campaign.push(item.row);
     else if (item.type === 'HYPERLINK') rowsByType.hyperlink.push(item.row);
@@ -469,6 +560,12 @@ function applyRowFormatting(sheet, formatData, numCols) {
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.WEEK_ROW.background)
          .setFontSize(10)
+  );
+
+  rowsByType.network.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.NETWORK_ROW.background)
+         .setFontSize(9)
   );
 
   rowsByType.sourceApp.forEach(r =>

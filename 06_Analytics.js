@@ -1,12 +1,13 @@
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
-    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
   }
 
   try {
     const campaignData = {};
     const appWeekData = {};
     const sourceAppData = {};
+    const networkData = {};
 
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
@@ -14,7 +15,34 @@ function calculateWoWMetrics(appData) {
       Object.values(app.weeks).forEach(week => {
         let allCampaigns = [];
         
-        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+        if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          Object.values(week.networks).forEach(network => {
+            if (!networkData[network.networkId]) {
+              networkData[network.networkId] = {};
+            }
+            
+            networkData[network.networkId][week.weekStart] = {
+              weekStart: week.weekStart,
+              spend: network.spend,
+              profit: network.eProfitForecast,
+              networkId: network.networkId,
+              networkName: network.networkName
+            };
+          });
+          
+          const networkTotals = Object.values(week.networks).reduce((acc, network) => {
+            acc.spend += network.spend || 0;
+            acc.profit += network.eProfitForecast || 0;
+            return acc;
+          }, { spend: 0, profit: 0 });
+          
+          appWeekData[app.appName][week.weekStart] = { 
+            weekStart: week.weekStart, 
+            spend: networkTotals.spend, 
+            profit: networkTotals.profit 
+          };
+          
+        } else if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
           Object.values(week.sourceApps).forEach(sourceApp => {
             allCampaigns.push(...sourceApp.campaigns);
             
@@ -55,8 +83,6 @@ function calculateWoWMetrics(appData) {
               }
             });
           });
-        } else if (CURRENT_PROJECT === 'OVERALL') {
-          allCampaigns = week.campaigns || [];
         } else {
           allCampaigns = week.campaigns || [];
           
@@ -82,9 +108,11 @@ function calculateWoWMetrics(appData) {
           });
         }
         
-        const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
-        const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
+        if (CURRENT_PROJECT !== 'OVERALL') {
+          const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+          const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+          appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
+        }
       });
     });
 
@@ -158,9 +186,31 @@ function calculateWoWMetrics(appData) {
       });
     }
 
-    return { campaignWoW, appWeekWoW, sourceAppWoW };
+    const networkWoW = {};
+    if (CURRENT_PROJECT === 'OVERALL') {
+      Object.keys(networkData).forEach(networkId => {
+        const weeks = Object.values(networkData[networkId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        weeks.forEach((curr, i) => {
+          const key = `${networkId}_${curr.weekStart}`;
+          networkWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = weeks[i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+            networkWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+            };
+          }
+        });
+      });
+    }
+
+    return { campaignWoW, appWeekWoW, sourceAppWoW, networkWoW };
   } catch (e) {
-    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
   }
 }
 

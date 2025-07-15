@@ -162,6 +162,104 @@ function getGraphQLQuery() {
   }`;
 }
 
+function processApiData(rawData, includeLastWeek = null) {
+  if (CURRENT_PROJECT === 'OVERALL') {
+    return processOverallApiData(rawData, includeLastWeek);
+  }
+  if (CURRENT_PROJECT === 'TRICKY') {
+    return processApiDataTrickyOptimized(rawData, includeLastWeek);
+  }
+  return processApiDataStandard(rawData, includeLastWeek);
+}
+
+function processOverallApiData(rawData, includeLastWeek = null) {
+  const stats = rawData.data.analytics.richStats.stats;
+  const appData = {};
+  const today = new Date();
+  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
+  const dayOfWeek = today.getDay();
+  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
+
+  stats.forEach((row, index) => {
+    try {
+      const date = row[0].value;
+      const monday = getMondayOfWeek(new Date(date));
+      const weekKey = formatDateForAPI(monday);
+
+      if (weekKey >= currentWeekStart) return;
+      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
+
+      const network = row[1];
+      const app = row[2];
+      const metricsStartIndex = 3;
+      
+      if (row.length < metricsStartIndex + 8) return;
+      
+      const metrics = extractOverallMetrics(row, metricsStartIndex);
+      const sunday = getSundayOfWeek(new Date(date));
+      const appKey = app.id;
+
+      const networkId = network.id || 'unknown';
+      const networkName = network.value || 'Unknown Network';
+
+      if (!appData[appKey]) {
+        appData[appKey] = {
+          appId: app.id,
+          appName: app.name,
+          platform: app.platform,
+          bundleId: app.bundleId,
+          weeks: {}
+        };
+      }
+
+      if (!appData[appKey].weeks[weekKey]) {
+        appData[appKey].weeks[weekKey] = {
+          weekStart: formatDateForAPI(monday),
+          weekEnd: formatDateForAPI(sunday),
+          networks: {}
+        };
+      }
+
+      if (!appData[appKey].weeks[weekKey].networks[networkId]) {
+        appData[appKey].weeks[weekKey].networks[networkId] = {
+          networkId: networkId,
+          networkName: networkName,
+          ...metrics
+        };
+      } else {
+        const existing = appData[appKey].weeks[weekKey].networks[networkId];
+        existing.cpi = ((existing.cpi * existing.installs) + (metrics.cpi * metrics.installs)) / (existing.installs + metrics.installs);
+        existing.installs += metrics.installs;
+        existing.spend += metrics.spend;
+        existing.rrD1 = ((existing.rrD1 * existing.installs) + (metrics.rrD1 * metrics.installs)) / (existing.installs + metrics.installs);
+        existing.roas = ((existing.roas * existing.spend) + (metrics.roas * metrics.spend)) / (existing.spend + metrics.spend);
+        existing.rrD7 = ((existing.rrD7 * existing.installs) + (metrics.rrD7 * metrics.installs)) / (existing.installs + metrics.installs);
+        existing.eRoasForecast = ((existing.eRoasForecast * existing.spend) + (metrics.eRoasForecast * metrics.spend)) / (existing.spend + metrics.spend);
+        existing.eProfitForecast += metrics.eProfitForecast;
+      }
+
+    } catch (error) {
+      console.error('Error processing OVERALL row:', error);
+    }
+  });
+
+  return appData;
+}
+
+function extractOverallMetrics(row, startIndex) {
+  return {
+    cpi: parseFloat(row[startIndex].value) || 0,
+    installs: parseInt(row[startIndex + 1].value) || 0,
+    spend: parseFloat(row[startIndex + 2].value) || 0,
+    rrD1: parseFloat(row[startIndex + 3].value) || 0,
+    roas: parseFloat(row[startIndex + 4].value) || 0,
+    rrD7: parseFloat(row[startIndex + 5].value) || 0,
+    eRoasForecast: parseFloat(row[startIndex + 6].value) || 0,
+    eProfitForecast: parseFloat(row[startIndex + 7].value) || 0
+  };
+}
+
 function initTrickyOptimizedCache() {
   if (CURRENT_PROJECT !== 'TRICKY' || TRICKY_OPTIMIZED_CACHE) return TRICKY_OPTIMIZED_CACHE;
   
@@ -217,13 +315,6 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   }
   
   return bundleId;
-}
-
-function processApiData(rawData, includeLastWeek = null) {
-  if (CURRENT_PROJECT === 'TRICKY') {
-    return processApiDataTrickyOptimized(rawData, includeLastWeek);
-  }
-  return processApiDataStandard(rawData, includeLastWeek);
 }
 
 function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
@@ -392,57 +483,14 @@ function processApiDataStandard(rawData, includeLastWeek = null) {
       if (weekKey >= currentWeekStart) return;
       if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
 
-      let campaign, app, metricsStartIndex;
-      
-      if (CURRENT_PROJECT === 'OVERALL') {
-        campaign = null;
-        app = row[1];
-        metricsStartIndex = 2;
-      } else {
-        campaign = row[1];
-        app = row[2];
-        metricsStartIndex = 3;
-      }
+      const campaign = row[1];
+      const app = row[2];
+      const metricsStartIndex = 3;
       
       const metrics = extractMetrics(row, metricsStartIndex);
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
-      if (CURRENT_PROJECT === 'OVERALL') {
-        if (!appData[appKey]) {
-          appData[appKey] = {
-            appId: app.id,
-            appName: app.name,
-            platform: app.platform,
-            bundleId: app.bundleId,
-            weeks: {}
-          };
-        }
-
-        if (!appData[appKey].weeks[weekKey]) {
-          appData[appKey].weeks[weekKey] = {
-            weekStart: formatDateForAPI(monday),
-            weekEnd: formatDateForAPI(sunday),
-            campaigns: []
-          };
-        }
-        
-        const virtualCampaignData = {
-          date: date,
-          campaignId: `app_${app.id}_${weekKey}`,
-          campaignName: app.name,
-          ...metrics,
-          status: 'Active',
-          type: 'Overall',
-          geo: 'ALL',
-          sourceApp: app.name,
-          isAutomated: false
-        };
-        
-        appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
-        return;
-      }
-
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
@@ -537,16 +585,16 @@ function extractGeoFromCampaign(campaignName) {
     '| ITA |': 'ITA',  // Italy
     '| ESP |': 'ESP',  // Spain
     '| AUS |': 'AUS',  // Australia
-    '| NZL |': 'NZL',  // New Zealand
+    '| NZL |': 'NZL',  // New Zealand
     '| JPN |': 'JPN',  // Japan
-    '| KOR |': 'KOR',  // South Korea
+    '| KOR |': 'KOR',  // South Korea
     '| CHN |': 'CHN',  // China
     '| IND |': 'IND',  // India
     '| BRA |': 'BRA',  // Brazil
     '| MEX |': 'MEX',  // Mexico
     '| RUS |': 'RUS',  // Russia
-    '| ZAF |': 'ZAF',  // South Africa
-    '| SAU |': 'SAU',  // Saudi Arabia
+    '| ZAF |': 'ZAF',  // South Africa
+    '| SAU |': 'SAU',  // Saudi Arabia
     '| TUR |': 'TUR',  // Turkey
     '| NLD |': 'NLD',  // Netherlands
     '| BEL |': 'BEL',  // Belgium
