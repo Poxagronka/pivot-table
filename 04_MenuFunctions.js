@@ -7,20 +7,25 @@ function onOpen() {
   menu.addItem('📈 Generate Report (Any Period)...', 'smartReportWizard')
       .addItem('🔄 Update All to Current', 'updateAllProjectsInBatches')
       .addItem('🎯 Update Selected Projects', 'updateSelectedProjectsToCurrent')
-      .addSeparator()
-      .addItem('⚙️ Open Settings Sheet', 'openSettingsSheet')
-      .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
-      .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
-      .addItem('📊 System Status', 'showQuickStatus')
-      .addItem('🔄 Recreate Triggers', 'recreateAllTriggers')
-      .addSeparator()
-      .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
-      .addItem('🔍 Quick API Check', 'quickAPICheckAll')
-      .addItem('🗑️ Clear Data...', 'clearDataWizard')
-      .addItem('📱 Apps Database (TRICKY)', 'appsDbWizard')
-      .addSeparator()
-      .addItem('🐛 Debug Single Project', 'debugSingleProject')
-      .addItem('🐙 GitHub Repository', 'openGitHubRepo')
+      .addSeparator();
+  
+  var settingsMenu = ui.createMenu('⚙️ Settings');
+  settingsMenu.addItem('📝 Open Settings Sheet', 'openSettingsSheet')
+            .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
+            .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
+            .addItem('📊 System Status', 'showQuickStatus')
+            .addSeparator()
+            .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
+            .addItem('🔍 Quick API Check', 'quickAPICheckAll')
+            .addItem('🗑️ Clear Data...', 'clearDataWizard')
+            .addItem('📱 Apps Database (TRICKY)', 'appsDbWizard')
+            .addSeparator()
+            .addItem('🐛 Debug Single Project', 'debugSingleProject')
+            .addItem('🐙 GitHub Repository', 'openGitHubRepo')
+            .addItem('🔄 Recreate Triggers', 'recreateAllTriggers');
+  
+  menu.addSubMenu(settingsMenu)
+      
       .addToUi();
 }
 
