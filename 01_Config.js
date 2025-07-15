@@ -32,19 +32,10 @@ function getBearerToken() {
     
     return token;
   } catch (e) {
-    console.error('Error loading bearer token:', e);
-    if (FALLBACK_BEARER_TOKEN) {
-      console.log('Using fallback bearer token');
-      return FALLBACK_BEARER_TOKEN;
-    }
-    
+    if (FALLBACK_BEARER_TOKEN) return FALLBACK_BEARER_TOKEN;
     const props = PropertiesService.getScriptProperties();
     const propToken = props.getProperty('BEARER_TOKEN');
-    if (propToken) {
-      console.log('Using property service bearer token');
-      return propToken;
-    }
-    
+    if (propToken) return propToken;
     return '';
   }
 }
@@ -66,34 +57,17 @@ function clearTrickyCaches() {
   BUNDLE_ID_CACHE = {};
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
-  console.log('TRICKY caches cleared');
 }
 
 function getTargetEROAS(projectName, appName = null) {
   try {
     const settings = loadSettingsFromSheetWithRetry();
-    
-    if (projectName === 'TRICKY') {
-      return settings.targetEROAS.tricky || 250;
-    }
-    
-    if (appName && appName.toLowerCase().includes('business')) {
-      return settings.targetEROAS.business || 140;
-    }
-    
+    if (projectName === 'TRICKY') return settings.targetEROAS.tricky || 250;
+    if (appName && appName.toLowerCase().includes('business')) return settings.targetEROAS.business || 140;
     return settings.targetEROAS.ceg || 150;
-    
   } catch (e) {
-    console.error('Error loading target eROAS:', e);
-    
-    if (projectName === 'TRICKY') {
-      return 250;
-    }
-    
-    if (appName && appName.toLowerCase().includes('business')) {
-      return 140;
-    }
-    
+    if (projectName === 'TRICKY') return 250;
+    if (appName && appName.toLowerCase().includes('business')) return 140;
     return 150;
   }
 }
@@ -103,7 +77,6 @@ function getGrowthThresholds(projectName) {
     const settings = loadSettingsFromSheetWithRetry();
     return settings.growthThresholds[projectName] || getDefaultGrowthThresholds();
   } catch (e) {
-    console.error('Error loading growth thresholds:', e);
     return getDefaultGrowthThresholds();
   }
 }
@@ -170,7 +143,6 @@ function getUpdateTriggersStatus() {
       })
     };
   } catch (e) {
-    console.error('Error getting update triggers status:', e);
     return {
       enabled: false,
       triggersCount: 0,
@@ -187,7 +159,6 @@ function loadSettingsFromSheetWithRetry(maxRetries = 3) {
       const settings = loadSettingsFromSheet();
       return settings;
     } catch (e) {
-      console.error(`Settings load attempt ${attempt} failed:`, e);
       if (attempt === maxRetries) {
         return getDefaultSettings();
       }
@@ -491,9 +462,7 @@ function setCurrentProject(projectName) {
   if (CURRENT_PROJECT === 'TRICKY' || projectName === 'TRICKY') {
     try {
       clearTrickyCaches();
-    } catch (e) {
-      console.log('Cache clear function not available');
-    }
+    } catch (e) {}
   }
   
   CURRENT_PROJECT = projectName;

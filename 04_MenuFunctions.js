@@ -24,9 +24,7 @@ function onOpen() {
             .addItem('🐙 GitHub Repository', 'openGitHubRepo')
             .addItem('🔄 Recreate Triggers', 'recreateAllTriggers');
   
-  menu.addSubMenu(settingsMenu)
-      
-      .addToUi();
+  menu.addSubMenu(settingsMenu).addToUi();
 }
 
 function updateAllProjectsInBatches() {
@@ -47,26 +45,21 @@ function updateAllProjectsInBatches() {
     var batch1 = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS'];
     var batch2 = ['APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
     
-    console.log('Starting batch 1 with TRICKY optimizations...');
     var batch1Results = updateProjectBatchOptimized(batch1, 1);
     
     if (batch1Results.successCount > 0) {
-      console.log('Waiting 30 seconds before batch 2...');
       Utilities.sleep(30000);
     }
     
-    console.log('Starting batch 2...');
     var batch2Results = updateProjectBatchOptimized(batch2, 2);
     
     var totalSuccess = batch1Results.successCount + batch2Results.successCount;
     var totalErrors = batch1Results.errors.concat(batch2Results.errors);
     
     try {
-      console.log('Sorting project sheets...');
       Utilities.sleep(5000);
       sortProjectSheetsWithRetry();
     } catch (e) {
-      console.error('Error sorting sheets:', e);
       totalErrors.push(`Sorting: ${e.toString().substring(0, 50)}...`);
     }
     
@@ -86,29 +79,21 @@ function updateProjectBatchOptimized(projects, batchNumber) {
   var successCount = 0;
   var errors = [];
   
-  console.log(`=== BATCH ${batchNumber} START (OPTIMIZED) ===`);
-  
   projects.forEach(function(proj, index) {
     try {
-      console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
-      
       if (proj === 'TRICKY') {
-        console.log('Using TRICKY optimized update...');
         clearTrickyCaches();
       }
       
       if (index > 0) {
         const waitTime = proj === 'TRICKY' ? 12000 : 8000;
-        console.log(`Waiting ${waitTime/1000} seconds before next project...`);
         Utilities.sleep(waitTime);
       }
       
       updateProjectDataOptimized(proj);
       successCount++;
-      console.log(`${proj} updated successfully`);
       
     } catch (e) {
-      console.error(`Error updating ${proj}:`, e);
       var errorMsg = e.toString();
       if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
         errors.push(`${proj}: Timeout - try individually`);
@@ -116,12 +101,9 @@ function updateProjectBatchOptimized(projects, batchNumber) {
         errors.push(`${proj}: ${errorMsg.substring(0, 50)}...`);
       }
       
-      console.log('Waiting 5 seconds after error...');
       Utilities.sleep(5000);
     }
   });
-  
-  console.log(`=== BATCH ${batchNumber} END ===`);
   
   return { successCount: successCount, errors: errors };
 }
@@ -160,25 +142,20 @@ function updateSelectedProjectsToCurrent() {
     selected.forEach(function(proj, index) {
       try {
         var projectName = proj.toUpperCase();
-        console.log(`Updating ${projectName} (${index + 1}/${selected.length})...`);
         
         if (projectName === 'TRICKY') {
-          console.log('Clearing TRICKY caches for optimization...');
           clearTrickyCaches();
         }
         
         if (index > 0) {
           const waitTime = projectName === 'TRICKY' ? 12000 : 8000;
-          console.log(`Waiting ${waitTime/1000} seconds before next project...`);
           Utilities.sleep(waitTime);
         }
         
         updateProjectDataOptimized(projectName);
         successCount++;
-        console.log(`${projectName} updated successfully`);
         
       } catch (e) {
-        console.error(`Error updating ${proj}:`, e);
         var errorMsg = e.toString();
         if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
           errors.push(`${proj}: Timeout - try individually`);
@@ -186,18 +163,15 @@ function updateSelectedProjectsToCurrent() {
           errors.push(`${proj}: ${errorMsg.substring(0, 50)}...`);
         }
         
-        console.log('Waiting 5 seconds after error...');
         Utilities.sleep(5000);
       }
     });
     
     if (successCount > 0) {
       try {
-        console.log('Sorting project sheets...');
         Utilities.sleep(3000);
         sortProjectSheetsWithRetry();
       } catch (e) {
-        console.error('Error sorting sheets:', e);
         errors.push(`Sorting: ${e.toString().substring(0, 30)}...`);
       }
     }
@@ -231,10 +205,7 @@ function updateSingleProject() {
   var projectName = MENU_PROJECTS[project-1].toUpperCase();
   
   try {
-    console.log(`Updating single project: ${projectName}`);
-    
     if (projectName === 'TRICKY') {
-      console.log('Using TRICKY optimized processing...');
       clearTrickyCaches();
     }
     
@@ -247,7 +218,6 @@ function updateSingleProject() {
     
     ui.alert('✅ Success', successMessage, ui.ButtonSet.OK);
   } catch (e) {
-    console.error(`Error updating ${projectName}:`, e);
     var errorMsg = e.toString();
     if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
       ui.alert('⏱️ Timeout', `${projectName} update timed out. Try reducing date range or check API status.`, ui.ButtonSet.OK);
@@ -377,7 +347,6 @@ function quickAPICheckAll() {
       setCurrentProject(proj);
       
       if (proj === 'TRICKY') {
-        console.log('Clearing TRICKY caches for API check...');
         clearTrickyCaches();
       }
       
@@ -483,14 +452,11 @@ function clearAllProjectsDataOptimized() {
     projects.forEach(function(proj) {
       try {
         if (proj === 'TRICKY') {
-          console.log('Clearing TRICKY with optimizations...');
           clearTrickyCaches();
         }
         clearProjectDataSilent(proj);
         successCount++;
-      } catch (e) {
-        console.error(`Error clearing ${proj}:`, e);
-      }
+      } catch (e) {}
     });
     
     ui.alert(successCount === projects.length ? 'Success' : 'Partial Success', 
@@ -512,7 +478,6 @@ function clearProjectAllDataOptimized(projectName) {
   
   try {
     if (projectName === 'TRICKY') {
-      console.log('Clearing TRICKY with optimizations...');
       clearTrickyCaches();
     }
     clearProjectDataSilent(projectName);
@@ -537,24 +502,17 @@ function syncTriggersWithSettings() {
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
-      console.log('Deleted auto cache trigger');
     }
     
     if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
       clearAllUpdateTriggers();
       createUpdateTriggers();
-      console.log('Created update triggers with TRICKY optimizations');
     } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
       clearAllUpdateTriggers();
-      console.log('Deleted all update triggers');
     }
-    
-    console.log('Triggers synchronized with Settings sheet');
   } catch (e) {
-    console.error('Error syncing triggers with settings:', e);
     throw e;
   }
 }
@@ -599,20 +557,16 @@ function updateProjectDataWithRetry(projectName, maxRetries = 2) {
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       if (projectName === 'TRICKY') {
-        console.log('Using TRICKY optimized update with retry...');
         clearTrickyCaches();
       }
       updateProjectDataOptimized(projectName);
       return;
     } catch (e) {
-      console.error(`${projectName} update attempt ${attempt} failed:`, e);
-      
       if (attempt === maxRetries) {
         throw e;
       }
       
       var delay = baseDelay * Math.pow(2, attempt - 1);
-      console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
     }
   }
@@ -626,14 +580,11 @@ function sortProjectSheetsWithRetry(maxRetries = 2) {
       sortProjectSheets();
       return;
     } catch (e) {
-      console.error(`Sheet sorting attempt ${attempt} failed:`, e);
-      
       if (attempt === maxRetries) {
         throw e;
       }
       
       var delay = baseDelay * attempt;
-      console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
     }
   }
@@ -751,9 +702,7 @@ function quickGenerateAllForDaysOptimized(days) {
       try { 
         generateProjectReportOptimized(p.toUpperCase(), days); 
         success++; 
-      } catch(e) { 
-        console.error(e); 
-      }
+      } catch(e) {}
     }
     sortProjectSheets();
     ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports (TRICKY optimized)', ui.ButtonSet.OK);
@@ -787,23 +736,15 @@ function runSelectedProjectsDateRangeOptimized(projects, start, end) {
 }
 
 function generateProjectReportOptimized(projectName, days) { 
-  console.log(`Generating ${projectName} report for ${days} days`);
-  if (days > 180) {
-    console.log(`Warning: Large period (${days} days) - monitoring for timeouts`);
-  }
-  
   if (projectName === 'TRICKY') {
-    console.log('Using TRICKY optimized processing...');
     clearTrickyCaches();
   }
-  
   setCurrentProject(projectName); 
   generateReport(days); 
 }
 
 function generateProjectReportForDateRangeOptimized(projectName, startDate, endDate) { 
   if (projectName === 'TRICKY') {
-    console.log('Using TRICKY optimized processing for date range...');
     clearTrickyCaches();
   }
   setCurrentProject(projectName); 
@@ -812,7 +753,6 @@ function generateProjectReportForDateRangeOptimized(projectName, startDate, endD
 
 function debugProjectReportGenerationOptimized(projectName) { 
   if (projectName === 'TRICKY') {
-    console.log('Using TRICKY optimized debug...');
     clearTrickyCaches();
   }
   setCurrentProject(projectName); 
@@ -977,8 +917,6 @@ function recreateAllTriggers() {
   if (result !== ui.Button.YES) return;
   
   try {
-    console.log('Recreating all triggers with TRICKY optimizations...');
-    
     clearAllUpdateTriggers();
     
     var cacheEnabled = isAutoCacheEnabled();
@@ -986,18 +924,15 @@ function recreateAllTriggers() {
     
     if (cacheEnabled) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      console.log('Cache trigger recreated');
     }
     
     if (updateEnabled) {
       createUpdateTriggers();
-      console.log('Update triggers recreated with TRICKY optimizations');
     }
     
     ui.alert('✅ Triggers Recreated', 'All triggers recreated successfully!\n\n🚀 TRICKY optimizations: Active', ui.ButtonSet.OK);
     
   } catch (e) {
-    console.error('Error recreating triggers:', e);
     ui.alert('❌ Error', 'Error recreating triggers: ' + e.toString(), ui.ButtonSet.OK);
   }
 }

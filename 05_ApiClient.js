@@ -6,52 +6,17 @@ var TRICKY_OPTIMIZED_CACHE = null;
 function fetchCampaignData(dateRange) {
   const config = getCurrentConfig();
   const apiConfig = getCurrentApiConfig();
-  
-  const filters = [
-    { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
-  ];
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
-    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
-  }
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    
-    if (searchPattern.startsWith('!')) {
-      const excludePattern = searchPattern.substring(1);
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: false,
-        searchByString: excludePattern
-      });
-    } else {
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: true, 
-        searchByString: searchPattern
-      });
-    }
-  }
-  
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
+  const filters = buildFilters(apiConfig);
+  const dateDimension = ['GOOGLE_ADS','APPLOVIN','INCENT','OVERALL'].includes(CURRENT_PROJECT) ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
     variables: {
-      dateFilters: [{
-        dimension: dateDimension,
-        from: dateRange.from,
-        to: dateRange.to,
-        include: true
-      }],
+      dateFilters: [{dimension: dateDimension, from: dateRange.from, to: dateRange.to, include: true}],
       filters: filters,
       groupBy: apiConfig.GROUP_BY,
       measures: apiConfig.MEASURES,
-      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
+      havingFilters: [{measure: {id: "spend", day: null}, operator: "MORE", value: 0}],
       anonymizationMode: "OFF",
       topFilter: null,
       revenuePredictionVersion: "",
@@ -63,116 +28,61 @@ function fetchCampaignData(dateRange) {
   const options = {
     method: 'post',
     contentType: 'application/json',
-    headers: {
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: `Bearer ${config.BEARER_TOKEN}`,
-      Connection: 'keep-alive',
-      DNT: '1',
-      Origin: 'https://app.appodeal.com',
-      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-      'x-requested-with': 'XMLHttpRequest',
-      'Trace-Id': Utilities.getUuid()
-    },
+    headers: buildHeaders(config),
     payload: JSON.stringify(payload)
   };
 
   const resp = UrlFetchApp.fetch(config.API_URL, options);
-  if (resp.getResponseCode() !== 200) {
-    throw new Error('API request failed: ' + resp.getContentText());
-  }
+  if (resp.getResponseCode() !== 200) throw new Error('API request failed: ' + resp.getContentText());
   return JSON.parse(resp.getContentText());
 }
 
 function fetchProjectCampaignData(projectName, dateRange) {
-  const config = getProjectConfig(projectName);
-  const apiConfig = getProjectApiConfig(projectName);
-  
-  if (!config.BEARER_TOKEN) {
-    throw new Error(`${projectName} project is not configured: missing BEARER_TOKEN`);
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    return fetchCampaignData(dateRange);
+  } finally {
+    setCurrentProject(originalProject);
   }
-  
-  if (!apiConfig.FILTERS.USER || apiConfig.FILTERS.USER.length === 0) {
-    throw new Error(`${projectName} project is not configured: missing USER filters`);
-  }
-  
+}
+
+function buildFilters(apiConfig) {
   const filters = [
-    { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
+    {dimension: "USER", values: apiConfig.FILTERS.USER, include: true},
+    {dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true}
   ];
   
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
-    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
+  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID?.length > 0) {
+    filters.push({dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true});
   }
   
   if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
     const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    
-    if (searchPattern.startsWith('!')) {
-      const excludePattern = searchPattern.substring(1);
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: false,
-        searchByString: excludePattern
-      });
-    } else {
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: true, 
-        searchByString: searchPattern
-      });
-    }
+    filters.push({
+      dimension: "ATTRIBUTION_CAMPAIGN_HID", 
+      values: [], 
+      include: !searchPattern.startsWith('!'),
+      searchByString: searchPattern.startsWith('!') ? searchPattern.substring(1) : searchPattern
+    });
   }
   
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
-  
-  const payload = {
-    operationName: apiConfig.OPERATION_NAME,
-    variables: {
-      dateFilters: [{
-        dimension: dateDimension,
-        from: dateRange.from,
-        to: dateRange.to,
-        include: true
-      }],
-      filters: filters,
-      groupBy: apiConfig.GROUP_BY,
-      measures: apiConfig.MEASURES,
-      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
-      anonymizationMode: "OFF",
-      topFilter: null,
-      revenuePredictionVersion: "",
-      isMultiMediation: true
-    },
-    query: getGraphQLQuery()
-  };
+  return filters;
+}
 
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: `Bearer ${config.BEARER_TOKEN}`,
-      Connection: 'keep-alive',
-      DNT: '1',
-      Origin: 'https://app.appodeal.com',
-      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-      'x-requested-with': 'XMLHttpRequest',
-      'Trace-Id': Utilities.getUuid()
-    },
-    payload: JSON.stringify(payload)
+function buildHeaders(config) {
+  return {
+    Accept: 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    Authorization: `Bearer ${config.BEARER_TOKEN}`,
+    Connection: 'keep-alive',
+    DNT: '1',
+    Origin: 'https://app.appodeal.com',
+    Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+    'x-requested-with': 'XMLHttpRequest',
+    'Trace-Id': Utilities.getUuid()
   };
-
-  const resp = UrlFetchApp.fetch(config.API_URL, options);
-  if (resp.getResponseCode() !== 200) {
-    throw new Error(`${projectName} API request failed: ` + resp.getContentText());
-  }
-  return JSON.parse(resp.getContentText());
 }
 
 function getGraphQLQuery() {
@@ -253,11 +163,8 @@ function getGraphQLQuery() {
 }
 
 function initTrickyOptimizedCache() {
-  if (CURRENT_PROJECT !== 'TRICKY') return null;
+  if (CURRENT_PROJECT !== 'TRICKY' || TRICKY_OPTIMIZED_CACHE) return TRICKY_OPTIMIZED_CACHE;
   
-  if (TRICKY_OPTIMIZED_CACHE) return TRICKY_OPTIMIZED_CACHE;
-  
-  console.log('Initializing TRICKY optimized cache...');
   const appsDb = new AppsDatabase('TRICKY');
   appsDb.ensureCacheUpToDate();
   const appsDbCache = appsDb.loadFromCache();
@@ -269,7 +176,6 @@ function initTrickyOptimizedCache() {
     cacheHits: 0
   };
   
-  console.log(`TRICKY cache initialized: ${Object.keys(appsDbCache).length} apps`);
   return TRICKY_OPTIMIZED_CACHE;
 }
 
@@ -278,7 +184,6 @@ function batchExtractBundleIds(campaignNames) {
   
   const cache = initTrickyOptimizedCache();
   const results = {};
-  let newExtractions = 0;
   
   campaignNames.forEach(campaignName => {
     if (cache.bundleIdCache[campaignName] !== undefined) {
@@ -288,51 +193,16 @@ function batchExtractBundleIds(campaignNames) {
       const bundleId = extractBundleIdFromCampaign(campaignName);
       cache.bundleIdCache[campaignName] = bundleId;
       results[campaignName] = bundleId;
-      newExtractions++;
     }
   });
-  
-  if (newExtractions > 0) {
-    console.log(`Batch extracted ${newExtractions} bundle IDs, ${cache.cacheHits} cache hits`);
-  }
   
   return results;
 }
 
-function getOptimizedAppsDb() {
-  const now = new Date().getTime();
-  
-  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 600000) {
-    return APPS_DB_CACHE;
-  }
-  
-  console.log('Loading Apps Database...');
-  const appsDb = new AppsDatabase('TRICKY');
-  appsDb.ensureCacheUpToDate();
-  APPS_DB_CACHE = appsDb.loadFromCache();
-  APPS_DB_CACHE_TIME = now;
-  
-  console.log(`Apps Database loaded: ${Object.keys(APPS_DB_CACHE).length} apps`);
-  return APPS_DB_CACHE;
-}
-
-function getCachedBundleId(campaignName) {
-  if (BUNDLE_ID_CACHE[campaignName]) {
-    return BUNDLE_ID_CACHE[campaignName];
-  }
-  
-  const bundleId = extractBundleIdFromCampaign(campaignName);
-  BUNDLE_ID_CACHE[campaignName] = bundleId;
-  return bundleId;
-}
-
 function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
-  if (!bundleId || CURRENT_PROJECT !== 'TRICKY') {
-    return bundleId || 'Unknown';
-  }
+  if (!bundleId || CURRENT_PROJECT !== 'TRICKY') return bundleId || 'Unknown';
   
   const appInfo = appsDbCache[bundleId];
-  
   if (appInfo && appInfo.publisher !== bundleId) {
     const publisher = appInfo.publisher || '';
     const appName = appInfo.appName || '';
@@ -359,18 +229,11 @@ function processApiData(rawData, includeLastWeek = null) {
 function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
-
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
   const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
-
   const dayOfWeek = today.getDay();
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
-
-  console.log(`TRICKY Optimized: Processing ${stats.length} records...`);
-  console.log(`Current week start: ${currentWeekStart}`);
-  console.log(`Include last week: ${shouldIncludeLastWeek}`);
-
   const cache = initTrickyOptimizedCache();
   
   const campaignNames = [];
@@ -395,54 +258,30 @@ function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
       if (spendValue <= 0) return;
       
       let campaignName = 'Unknown';
-      if (campaign) {
-        if (campaign.campaignName) {
-          campaignName = campaign.campaignName;
-        } else if (campaign.value) {
-          campaignName = campaign.value;
-        }
+      if (campaign?.campaignName) {
+        campaignName = campaign.campaignName;
+      } else if (campaign?.value) {
+        campaignName = campaign.value;
       }
       
       campaignNames.push(campaignName);
       validRows.push({ row, index, date, weekKey, campaign, app, campaignName, spendValue });
       
-    } catch (error) {
-      console.error(`Error pre-processing row ${index}:`, error);
-    }
+    } catch (error) {}
   });
 
-  console.log(`TRICKY Optimized: Pre-filtered to ${validRows.length} valid rows`);
-  
   const bundleIdMap = batchExtractBundleIds(campaignNames);
-  console.log(`TRICKY Optimized: Bundle ID extraction completed`);
-
   const groupedData = {};
   
   validRows.forEach(({ row, date, weekKey, campaign, app, campaignName, spendValue }) => {
     try {
       const metricsStartIndex = 3;
-      
-      const metrics = {
-        cpi: parseFloat(row[metricsStartIndex].value) || 0,
-        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
-        spend: spendValue,
-        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
-        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,
-        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,
-        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
-        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,
-        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,
-        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0
-      };
-
+      const metrics = extractMetrics(row, metricsStartIndex);
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       const bundleId = bundleIdMap[campaignName];
       const geo = extractGeoFromCampaign(campaignName);
       const sourceApp = extractSourceApp(campaignName);
-      
       const campaignId = campaign?.campaignId || campaign?.id || 'Unknown';
 
       const campaignData = {
@@ -479,13 +318,8 @@ function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
       groupedData[appKey].weeks[weekKey].campaigns.push(campaignData);
       cache.processed++;
       
-    } catch (error) {
-      console.error(`Error processing grouped row:`, error);
-    }
+    } catch (error) {}
   });
-
-  console.log(`TRICKY Optimized: Grouped ${cache.processed} campaigns`);
-  console.log(`TRICKY Optimized: Starting source app optimization...`);
 
   Object.keys(groupedData).forEach(appKey => {
     const appInfo = groupedData[appKey];
@@ -502,13 +336,11 @@ function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
     
     Object.keys(appInfo.weeks).forEach(weekKey => {
       const weekInfo = appInfo.weeks[weekKey];
-      
       const bundleGroups = {};
+      
       weekInfo.campaigns.forEach(campaign => {
         const bundleId = campaign.extractedBundleId || 'unknown';
-        if (!bundleGroups[bundleId]) {
-          bundleGroups[bundleId] = [];
-        }
+        if (!bundleGroups[bundleId]) bundleGroups[bundleId] = [];
         bundleGroups[bundleId].push(campaign);
       });
       
@@ -539,28 +371,17 @@ function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
     });
   });
 
-  console.log(`TRICKY Optimized: Processing completed - ${cache.processed} records processed`);
-  console.log(`TRICKY Optimized: Cache efficiency - ${cache.cacheHits} hits`);
   return appData;
 }
 
 function processApiDataStandard(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
-
   const today = new Date();
   const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
   const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
-
   const dayOfWeek = today.getDay();
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
-
-  console.log(`Processing ${stats.length} records...`);
-  console.log(`Current week start: ${currentWeekStart}`);
-  console.log(`Last week start: ${lastWeekStart}`);
-  console.log(`Include last week: ${shouldIncludeLastWeek}`);
-
-  let processedCount = 0;
 
   stats.forEach((row, index) => {
     try {
@@ -568,13 +389,8 @@ function processApiDataStandard(rawData, includeLastWeek = null) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
 
-      if (weekKey >= currentWeekStart) {
-        return;
-      }
-      
-      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) {
-        return;
-      }
+      if (weekKey >= currentWeekStart) return;
+      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
 
       let campaign, app, metricsStartIndex;
       
@@ -588,21 +404,7 @@ function processApiDataStandard(rawData, includeLastWeek = null) {
         metricsStartIndex = 3;
       }
       
-      const metrics = {
-        cpi: parseFloat(row[metricsStartIndex].value) || 0,
-        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
-        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
-        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
-        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,
-        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,
-        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
-        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,
-        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,
-        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0
-      };
-
+      const metrics = extractMetrics(row, metricsStartIndex);
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
@@ -638,7 +440,6 @@ function processApiDataStandard(rawData, includeLastWeek = null) {
         };
         
         appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
-        processedCount++;
         return;
       }
 
@@ -689,28 +490,35 @@ function processApiDataStandard(rawData, includeLastWeek = null) {
       }
       
       appData[appKey].weeks[weekKey].campaigns.push(campaignData);
-      processedCount++;
-      
-      if (processedCount % 100 === 0) {
-        console.log(`Processed ${processedCount}/${stats.length} records...`);
-      }
 
-    } catch (error) {
-      console.error(`Error processing row ${index}:`, error);
-    }
+    } catch (error) {}
   });
 
-  console.log(`Processing completed: ${processedCount} records processed`);
   return appData;
+}
+
+function extractMetrics(row, startIndex) {
+  return {
+    cpi: parseFloat(row[startIndex].value) || 0,
+    installs: parseInt(row[startIndex + 1].value) || 0,
+    ipm: parseFloat(row[startIndex + 2].value) || 0,
+    spend: parseFloat(row[startIndex + 3].value) || 0,
+    rrD1: parseFloat(row[startIndex + 4].value) || 0,
+    roas: parseFloat(row[startIndex + 5].value) || 0,
+    rrD7: parseFloat(row[startIndex + 6].value) || 0,
+    roasD7: parseFloat(row[startIndex + 7].value) || 0,
+    eArpuForecast: parseFloat(row[startIndex + 8].value) || 0,
+    eRoasForecast: parseFloat(row[startIndex + 9].value) || 0,
+    eProfitForecast: parseFloat(row[startIndex + 10].value) || 0,
+    eRoasForecastD730: parseFloat(row[startIndex + 11].value) || 0
+  };
 }
 
 function processProjectApiData(projectName, rawData, includeLastWeek = null) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
   try {
-    const result = processApiData(rawData, includeLastWeek);
-    return result;
+    return processApiData(rawData, includeLastWeek);
   } finally {
     setCurrentProject(originalProject);
   }
@@ -724,18 +532,13 @@ function extractGeoFromCampaign(campaignName) {
       '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
       '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR'
     };
-
     for (const [pattern, geo] of Object.entries(geoMap)) {
-      if (campaignName.includes(pattern)) {
-        return geo;
-      }
+      if (campaignName.includes(pattern)) return geo;
     }
     return 'OTHER';
   }
   
-  if (CURRENT_PROJECT === 'OVERALL') {
-    return 'ALL';
-  }
+  if (CURRENT_PROJECT === 'OVERALL') return 'ALL';
   
   if (CURRENT_PROJECT === 'GOOGLE_ADS') {
     const geoPatterns = [
@@ -743,11 +546,8 @@ function extractGeoFromCampaign(campaignName) {
       { pattern: 'US ', geo: 'US' }, { pattern: ' US ', geo: 'US' }, { pattern: 'WW ', geo: 'WW' },
       { pattern: ' WW ', geo: 'WW' }, { pattern: 'UK', geo: 'UK' }, { pattern: 'GE', geo: 'GE' }, { pattern: 'BR', geo: 'BR' }
     ];
-    
     for (const {pattern, geo} of geoPatterns) {
-      if (campaignName.includes(pattern)) {
-        return geo;
-      }
+      if (campaignName.includes(pattern)) return geo;
     }
     return 'OTHER';
   }
@@ -757,7 +557,6 @@ function extractGeoFromCampaign(campaignName) {
   
   for (const pattern of geoPatterns) {
     const upperPattern = pattern.toUpperCase();
-    
     if (upperCampaignName.includes('_' + upperPattern + '_') || upperCampaignName.includes('-' + upperPattern + '-') ||
         upperCampaignName.includes('_' + upperPattern) || upperCampaignName.includes('-' + upperPattern) ||
         upperCampaignName.includes(upperPattern + '_') || upperCampaignName.includes(upperPattern + '-') ||
@@ -771,17 +570,9 @@ function extractGeoFromCampaign(campaignName) {
 
 function extractSourceApp(campaignName) {
   try {
-    if (CURRENT_PROJECT === 'OVERALL') {
-      return campaignName;
-    }
-    
-    if (campaignName.startsWith('APD_')) {
-      return campaignName;
-    }
-    
-    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'MINTEGRAL' || CURRENT_PROJECT === 'INCENT') {
-      return campaignName;
-    }
+    if (CURRENT_PROJECT === 'OVERALL') return campaignName;
+    if (campaignName.startsWith('APD_')) return campaignName;
+    if (['REGULAR','GOOGLE_ADS','APPLOVIN','MINTEGRAL','INCENT'].includes(CURRENT_PROJECT)) return campaignName;
     
     const eq = campaignName.indexOf('=');
     if (eq !== -1) {
@@ -808,7 +599,6 @@ function extractSourceApp(campaignName) {
 function extractProjectSourceApp(projectName, campaignName) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
   try {
     return extractSourceApp(campaignName);
   } finally {
@@ -819,7 +609,6 @@ function extractProjectSourceApp(projectName, campaignName) {
 function extractProjectGeoFromCampaign(projectName, campaignName) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
   try {
     return extractGeoFromCampaign(campaignName);
   } finally {
@@ -832,5 +621,4 @@ function clearTrickyCaches() {
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
   TRICKY_OPTIMIZED_CACHE = null;
-  console.log('TRICKY caches cleared');
 }

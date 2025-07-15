@@ -1,6 +1,5 @@
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
-    console.error('Invalid appData provided to calculateWoWMetrics');
     return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 
@@ -161,7 +160,6 @@ function calculateWoWMetrics(appData) {
 
     return { campaignWoW, appWeekWoW, sourceAppWoW };
   } catch (e) {
-    console.error('Error calculating WoW metrics:', e);
     return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 }
@@ -287,7 +285,6 @@ function generateReport(days) {
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
   } catch (e) {
-    console.error('Error generating report:', e);
     SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
@@ -323,7 +320,6 @@ function generateReportForDateRange(startDate, endDate) {
     
     ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
   } catch (e) {
-    console.error('Error generating report for date range:', e);
     ui.alert('Error', 'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n1. Your internet connection\n2. The API token is still valid\n3. Try a smaller date range', ui.ButtonSet.OK);
   }
 }
@@ -397,7 +393,6 @@ function updateAllDataToCurrent() {
     
     ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
   } catch (e) {
-    console.error('Error updating data:', e);
     ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
   }
 }

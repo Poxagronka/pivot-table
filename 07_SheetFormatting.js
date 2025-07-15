@@ -1,14 +1,12 @@
 function createEnhancedPivotTable(appData) {
   if (CURRENT_PROJECT === 'TRICKY') {
     createTrickyOptimizedPivotTable(appData);
-    return;
+  } else {
+    createStandardEnhancedPivotTable(appData);
   }
-  
-  createStandardEnhancedPivotTable(appData);
 }
 
 function createTrickyOptimizedPivotTable(appData) {
-  console.log('Creating TRICKY optimized pivot table...');
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -20,7 +18,6 @@ function createTrickyOptimizedPivotTable(appData) {
   const formatData = [];
   const hyperlinkData = [];
 
-  console.log('Building TRICKY table data...');
   const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
   
   appKeys.forEach(appKey => {
@@ -58,19 +55,13 @@ function createTrickyOptimizedPivotTable(appData) {
     });
   });
 
-  console.log(`TRICKY table built: ${tableData.length} rows`);
-  
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
-  console.log('Applying TRICKY optimized formatting...');
   applyTrickyOptimizedFormatting(sheet, tableData.length, headers.length, formatData, appData, hyperlinkData);
-  
-  console.log('Creating TRICKY optimized grouping...');
   createTrickyOptimizedRowGrouping(sheet, tableData, appData);
   
   sheet.setFrozenRows(1);
-  console.log('TRICKY optimized pivot table completed');
 }
 
 function addTrickyOptimizedSourceAppRows(tableData, sourceApps, weekKey, wow, formatData, hyperlinkData) {
@@ -130,100 +121,22 @@ function addTrickyOptimizedCampaignRows(tableData, campaigns, weekKey, wow, form
 }
 
 function applyTrickyOptimizedFormatting(sheet, numRows, numCols, formatData, appData, hyperlinkData) {
-  const headerRange = sheet.getRange(1, 1, 1, numCols);
-  headerRange
-    .setBackground(COLORS.HEADER.background)
-    .setFontColor(COLORS.HEADER.fontColor)
-    .setFontWeight('bold')
-    .setHorizontalAlignment('center')
-    .setVerticalAlignment('middle')
-    .setFontSize(10)
-    .setWrap(true);
-
-  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
-  const widthOperations = [];
-  columnWidths.forEach(col => {
-    widthOperations.push(() => sheet.setColumnWidth(col.c, col.w));
-  });
+  applyBasicFormatting(sheet, numRows, numCols);
+  applyRowFormatting(sheet, formatData, numCols);
   
-  widthOperations.forEach(op => op());
-
-  if (numRows > 1) {
-    const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-    allDataRange.setVerticalAlignment('middle');
-    
-    const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
-    commentsRange.setWrap(true).setHorizontalAlignment('left');
-    
-    const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
-    growthStatusRange.setWrap(true).setHorizontalAlignment('left');
-  }
-
-  const rowsByType = {
-    app: [],
-    week: [],
-    sourceApp: [],
-    campaign: []
-  };
-  
-  formatData.forEach(item => {
-    if (item.type === 'APP') rowsByType.app.push(item.row);
-    if (item.type === 'WEEK') rowsByType.week.push(item.row);
-    if (item.type === 'SOURCE_APP') rowsByType.sourceApp.push(item.row);
-    if (item.type === 'CAMPAIGN') rowsByType.campaign.push(item.row);
-  });
-
-  console.log(`Formatting ${rowsByType.app.length} app rows, ${rowsByType.week.length} week rows, ${rowsByType.sourceApp.length} source app rows, ${rowsByType.campaign.length} campaign rows`);
-
-  rowsByType.app.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.APP_ROW.background)
-         .setFontColor(COLORS.APP_ROW.fontColor)
-         .setFontWeight('bold')
-         .setFontSize(10)
-  );
-
-  rowsByType.week.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.WEEK_ROW.background)
-         .setFontSize(10)
-  );
-
-  rowsByType.sourceApp.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.SOURCE_APP_ROW.background)
-         .setFontSize(9)
-  );
-
-  rowsByType.campaign.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.CAMPAIGN_ROW.background)
-         .setFontSize(9)
-  );
-
   if (hyperlinkData.length > 0) {
     hyperlinkData.forEach(link => {
-      const linkCell = sheet.getRange(link.row, link.col);
-      linkCell.setFontColor('#000000').setFontLine('none');
+      sheet.getRange(link.row, link.col).setFontColor('#000000').setFontLine('none');
     });
   }
-
-  if (numRows > 1) {
-    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
-    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
-    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
-    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
-  }
-
+  
+  applyNumberFormats(sheet, numRows);
   applyConditionalFormatting(sheet, numRows, appData);
   sheet.hideColumns(1);
 }
 
 function createTrickyOptimizedRowGrouping(sheet, tableData, appData) {
   try {
-    console.log('Creating TRICKY optimized row grouping...');
     let rowPointer = 2;
     const sortedApps = Object.keys(appData).sort((a, b) => 
       appData[a].appName.localeCompare(appData[b].appName)
@@ -290,27 +203,15 @@ function createTrickyOptimizedRowGrouping(sheet, tableData, appData) {
       }
     });
     
-    console.log(`Executing ${groupOperations.length} group operations...`);
-    
     groupOperations.forEach((op, index) => {
       try {
         const range = sheet.getRange(op.startRow, 1, op.count, 1);
         range.shiftRowGroupDepth(1);
         range.collapseGroups();
-        
-        if (index % 10 === 0 && index > 0) {
-          console.log(`Grouped ${index}/${groupOperations.length} operations...`);
-        }
-      } catch (e) {
-        console.log(`Error in group operation ${index}:`, e);
-      }
+      } catch (e) {}
     });
     
-    console.log('TRICKY optimized row grouping completed');
-    
-  } catch (e) {
-    console.error('Error in createTrickyOptimizedRowGrouping:', e);
-  }
+  } catch (e) {}
 }
 
 function createStandardEnhancedPivotTable(appData) {
@@ -414,9 +315,7 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
           sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
           formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
         }
-      } catch (e) {
-        console.log('Error getting store link for source app:', e);
-      }
+      } catch (e) {}
     }
     
     const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
@@ -493,17 +392,10 @@ function createOverallRowGrouping(sheet, tableData, appData) {
         try {
           sheet.getRange(appStartRow + 1, 1, weekCount, 1).shiftRowGroupDepth(1);
           sheet.getRange(appStartRow + 1, 1, weekCount, 1).collapseGroups();
-        } catch (e) {
-          console.log('Error grouping weeks under app:', e);
-        }
+        } catch (e) {}
       }
     });
-    
-    console.log('Overall row grouping completed');
-    
-  } catch (e) {
-    console.error('Error in createOverallRowGrouping:', e);
-  }
+  } catch (e) {}
 }
 
 function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
@@ -534,7 +426,7 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
   ];
 }
 
-function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
+function applyBasicFormatting(sheet, numRows, numCols) {
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange
     .setBackground(COLORS.HEADER.background)
@@ -545,30 +437,27 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     .setFontSize(10)
     .setWrap(true);
 
-  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
-  columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
+  TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => sheet.setColumnWidth(col.c, col.w));
 
   if (numRows > 1) {
-    const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-    allDataRange.setVerticalAlignment('middle');
-    
-    const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
-    commentsRange.setWrap(true).setHorizontalAlignment('left');
-    
-    const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
-    growthStatusRange.setWrap(true).setHorizontalAlignment('left');
+    sheet.getRange(2, 1, numRows - 1, numCols).setVerticalAlignment('middle');
+    sheet.getRange(2, numCols, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left');
+    sheet.getRange(2, numCols - 1, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left');
   }
+}
 
-  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [];
+function applyRowFormatting(sheet, formatData, numCols) {
+  const rowsByType = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [] };
+  
   formatData.forEach(item => {
-    if (item.type === 'APP') appRows.push(item.row);
-    if (item.type === 'WEEK') weekRows.push(item.row);
-    if (item.type === 'SOURCE_APP') sourceAppRows.push(item.row);
-    if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
-    if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
+    if (item.type === 'APP') rowsByType.app.push(item.row);
+    else if (item.type === 'WEEK') rowsByType.week.push(item.row);
+    else if (item.type === 'SOURCE_APP') rowsByType.sourceApp.push(item.row);
+    else if (item.type === 'CAMPAIGN') rowsByType.campaign.push(item.row);
+    else if (item.type === 'HYPERLINK') rowsByType.hyperlink.push(item.row);
   });
 
-  appRows.forEach(r =>
+  rowsByType.app.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.APP_ROW.background)
          .setFontColor(COLORS.APP_ROW.fontColor)
@@ -576,31 +465,32 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
          .setFontSize(10)
   );
 
-  weekRows.forEach(r =>
+  rowsByType.week.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.WEEK_ROW.background)
          .setFontSize(10)
   );
 
-  sourceAppRows.forEach(r =>
+  rowsByType.sourceApp.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.SOURCE_APP_ROW.background)
          .setFontSize(9)
   );
 
-  campaignRows.forEach(r =>
+  rowsByType.campaign.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.CAMPAIGN_ROW.background)
          .setFontSize(9)
   );
 
-  if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
-    hyperlinkRows.forEach(r => {
-      const linkCell = sheet.getRange(r, 2);
-      linkCell.setFontColor('#000000').setFontLine('none');
+  if (rowsByType.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
+    rowsByType.hyperlink.forEach(r => {
+      sheet.getRange(r, 2).setFontColor('#000000').setFontLine('none');
     });
   }
+}
 
+function applyNumberFormats(sheet, numRows) {
   if (numRows > 1) {
     sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
     sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
@@ -609,7 +499,12 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
     sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
   }
+}
 
+function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
+  applyBasicFormatting(sheet, numRows, numCols);
+  applyRowFormatting(sheet, formatData, numCols);
+  applyNumberFormats(sheet, numRows);
   applyConditionalFormatting(sheet, numRows, appData);
   sheet.hideColumns(1);
 }
@@ -624,9 +519,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
         .whenTextContains('%').whenNumberGreaterThan(0)
         .setBackground(COLORS.POSITIVE.background)
         .setFontColor(COLORS.POSITIVE.fontColor)
-        .setRanges([spendRange]).build()
-    );
-    rules.push(
+        .setRanges([spendRange]).build(),
       SpreadsheetApp.newConditionalFormatRule()
         .whenTextContains('%').whenNumberLessThan(0)
         .setBackground(COLORS.NEGATIVE.background)
@@ -635,9 +528,8 @@ function applyConditionalFormatting(sheet, numRows, appData) {
     );
 
     const eroasColumn = 15;
-    const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
-    
     const data = sheet.getDataRange().getValues();
+    
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       let appName = '';
@@ -657,26 +549,21 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       }
       
       const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
+      const colLetter = String.fromCharCode(64 + eroasColumn);
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= ${targetEROAS})`)
           .setBackground(COLORS.POSITIVE.background)
           .setFontColor(COLORS.POSITIVE.fontColor)
-          .setRanges([cellRange]).build()
-      );
-      
-      rules.push(
+          .setRanges([cellRange]).build(),
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < ${targetEROAS})`)
           .setBackground(COLORS.WARNING.background)
           .setFontColor(COLORS.WARNING.fontColor)
-          .setRanges([cellRange]).build()
-      );
-      
-      rules.push(
+          .setRanges([cellRange]).build(),
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < 120)`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${colLetter}${i + 1})), VALUE(SUBSTITUTE(${colLetter}${i + 1},"%","")) < 120)`)
           .setBackground(COLORS.NEGATIVE.background)
           .setFontColor(COLORS.NEGATIVE.fontColor)
           .setRanges([cellRange]).build()
@@ -690,9 +577,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
         .whenTextContains('%').whenNumberGreaterThan(0)
         .setBackground(COLORS.POSITIVE.background)
         .setFontColor(COLORS.POSITIVE.fontColor)
-        .setRanges([profitRange]).build()
-    );
-    rules.push(
+        .setRanges([profitRange]).build(),
       SpreadsheetApp.newConditionalFormatRule()
         .whenTextContains('%').whenNumberLessThan(0)
         .setBackground(COLORS.NEGATIVE.background)
@@ -781,9 +666,7 @@ function calculateWeekTotals(campaigns) {
 }
 
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
-  if (CURRENT_PROJECT === 'OVERALL') {
-    return;
-  }
+  if (CURRENT_PROJECT === 'OVERALL') return;
   
   campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
     let campaignIdValue;
@@ -820,7 +703,6 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
 function createRowGrouping(sheet, tableData, appData) {
   try {
     let rowPointer = 2;
-
     const sortedApps = Object.keys(appData).sort((a, b) => 
       appData[a].appName.localeCompare(appData[b].appName)
     );
@@ -859,9 +741,7 @@ function createRowGrouping(sheet, tableData, appData) {
               try {
                 sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
                 sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).collapseGroups();
-              } catch (e) {
-                console.log('Error grouping campaigns under source app:', e);
-              }
+              } catch (e) {}
             }
           });
           
@@ -869,9 +749,7 @@ function createRowGrouping(sheet, tableData, appData) {
             try {
               sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).shiftRowGroupDepth(1);
               sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).collapseGroups();
-            } catch (e) {
-              console.log('Error grouping week content:', e);
-            }
+            } catch (e) {}
           }
           
         } else if (CURRENT_PROJECT !== 'OVERALL') {
@@ -883,9 +761,7 @@ function createRowGrouping(sheet, tableData, appData) {
             try {
               sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
               sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).collapseGroups();
-            } catch (e) {
-              console.log('Error grouping campaigns under week:', e);
-            }
+            } catch (e) {}
           }
         }
       });
@@ -895,17 +771,10 @@ function createRowGrouping(sheet, tableData, appData) {
         try {
           sheet.getRange(appStartRow + 1, 1, appContentRows, 1).shiftRowGroupDepth(1);
           sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
-        } catch (e) {
-          console.log('Error grouping app content:', e);
-        }
+        } catch (e) {}
       }
     });
-    
-    console.log('Row grouping completed');
-    
-  } catch (e) {
-    console.error('Error in createRowGrouping:', e);
-  }
+  } catch (e) {}
 }
 
 function createProjectPivotTable(projectName, appData) {

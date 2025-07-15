@@ -49,9 +49,7 @@ function expandAllGroups(sheet) {
         break;
       }
     }
-  } catch (e) {
-    console.log('No groups to expand or error expanding groups:', e);
-  }
+  } catch (e) {}
 }
 
 function clearAllGroups(sheet) {
@@ -68,9 +66,7 @@ function clearAllGroups(sheet) {
         hasGroups = false;
       }
     }
-  } catch (e) {
-    console.log('Error clearing groups:', e);
-  }
+  } catch (e) {}
 }
 
 function recreateGrouping(sheet) {
@@ -89,10 +85,7 @@ function clearAllDataSilent() {
     try {
       const cache = new CommentCache();
       cache.syncCommentsFromSheet();
-      console.log('Comments cached before clearing sheet');
-    } catch (e) {
-      console.error('Error caching comments:', e);
-    }
+    } catch (e) {}
   }
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
@@ -107,14 +100,10 @@ function clearProjectDataSilent(projectName) {
     try {
       const cache = new CommentCache(projectName);
       cache.syncCommentsFromSheet();
-      console.log(`${projectName}: Comments cached before clearing sheet`);
-    } catch (e) {
-      console.error(`${projectName}: Error caching comments:`, e);
-    }
+    } catch (e) {}
   }
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  console.log(`${projectName}: Sheet recreated`);
 }
 
 function recreateSheetFast(spreadsheet, sheetName) {
@@ -125,13 +114,10 @@ function recreateSheetFast(spreadsheet, sheetName) {
     }
     
     const newSheet = spreadsheet.insertSheet(sheetName);
-    console.log(`Sheet ${sheetName} recreated`);
   } catch (e) {
-    console.error(`Error recreating sheet ${sheetName}:`, e);
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (sheet) {
       sheet.clear();
-      console.log(`Fallback: Sheet ${sheetName} cleared`);
     }
   }
 }
@@ -146,30 +132,19 @@ function updateProjectDataOptimized(projectName) {
 }
 
 function updateProjectDataOptimizedTricky() {
-  console.log('=== STARTING TRICKY OPTIMIZED UPDATE ===');
-  
   const config = getProjectConfig('TRICKY');
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log('TRICKY: No existing data to update');
-    return;
-  }
+  if (!sheet || sheet.getLastRow() < 2) return;
   
-  console.log('TRICKY: Initializing optimized cache...');
   const trickyCache = initTrickyOptimizedCache();
   
-  console.log('TRICKY: Caching comments...');
   const cache = new CommentCache('TRICKY');
   cache.syncCommentsFromSheet();
   
-  console.log('TRICKY: Finding earliest week date...');
   const earliestDate = findEarliestWeekDate(sheet);
-  if (!earliestDate) {
-    console.log('TRICKY: No week data found');
-    return;
-  }
+  if (!earliestDate) return;
   
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -186,38 +161,21 @@ function updateProjectDataOptimizedTricky() {
     to: formatDateForAPI(endDate)
   };
   
-  console.log(`TRICKY: Fetching optimized data ${dateRange.from} to ${dateRange.to}`);
-  
   const raw = fetchProjectCampaignData('TRICKY', dateRange);
   
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log('TRICKY: No API data');
-    return;
-  }
+  if (!raw.data?.analytics?.richStats?.stats?.length) return;
   
-  console.log('TRICKY: Processing API data with optimizations...');
   const originalProject = CURRENT_PROJECT;
   setCurrentProject('TRICKY');
   
   try {
     const processed = processApiData(raw);
     
-    if (Object.keys(processed).length === 0) {
-      console.log('TRICKY: No valid processed data');
-      return;
-    }
+    if (Object.keys(processed).length === 0) return;
     
-    console.log('TRICKY: Recreating sheet...');
     recreateSheetFast(spreadsheet, config.SHEET_NAME);
-    
-    console.log('TRICKY: Creating optimized pivot table...');
     createEnhancedPivotTable(processed);
-    
-    console.log('TRICKY: Applying cached comments...');
     cache.applyCommentsToSheet();
-    
-    console.log('=== TRICKY OPTIMIZED UPDATE COMPLETED ===');
-    console.log(`TRICKY: Cache stats - ${trickyCache?.processed || 0} processed, ${trickyCache?.cacheHits || 0} cache hits`);
     
   } finally {
     setCurrentProject(originalProject);
@@ -225,26 +183,17 @@ function updateProjectDataOptimizedTricky() {
 }
 
 function updateProjectDataOptimizedStandard(projectName) {
-  console.log(`Starting standard update for ${projectName}`);
-  
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No existing data to update`);
-    return;
-  }
+  if (!sheet || sheet.getLastRow() < 2) return;
   
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
-  console.log(`${projectName}: Comments cached`);
   
   const earliestDate = findEarliestWeekDate(sheet);
-  if (!earliestDate) {
-    console.log(`${projectName}: No week data found`);
-    return;
-  }
+  if (!earliestDate) return;
   
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -261,21 +210,13 @@ function updateProjectDataOptimizedStandard(projectName) {
     to: formatDateForAPI(endDate)
   };
   
-  console.log(`${projectName}: Fetching ${dateRange.from} to ${dateRange.to}`);
-  
   const raw = fetchProjectCampaignData(projectName, dateRange);
   
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No API data`);
-    return;
-  }
+  if (!raw.data?.analytics?.richStats?.stats?.length) return;
   
   const processed = processProjectApiData(projectName, raw);
   
-  if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid processed data`);
-    return;
-  }
+  if (Object.keys(processed).length === 0) return;
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
   
@@ -291,8 +232,6 @@ function updateProjectDataOptimizedStandard(projectName) {
   } finally {
     setCurrentProject(originalProject);
   }
-  
-  console.log(`${projectName}: Update completed successfully`);
 }
 
 function findEarliestWeekDate(sheet) {
@@ -358,11 +297,6 @@ function sortProjectSheets() {
       ...hiddenSheets.map(item => item.sheet)
     ];
     
-    console.log('Sheet ordering:');
-    console.log('- Project sheets:', projectSheets.map(s => s.name));
-    console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
-    console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
-    
     let position = 1;
     
     finalOrder.forEach((sheet, index) => {
@@ -374,14 +308,10 @@ function sortProjectSheets() {
         if (index < finalOrder.length - 1) {
           Utilities.sleep(500);
         }
-      } catch (e) {
-        console.error(`Error moving sheet ${sheet.getName()}:`, e);
-      }
+      } catch (e) {}
     });
     
-    console.log('Project sheets sorted successfully');
   } catch (e) {
-    console.error('Error sorting project sheets:', e);
     throw e;
   }
 }
@@ -445,7 +375,6 @@ function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
   try {
     return fn();
   } catch (e) {
-    console.error(`Error in ${context}:`, e);
     return fallbackValue;
   }
 }
@@ -463,7 +392,6 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
       }
       
       const delay = baseDelay * Math.pow(2, attempts - 1);
-      console.log(`Attempt ${attempts} failed, retrying in ${delay}ms...`);
       Utilities.sleep(delay);
       return attempt();
     }
@@ -476,7 +404,6 @@ function measureExecutionTime(fn, label = 'Function') {
   const startTime = new Date().getTime();
   const result = fn();
   const endTime = new Date().getTime();
-  console.log(`${label} execution time: ${endTime - startTime}ms`);
   return result;
 }
 

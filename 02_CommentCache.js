@@ -22,14 +22,6 @@ class CommentCache {
   }
 
   loadAllComments() {
-    if (this.isTricky) {
-      return this.loadAllCommentsTrickyOptimized();
-    }
-    return this.loadAllCommentsStandard();
-  }
-
-  loadAllCommentsTrickyOptimized() {
-    console.log('Loading TRICKY comments optimized...');
     const comments = {};
     const data = this.cacheSheet.getDataRange().getValues();
     
@@ -41,20 +33,6 @@ class CommentCache {
       }
     }
     
-    console.log(`TRICKY comments loaded: ${Object.keys(comments).length} entries`);
-    return comments;
-  }
-
-  loadAllCommentsStandard() {
-    const comments = {};
-    const data = this.cacheSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      const [appName, weekRange, level, identifier, sourceApp, comment, lastUpdated] = data[i];
-      if (comment) {
-        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp);
-        comments[key] = comment;
-      }
-    }
     return comments;
   }
 
@@ -100,15 +78,6 @@ class CommentCache {
   }
 
   syncCommentsFromSheet() {
-    if (this.isTricky) {
-      this.syncCommentsFromSheetTrickyOptimized();
-    } else {
-      this.syncCommentsFromSheetStandard();
-    }
-  }
-
-  syncCommentsFromSheetTrickyOptimized() {
-    console.log('Syncing TRICKY comments optimized...');
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
@@ -168,8 +137,6 @@ class CommentCache {
       }
     }
     
-    console.log(`TRICKY optimized: Found ${commentsToSave.length} comments to save`);
-    
     commentsToSave.forEach(commentData => {
       this.saveComment(
         commentData.appName,
@@ -180,47 +147,6 @@ class CommentCache {
         commentData.sourceApp
       );
     });
-    
-    console.log('TRICKY comments sync completed');
-  }
-
-  syncCommentsFromSheetStandard() {
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    let currentWeek = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2];
-      const comment = data[i][19];
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-        currentWeek = '';
-      } else if (level === 'WEEK' && currentApp) {
-        currentWeek = nameOrRange;
-        if (comment) {
-          this.saveComment(currentApp, currentWeek, 'WEEK', comment);
-        }
-      } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        if (comment) {
-          const sourceAppDisplayName = nameOrRange;
-          this.saveComment(currentApp, currentWeek, 'SOURCE_APP', comment, sourceAppDisplayName);
-        }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
-        
-        this.saveComment(currentApp, currentWeek, 'CAMPAIGN', comment, campaignIdValue, sourceAppName);
-      }
-    }
   }
 
   extractCampaignIdFromHyperlink(hyperlinkFormula) {
@@ -233,15 +159,6 @@ class CommentCache {
   }
 
   applyCommentsToSheet() {
-    if (this.isTricky) {
-      this.applyCommentsToSheetTrickyOptimized();
-    } else {
-      this.applyCommentsToSheetStandard();
-    }
-  }
-
-  applyCommentsToSheetTrickyOptimized() {
-    console.log('Applying TRICKY comments optimized...');
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
@@ -288,8 +205,6 @@ class CommentCache {
       }
     }
     
-    console.log(`TRICKY optimized: Applying ${commentUpdates.length} comments`);
-    
     if (commentUpdates.length > 0) {
       const batchSize = 100;
       for (let i = 0; i < commentUpdates.length; i += batchSize) {
@@ -303,55 +218,6 @@ class CommentCache {
         }
       }
     }
-    
-    console.log('TRICKY comments application completed');
-  }
-
-  applyCommentsToSheetStandard() {
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    const comments = this.loadAllComments();
-    const data = sheet.getDataRange().getValues();
-    let currentApp = '';
-    let currentWeek = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2];
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-        currentWeek = '';
-      } else if (level === 'WEEK' && currentApp) {
-        currentWeek = nameOrRange;
-        const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
-        const weekComment = comments[weekKey];
-        if (weekComment) {
-          sheet.getRange(i + 1, 19).setValue(weekComment);
-        }
-      } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        const sourceAppDisplayName = nameOrRange;
-        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName);
-        const sourceAppComment = comments[sourceAppKey];
-        if (sourceAppComment) {
-          sheet.getRange(i + 1, 19).setValue(sourceAppComment);
-        }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
-        
-        const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, sourceAppName);
-        const campaignComment = comments[campaignKey];
-        if (campaignComment) {
-          sheet.getRange(i + 1, 19).setValue(campaignComment);
-        }
-      }
-    }
   }
 
   syncCommentsFromSheetQuiet() {
@@ -360,22 +226,14 @@ class CommentCache {
 }
 
 function collapseAllGroupsRecursively(sheet) {
-  console.log('Starting recursive collapse (one-by-one method)...');
-  
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) {
-    console.log('No data to process');
-    return;
-  }
+  if (data.length < 2) return;
   
   const groups = identifyGroups(data);
-  
-  console.log(`Found ${groups.apps.length} app groups, ${groups.weeks.length} week groups, ${groups.sourceApps.length} source app groups`);
   
   let totalCollapsed = 0;
   
   if (groups.sourceApps.length > 0) {
-    console.log('Collapsing source app groups...');
     let sourceAppCollapsed = 0;
     groups.sourceApps.forEach((group, index) => {
       try {
@@ -383,19 +241,11 @@ function collapseAllGroupsRecursively(sheet) {
         sourceAppCollapsed++;
         SpreadsheetApp.flush();
         Utilities.sleep(50);
-        
-        if (index % 5 === 0 && index > 0) {
-          console.log(`  Collapsed ${index} source app groups...`);
-        }
-      } catch (e) {
-        console.log(`  Could not collapse source app group at row ${group.start}: ${e.toString()}`);
-      }
+      } catch (e) {}
     });
-    console.log(`  Collapsed ${sourceAppCollapsed} of ${groups.sourceApps.length} source app groups`);
     totalCollapsed += sourceAppCollapsed;
   }
   
-  console.log('Collapsing week groups...');
   let weekCollapsed = 0;
   groups.weeks.forEach((group, index) => {
     try {
@@ -403,18 +253,10 @@ function collapseAllGroupsRecursively(sheet) {
       weekCollapsed++;
       SpreadsheetApp.flush();
       Utilities.sleep(50);
-      
-      if (index % 5 === 0 && index > 0) {
-        console.log(`  Collapsed ${index} week groups...`);
-      }
-    } catch (e) {
-      console.log(`  Could not collapse week group at row ${group.start}: ${e.toString()}`);
-    }
+    } catch (e) {}
   });
-  console.log(`  Collapsed ${weekCollapsed} of ${groups.weeks.length} week groups`);
   totalCollapsed += weekCollapsed;
   
-  console.log('Collapsing app groups...');
   let appCollapsed = 0;
   groups.apps.forEach((group, index) => {
     try {
@@ -422,14 +264,9 @@ function collapseAllGroupsRecursively(sheet) {
       appCollapsed++;
       SpreadsheetApp.flush();
       Utilities.sleep(50);
-    } catch (e) {
-      console.log(`  Could not collapse app group at row ${group.start}: ${e.toString()}`);
-    }
+    } catch (e) {}
   });
-  console.log(`  Collapsed ${appCollapsed} of ${groups.apps.length} app groups`);
   totalCollapsed += appCollapsed;
-  
-  console.log(`Recursive collapse completed: ${totalCollapsed} total groups collapsed`);
 }
 
 function identifyGroups(data) {
@@ -557,9 +394,5 @@ function expandAllGroups(sheet) {
         expanded = false;
       }
     }
-    
-    console.log(`Groups expanded after ${attempts} attempts`);
-  } catch (e) {
-    console.log('Error expanding groups:', e);
-  }
+  } catch (e) {}
 }
