@@ -36,68 +36,33 @@ class CommentCache {
     return comments;
   }
 
-  saveComment(appName, weekRange, level, comment, identifier = null, sourceApp = null) {
-    if (!comment || !comment.trim()) return;
-    
-    const data = this.cacheSheet.getDataRange().getValues();
-    let found = false;
-    
-    for (let i = 1; i < data.length; i++) {
-      const rowAppName = data[i][0];
-      const rowWeekRange = data[i][1];
-      const rowLevel = data[i][2];
-      const rowIdentifier = data[i][3];
-      const rowSourceApp = data[i][4];
-      
-      if (rowAppName === appName && 
-          rowWeekRange === weekRange && 
-          rowLevel === level &&
-          rowIdentifier === (identifier || 'N/A') &&
-          rowSourceApp === (sourceApp || 'N/A')) {
-        const existingComment = data[i][5] || '';
-        if (comment.length > existingComment.length) {
-          this.cacheSheet.getRange(i + 1, 6, 1, 2).setValues([[comment, new Date()]]);
-        }
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      const lastRow = this.cacheSheet.getLastRow();
-      this.cacheSheet.getRange(lastRow + 1, 1, 1, 7).setValues([[
-        appName, 
-        weekRange, 
-        level,
-        identifier || 'N/A', 
-        sourceApp || 'N/A', 
-        comment, 
-        new Date()
-      ]]);
-    }
-  }
-
   syncCommentsFromSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      return;
+    }
     
     const data = sheet.getDataRange().getValues();
     const commentsToSave = [];
     let currentApp = '';
     let currentWeek = '';
+    let currentSourceApp = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
       const idOrEmpty = data[i][2];
-      const comment = data[i][19];
+      const comment = data[i][18];
       
       if (level === 'APP') {
         currentApp = nameOrRange;
         currentWeek = '';
+        currentSourceApp = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
+        currentSourceApp = '';
         if (comment) {
           commentsToSave.push({
             appName: currentApp,
@@ -109,44 +74,115 @@ class CommentCache {
           });
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
+        currentSourceApp = nameOrRange;
         if (comment) {
-          const sourceAppDisplayName = nameOrRange;
           commentsToSave.push({
             appName: currentApp,
             weekRange: currentWeek,
             level: 'SOURCE_APP',
             comment: comment,
-            identifier: sourceAppDisplayName,
+            identifier: currentSourceApp,
             sourceApp: null
           });
         }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
-        
-        commentsToSave.push({
-          appName: currentApp,
-          weekRange: currentWeek,
-          level: 'CAMPAIGN',
-          comment: comment,
-          identifier: campaignIdValue,
-          sourceApp: sourceAppName
-        });
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && currentSourceApp) {
+        if (comment) {
+          let campaignIdValue = idOrEmpty;
+          if (typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK')) {
+            campaignIdValue = this.extractCampaignIdFromHyperlink(idOrEmpty);
+          }
+          
+          commentsToSave.push({
+            appName: currentApp,
+            weekRange: currentWeek,
+            level: 'CAMPAIGN',
+            comment: comment,
+            identifier: campaignIdValue,
+            sourceApp: currentSourceApp
+          });
+        }
       }
     }
     
+    if (commentsToSave.length > 0) {
+      this.batchSaveComments(commentsToSave);
+    }
+  }
+
+  batchSaveComments(commentsToSave) {
+    const existingData = this.cacheSheet.getDataRange().getValues();
+    const existingMap = new Map();
+    
+    for (let i = 1; i < existingData.length; i++) {
+      const [appName, weekRange, level, identifier, sourceApp, comment] = existingData[i];
+      const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp);
+      existingMap.set(key, { 
+        row: i + 1, 
+        comment: comment || '',
+        data: existingData[i]
+      });
+    }
+    
+    const updates = [];
+    const newRows = [];
+    const now = new Date();
+    
     commentsToSave.forEach(commentData => {
-      this.saveComment(
+      const key = this.getCommentKey(
         commentData.appName,
         commentData.weekRange,
         commentData.level,
-        commentData.comment,
         commentData.identifier,
         commentData.sourceApp
       );
+      
+      const existing = existingMap.get(key);
+      
+      if (existing) {
+        if (commentData.comment.length > existing.comment.length) {
+          updates.push({
+            row: existing.row,
+            comment: commentData.comment,
+            lastUpdated: now
+          });
+        }
+      } else {
+        newRows.push([
+          commentData.appName,
+          commentData.weekRange,
+          commentData.level,
+          commentData.identifier || 'N/A',
+          commentData.sourceApp || 'N/A',
+          commentData.comment,
+          now
+        ]);
+      }
     });
+    
+    if (updates.length > 0) {
+      const batchSize = 100;
+      for (let i = 0; i < updates.length; i += batchSize) {
+        const batch = updates.slice(i, i + batchSize);
+        batch.forEach(update => {
+          this.cacheSheet.getRange(update.row, 6, 1, 2).setValues([[update.comment, update.lastUpdated]]);
+        });
+        if (i + batchSize < updates.length) {
+          Utilities.sleep(50);
+        }
+      }
+    }
+    
+    if (newRows.length > 0) {
+      const batchSize = 100;
+      for (let i = 0; i < newRows.length; i += batchSize) {
+        const batch = newRows.slice(i, i + batchSize);
+        const lastRow = this.cacheSheet.getLastRow();
+        this.cacheSheet.getRange(lastRow + 1, 1, batch.length, 7).setValues(batch);
+        if (i + batchSize < newRows.length) {
+          Utilities.sleep(50);
+        }
+      }
+    }
   }
 
   extractCampaignIdFromHyperlink(hyperlinkFormula) {
@@ -161,13 +197,17 @@ class CommentCache {
   applyCommentsToSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      return;
+    }
     
     const comments = this.loadAllComments();
     const data = sheet.getDataRange().getValues();
     const commentUpdates = [];
     let currentApp = '';
     let currentWeek = '';
+    let currentSourceApp = '';
     
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
@@ -177,27 +217,29 @@ class CommentCache {
       if (level === 'APP') {
         currentApp = nameOrRange;
         currentWeek = '';
+        currentSourceApp = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
+        currentSourceApp = '';
         const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
         const weekComment = comments[weekKey];
         if (weekComment) {
           commentUpdates.push({ row: i + 1, comment: weekComment });
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        const sourceAppDisplayName = nameOrRange;
-        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName);
+        currentSourceApp = nameOrRange;
+        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', currentSourceApp);
         const sourceAppComment = comments[sourceAppKey];
         if (sourceAppComment) {
           commentUpdates.push({ row: i + 1, comment: sourceAppComment });
         }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && currentSourceApp) {
+        let campaignIdValue = idOrEmpty;
+        if (typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK')) {
+          campaignIdValue = this.extractCampaignIdFromHyperlink(idOrEmpty);
+        }
         
-        const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, sourceAppName);
+        const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, currentSourceApp);
         const campaignComment = comments[campaignKey];
         if (campaignComment) {
           commentUpdates.push({ row: i + 1, comment: campaignComment });
@@ -214,7 +256,7 @@ class CommentCache {
         });
         
         if (i + batchSize < commentUpdates.length) {
-          Utilities.sleep(100);
+          Utilities.sleep(50);
         }
       }
     }
@@ -227,7 +269,9 @@ class CommentCache {
 
 function collapseAllGroupsRecursively(sheet) {
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return;
+  if (data.length < 2) {
+    return;
+  }
   
   const groups = identifyGroups(data);
   
@@ -241,7 +285,8 @@ function collapseAllGroupsRecursively(sheet) {
         sourceAppCollapsed++;
         SpreadsheetApp.flush();
         Utilities.sleep(50);
-      } catch (e) {}
+      } catch (e) {
+      }
     });
     totalCollapsed += sourceAppCollapsed;
   }
@@ -253,7 +298,8 @@ function collapseAllGroupsRecursively(sheet) {
       weekCollapsed++;
       SpreadsheetApp.flush();
       Utilities.sleep(50);
-    } catch (e) {}
+    } catch (e) {
+    }
   });
   totalCollapsed += weekCollapsed;
   
@@ -264,7 +310,8 @@ function collapseAllGroupsRecursively(sheet) {
       appCollapsed++;
       SpreadsheetApp.flush();
       Utilities.sleep(50);
-    } catch (e) {}
+    } catch (e) {
+    }
   });
   totalCollapsed += appCollapsed;
 }
@@ -394,5 +441,6 @@ function expandAllGroups(sheet) {
         expanded = false;
       }
     }
-  } catch (e) {}
+  } catch (e) {
+  }
 }
