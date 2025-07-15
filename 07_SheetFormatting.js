@@ -278,7 +278,7 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
 }
 
 function createOverallPivotTable(appData) {
-  console.log('createOverallPivotTable: batched processing start');
+  console.log('createOverallPivotTable: optimized batched processing start');
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -295,15 +295,24 @@ function createOverallPivotTable(appData) {
   let currentRow = 2;
   let allFormatData = [];
   
-  console.log(`createOverallPivotTable: processing ${appKeys.length} apps in batches`);
+  const BATCH_SIZE = 50;
+  const PAUSE_BETWEEN_BATCHES = 2000;
+  const SMALL_PAUSE = 500;
+  
+  console.log(`createOverallPivotTable: processing ${appKeys.length} apps in optimized batches`);
+  
+  let batchNumber = 0;
+  let rowsInCurrentBatch = 0;
+  let currentBatch = [];
+  let currentFormatBatch = [];
   
   appKeys.forEach((appKey, appIndex) => {
     const app = appData[appKey];
-    const appBatch = [];
+    const appRowData = [];
     const formatBatch = [];
     
-    formatBatch.push({ row: currentRow, type: 'APP' });
-    appBatch.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    formatBatch.push({ row: currentRow + rowsInCurrentBatch, type: 'APP' });
+    appRowData.push(['APP', app.appName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 
     const weekKeys = Object.keys(app.weeks).sort();
     weekKeys.forEach(weekKey => {
@@ -314,8 +323,8 @@ function createOverallPivotTable(appData) {
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      formatBatch.push({ row: currentRow + appBatch.length, type: 'WEEK' });
-      appBatch.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
+      formatBatch.push({ row: currentRow + rowsInCurrentBatch + appRowData.length, type: 'WEEK' });
+      appRowData.push(createWeekRow(week, weekTotals, weekWoW.spendChangePercent ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '', weekWoW.eProfitChangePercent ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '', weekWoW.growthStatus || ''));
 
       const networkKeys = Object.keys(week.networks || {}).sort((a, b) => (week.networks[b].spend || 0) - (week.networks[a].spend || 0));
       
@@ -324,35 +333,66 @@ function createOverallPivotTable(appData) {
         const networkWoWKey = `${network.networkId}_${weekKey}`;
         const networkWoW = wow.networkWoW[networkWoWKey] || {};
         
-        formatBatch.push({ row: currentRow + appBatch.length, type: 'NETWORK' });
-        appBatch.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
+        formatBatch.push({ row: currentRow + rowsInCurrentBatch + appRowData.length, type: 'NETWORK' });
+        appRowData.push(createNetworkRow(network, networkWoW.spendChangePercent ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '', networkWoW.eProfitChangePercent ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '', networkWoW.growthStatus || ''));
       });
     });
     
-    console.log(`createOverallPivotTable: writing app ${appIndex + 1}/${appKeys.length}: ${app.appName} (${appBatch.length} rows)`);
-    sheet.getRange(currentRow, 1, appBatch.length, headers.length).setValues(appBatch);
+    currentBatch.push(...appRowData);
+    currentFormatBatch.push(...formatBatch);
+    rowsInCurrentBatch += appRowData.length;
     
-    allFormatData.push(...formatBatch.map(f => ({ ...f, row: f.row })));
-    currentRow += appBatch.length;
+    const shouldWriteBatch = rowsInCurrentBatch >= BATCH_SIZE || appIndex === appKeys.length - 1;
     
-    if ((appIndex + 1) % 3 === 0 && appIndex < appKeys.length - 1) {
-      console.log('createOverallPivotTable: pause between batches');
-      Utilities.sleep(1000);
+    if (shouldWriteBatch && currentBatch.length > 0) {
+      batchNumber++;
+      console.log(`createOverallPivotTable: writing batch ${batchNumber} (${currentBatch.length} rows)`);
+      
+      try {
+        sheet.getRange(currentRow, 1, currentBatch.length, headers.length).setValues(currentBatch);
+        SpreadsheetApp.flush();
+      } catch (e) {
+        console.error(`createOverallPivotTable: error writing batch ${batchNumber}:`, e);
+        
+        const subBatchSize = Math.floor(currentBatch.length / 2);
+        for (let i = 0; i < currentBatch.length; i += subBatchSize) {
+          const subBatch = currentBatch.slice(i, Math.min(i + subBatchSize, currentBatch.length));
+          try {
+            sheet.getRange(currentRow + i, 1, subBatch.length, headers.length).setValues(subBatch);
+            SpreadsheetApp.flush();
+            Utilities.sleep(SMALL_PAUSE);
+          } catch (subError) {
+            console.error(`createOverallPivotTable: error writing sub-batch:`, subError);
+          }
+        }
+      }
+      
+      allFormatData.push(...currentFormatBatch);
+      currentRow += currentBatch.length;
+      
+      currentBatch = [];
+      currentFormatBatch = [];
+      rowsInCurrentBatch = 0;
+      
+      if (appIndex < appKeys.length - 1) {
+        console.log(`createOverallPivotTable: pausing ${PAUSE_BETWEEN_BATCHES}ms before next batch`);
+        Utilities.sleep(PAUSE_BETWEEN_BATCHES);
+      }
     }
   });
   
-  console.log('createOverallPivotTable: applying formatting');
-  applyOverallFormatting(sheet, currentRow - 1, headers.length, allFormatData, appData);
+  console.log('createOverallPivotTable: applying formatting in smaller chunks');
+  applyOverallFormattingOptimized(sheet, currentRow - 1, headers.length, allFormatData, appData);
   
-  console.log('createOverallPivotTable: creating row grouping');
+  console.log('createOverallPivotTable: creating row grouping with delays');
   createOverallRowGroupingOptimized(sheet, appKeys, appData, currentRow - 1);
   
   sheet.setFrozenRows(1);
   console.log('createOverallPivotTable: done');
 }
 
-function applyOverallFormatting(sheet, numRows, numCols, formatData, appData) {
-  console.log('applyOverallFormatting: basic formatting');
+function applyOverallFormattingOptimized(sheet, numRows, numCols, formatData, appData) {
+  console.log('applyOverallFormattingOptimized: basic formatting');
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange.setBackground(COLORS.HEADER.background).setFontColor(COLORS.HEADER.fontColor).setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(10).setWrap(true);
 
@@ -364,7 +404,7 @@ function applyOverallFormatting(sheet, numRows, numCols, formatData, appData) {
     sheet.getRange(2, numCols - 1, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left');
   }
 
-  console.log('applyOverallFormatting: row colors');
+  console.log('applyOverallFormattingOptimized: row colors in chunks');
   const rowsByType = { app: [], week: [], network: [] };
   
   formatData.forEach(item => {
@@ -373,29 +413,50 @@ function applyOverallFormatting(sheet, numRows, numCols, formatData, appData) {
     else if (item.type === 'NETWORK') rowsByType.network.push(item.row);
   });
 
-  const applyFormat = (rows, color, size = 10, weight = 'normal') => {
-    rows.forEach(r => sheet.getRange(r, 1, 1, numCols).setBackground(color.background).setFontColor(color.fontColor || 'black').setFontWeight(weight).setFontSize(size));
+  const applyFormatInChunks = (rows, color, size = 10, weight = 'normal') => {
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + CHUNK_SIZE);
+      chunk.forEach(r => {
+        try {
+          sheet.getRange(r, 1, 1, numCols).setBackground(color.background).setFontColor(color.fontColor || 'black').setFontWeight(weight).setFontSize(size);
+        } catch (e) {}
+      });
+      if (i + CHUNK_SIZE < rows.length) {
+        Utilities.sleep(100);
+      }
+    }
   };
 
-  applyFormat(rowsByType.app, COLORS.APP_ROW, 10, 'bold');
-  applyFormat(rowsByType.week, COLORS.WEEK_ROW);
-  applyFormat(rowsByType.network, COLORS.NETWORK_ROW, 9);
+  applyFormatInChunks(rowsByType.app, COLORS.APP_ROW, 10, 'bold');
+  applyFormatInChunks(rowsByType.week, COLORS.WEEK_ROW);
+  applyFormatInChunks(rowsByType.network, COLORS.NETWORK_ROW, 9);
 
-  console.log('applyOverallFormatting: number formats');
+  console.log('applyOverallFormattingOptimized: number formats');
   if (numRows > 1) {
-    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
-    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
-    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
-    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
+    const formatRanges = [
+      { col: 5, format: '$0.00' },
+      { col: 8, format: '$0.000' },
+      { col: 9, format: '0.00' },
+      { col: 10, format: '0.0' },
+      { col: 13, format: '$0.000' },
+      { col: 16, format: '$0.00' }
+    ];
+    
+    formatRanges.forEach(({ col, format }) => {
+      try {
+        sheet.getRange(2, col, numRows - 1, 1).setNumberFormat(format);
+      } catch (e) {
+        console.error(`Error applying number format to column ${col}:`, e);
+      }
+    });
   }
 
   sheet.hideColumns(1);
 }
 
 function createOverallRowGroupingOptimized(sheet, appKeys, appData, totalRows) {
-  console.log('createOverallRowGroupingOptimized: start');
+  console.log('createOverallRowGroupingOptimized: start with smaller batches');
   try {
     let rowPointer = 2;
     const groupOperations = [];
@@ -434,17 +495,32 @@ function createOverallRowGroupingOptimized(sheet, appKeys, appData, totalRows) {
       }
     });
 
-    console.log(`createOverallRowGroupingOptimized: applying ${groupOperations.length} groups`);
-    groupOperations.forEach((op, index) => {
-      try {
-        sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
-        sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
-        
-        if ((index + 1) % 10 === 0) {
-          Utilities.sleep(100);
+    console.log(`createOverallRowGroupingOptimized: applying ${groupOperations.length} groups with delays`);
+    const GROUP_BATCH_SIZE = 5;
+    const GROUP_PAUSE = 1000;
+    
+    for (let i = 0; i < groupOperations.length; i += GROUP_BATCH_SIZE) {
+      const batch = groupOperations.slice(i, i + GROUP_BATCH_SIZE);
+      
+      batch.forEach((op, batchIndex) => {
+        try {
+          sheet.getRange(op.startRow, 1, op.count, 1).shiftRowGroupDepth(1);
+          SpreadsheetApp.flush();
+          Utilities.sleep(200);
+          
+          sheet.getRange(op.startRow, 1, op.count, 1).collapseGroups();
+          SpreadsheetApp.flush();
+          Utilities.sleep(200);
+        } catch (e) {
+          console.error(`Error applying group ${i + batchIndex}:`, e);
         }
-      } catch (e) {}
-    });
+      });
+      
+      if (i + GROUP_BATCH_SIZE < groupOperations.length) {
+        console.log(`createOverallRowGroupingOptimized: pausing ${GROUP_PAUSE}ms after group batch`);
+        Utilities.sleep(GROUP_PAUSE);
+      }
+    }
   } catch (e) {
     console.log('createOverallRowGroupingOptimized: error', e);
   }
