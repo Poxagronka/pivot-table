@@ -530,7 +530,7 @@ function extractGeoFromCampaign(campaignName) {
   if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
     const geoMap = {
       '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
-      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR'
+      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| RUS |': 'RUS','| NDL |': 'NDL','| ESP |': 'ESP','| GBR |': 'GBR'
     };
     for (const [pattern, geo] of Object.entries(geoMap)) {
       if (campaignName.includes(pattern)) return geo;
