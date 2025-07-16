@@ -12,13 +12,22 @@ function createTrickyOptimizedPivotTable(appData) {
   console.log('Creating TRICKY optimized pivot table...');
   const config = getCurrentConfig();
   const sheet = getOrCreateSheet(config);
+  Utilities.sleep(2000);
+  
   const wow = calculateWoWMetrics(appData);
+  Utilities.sleep(1000);
   
   const { tableData, formatData, hyperlinkData, groupData } = buildTrickyTableData(appData, wow);
+  Utilities.sleep(1000);
   
   writeDataToSheet(sheet, tableData);
+  Utilities.sleep(3000);
+  
   applyBatchFormatting(sheet, formatData, hyperlinkData, tableData.length);
+  Utilities.sleep(3000);
+  
   applyTrickyGrouping(sheet, groupData);
+  Utilities.sleep(2000);
   
   console.log('TRICKY optimized pivot table completed');
 }
@@ -27,13 +36,22 @@ function createStandardPivotTable(appData) {
   console.log('Creating standard pivot table...');
   const config = getCurrentConfig();
   const sheet = getOrCreateSheet(config);
+  Utilities.sleep(2000);
+  
   const wow = calculateWoWMetrics(appData);
+  Utilities.sleep(1000);
   
   const { tableData, formatData, hyperlinkData, groupData } = buildStandardTableData(appData, wow);
+  Utilities.sleep(1000);
   
   writeDataToSheet(sheet, tableData);
+  Utilities.sleep(3000);
+  
   applyBatchFormatting(sheet, formatData, hyperlinkData, tableData.length);
+  Utilities.sleep(3000);
+  
   applyStandardGrouping(sheet, groupData);
+  Utilities.sleep(2000);
   
   console.log('Standard pivot table completed');
 }
@@ -42,13 +60,22 @@ function createOverallPivotTable(appData) {
   console.log('Creating overall pivot table...');
   const config = getCurrentConfig();
   const sheet = getOrCreateSheet(config);
+  Utilities.sleep(2000);
+  
   const wow = calculateWoWMetrics(appData);
+  Utilities.sleep(1000);
   
   const { tableData, formatData, groupData } = buildOverallTableData(appData, wow);
+  Utilities.sleep(1000);
   
   writeDataToSheet(sheet, tableData);
+  Utilities.sleep(3000);
+  
   applyBatchFormatting(sheet, formatData, null, tableData.length);
+  Utilities.sleep(3000);
+  
   applyOverallGrouping(sheet, groupData);
+  Utilities.sleep(2000);
   
   console.log('Overall pivot table completed');
 }
@@ -272,17 +299,22 @@ function buildOverallTableData(appData, wow) {
 function getOrCreateSheet(config) {
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+    Utilities.sleep(1000);
+  }
   return sheet;
 }
 
 function writeDataToSheet(sheet, tableData) {
+  console.log(`Writing ${tableData.length} rows to sheet...`);
   const range = sheet.getRange(1, 1, tableData.length, tableData[0].length);
   range.setValues(tableData);
   SpreadsheetApp.flush();
 }
 
 function applyBatchFormatting(sheet, formatData, hyperlinkData, numRows) {
+  console.log('Applying batch formatting...');
   const requests = [];
   const headers = getUnifiedHeaders();
   const numCols = headers.length;
@@ -297,7 +329,8 @@ function applyBatchFormatting(sheet, formatData, hyperlinkData, numRows) {
   }
   
   if (requests.length > 0) {
-    const batchSize = 100;
+    console.log(`Executing ${requests.length} format requests...`);
+    const batchSize = 50;
     for (let i = 0; i < requests.length; i += batchSize) {
       const batch = requests.slice(i, i + batchSize);
       Sheets.Spreadsheets.batchUpdate({
@@ -305,13 +338,14 @@ function applyBatchFormatting(sheet, formatData, hyperlinkData, numRows) {
       }, SpreadsheetApp.getActiveSpreadsheet().getId());
       
       if (i + batchSize < requests.length) {
-        Utilities.sleep(200);
+        Utilities.sleep(1000);
       }
     }
   }
   
   sheet.hideColumns(1);
   sheet.setFrozenRows(1);
+  SpreadsheetApp.flush();
 }
 
 function getHeaderFormatRequests(numCols) {
@@ -473,6 +507,7 @@ function getHyperlinkFormatRequests(hyperlinkData) {
 }
 
 function applyTrickyGrouping(sheet, groupData) {
+  console.log('Applying TRICKY grouping...');
   const requests = [];
   
   groupData.sourceApps.forEach(group => {
@@ -500,13 +535,17 @@ function applyTrickyGrouping(sheet, groupData) {
   });
   
   if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
     Sheets.Spreadsheets.batchUpdate({
       requests: requests
     }, SpreadsheetApp.getActiveSpreadsheet().getId());
   }
+  
+  SpreadsheetApp.flush();
 }
 
 function applyStandardGrouping(sheet, groupData) {
+  console.log('Applying standard grouping...');
   const requests = [];
   
   groupData.weeks.forEach(group => {
@@ -526,13 +565,17 @@ function applyStandardGrouping(sheet, groupData) {
   });
   
   if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
     Sheets.Spreadsheets.batchUpdate({
       requests: requests
     }, SpreadsheetApp.getActiveSpreadsheet().getId());
   }
+  
+  SpreadsheetApp.flush();
 }
 
 function applyOverallGrouping(sheet, groupData) {
+  console.log('Applying overall grouping...');
   const requests = [];
   
   groupData.apps.forEach(group => {
@@ -544,10 +587,13 @@ function applyOverallGrouping(sheet, groupData) {
   });
   
   if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
     Sheets.Spreadsheets.batchUpdate({
       requests: requests
     }, SpreadsheetApp.getActiveSpreadsheet().getId());
   }
+  
+  SpreadsheetApp.flush();
 }
 
 function createWeekRow(week, weekTotals, weekWoW) {

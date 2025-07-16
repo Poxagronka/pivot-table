@@ -122,15 +122,18 @@ function recreateSheetFast(spreadsheet, sheetName) {
     const oldSheet = spreadsheet.getSheetByName(sheetName);
     if (oldSheet) {
       spreadsheet.deleteSheet(oldSheet);
+      Utilities.sleep(2000);
     }
     
     const newSheet = spreadsheet.insertSheet(sheetName);
+    Utilities.sleep(2000);
     console.log(`Sheet ${sheetName} recreated`);
   } catch (e) {
     console.error(`Error recreating sheet ${sheetName}:`, e);
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (sheet) {
       sheet.clear();
+      Utilities.sleep(1000);
       console.log(`Fallback: Sheet ${sheetName} cleared`);
     }
   }
@@ -212,9 +215,11 @@ function updateProjectDataOptimizedTricky() {
     
     console.log('TRICKY: Creating optimized pivot table...');
     createEnhancedPivotTable(processed);
+    Utilities.sleep(3000);
     
     console.log('TRICKY: Applying cached comments...');
     cache.applyCommentsToSheet();
+    Utilities.sleep(2000);
     
     console.log('=== TRICKY OPTIMIZED UPDATE COMPLETED ===');
     console.log(`TRICKY: Cache stats - ${trickyCache?.processed || 0} processed, ${trickyCache?.cacheHits || 0} cache hits`);
@@ -239,6 +244,7 @@ function updateProjectDataOptimizedStandard(projectName) {
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
   console.log(`${projectName}: Comments cached`);
+  Utilities.sleep(1000);
   
   const earliestDate = findEarliestWeekDate(sheet);
   if (!earliestDate) {
@@ -278,6 +284,7 @@ function updateProjectDataOptimizedStandard(projectName) {
   }
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
+  Utilities.sleep(3000);
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -287,7 +294,10 @@ function updateProjectDataOptimizedStandard(projectName) {
     } else {
       createEnhancedPivotTable(processed);
     }
+    Utilities.sleep(3000);
+    
     cache.applyCommentsToSheet();
+    Utilities.sleep(2000);
   } finally {
     setCurrentProject(originalProject);
   }
@@ -368,17 +378,20 @@ function sortProjectSheets() {
     finalOrder.forEach((sheet, index) => {
       try {
         spreadsheet.setActiveSheet(sheet);
+        Utilities.sleep(1000);
+        
         spreadsheet.moveActiveSheet(position);
         position++;
         
         if (index < finalOrder.length - 1) {
-          Utilities.sleep(500);
+          Utilities.sleep(1500);
         }
       } catch (e) {
         console.error(`Error moving sheet ${sheet.getName()}:`, e);
       }
     });
     
+    Utilities.sleep(2000);
     console.log('Project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);

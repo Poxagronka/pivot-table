@@ -133,18 +133,25 @@ function showReportWizard() {
   ui.alert('Processing', 'Generating reports... This may take a few minutes.', ui.ButtonSet.OK);
   
   try {
-    selectedProjects.forEach(function(proj) {
+    selectedProjects.forEach(function(proj, index) {
       if (proj === 'TRICKY') clearTrickyCaches();
       setCurrentProject(proj);
+      
+      if (index > 0) Utilities.sleep(5000);
       
       if (useRange) {
         generateReportForDateRange(startDate, endDate);
       } else {
         generateReport(days);
       }
+      
+      Utilities.sleep(5000);
     });
     
+    console.log('Sorting project sheets...');
+    Utilities.sleep(5000);
     sortProjectSheets();
+    
     ui.alert('✅ Success', 'Reports generated successfully!', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('❌ Error', 'Error generating reports: ' + e.toString(), ui.ButtonSet.OK);
@@ -173,7 +180,7 @@ function updateAllProjectsQuick() {
       clearTrickyCaches();
       updateProjectDataOptimized('TRICKY');
       console.log('TRICKY updated successfully');
-      Utilities.sleep(5000);
+      Utilities.sleep(8000);
     } catch (e) {
       console.error('Error updating TRICKY:', e);
     }
@@ -184,15 +191,18 @@ function updateAllProjectsQuick() {
     
     otherProjects.forEach(function(proj, index) {
       try {
-        if (index > 0) Utilities.sleep(3000);
+        if (index > 0) Utilities.sleep(5000);
         updateProjectDataOptimized(proj);
         successCount++;
         console.log(proj + ' updated successfully');
+        Utilities.sleep(5000);
       } catch (e) {
         console.error('Error updating ' + proj + ':', e);
       }
     });
     
+    console.log('Sorting project sheets...');
+    Utilities.sleep(5000);
     sortProjectSheets();
     
     ui.alert('✅ Complete', 'Updated ' + (successCount + 1) + '/8 projects\n\nTRICKY: Optimized processing used', ui.ButtonSet.OK);
@@ -236,16 +246,19 @@ function updateSelectedProjectsQuick() {
           clearTrickyCaches();
         }
         
-        if (index > 0) Utilities.sleep(3000);
+        if (index > 0) Utilities.sleep(5000);
         
         updateProjectDataOptimized(projectName);
         successCount++;
+        Utilities.sleep(5000);
         
       } catch (e) {
         console.error('Error updating ' + proj + ':', e);
       }
     });
     
+    console.log('Sorting project sheets...');
+    Utilities.sleep(5000);
     sortProjectSheets();
     
     ui.alert('✅ Complete', 'Successfully updated ' + successCount + '/' + selected.length + ' projects', ui.ButtonSet.OK);

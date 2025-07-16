@@ -277,12 +277,15 @@ function generateReport(days) {
     }
     
     clearAllDataSilent();
+    Utilities.sleep(3000);
     
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
+    
+    Utilities.sleep(3000);
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
@@ -311,12 +314,15 @@ function generateReportForDateRange(startDate, endDate) {
     }
     
     clearAllDataSilent();
+    Utilities.sleep(3000);
     
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
+    
+    Utilities.sleep(3000);
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
