@@ -233,10 +233,15 @@ class CommentCache {
   }
 
   applyCommentsToSheet() {
-    if (this.isTricky) {
-      this.applyCommentsToSheetTrickyOptimized();
-    } else {
-      this.applyCommentsToSheetStandard();
+    try {
+      if (this.isTricky) {
+        this.applyCommentsToSheetTrickyOptimized();
+      } else {
+        this.applyCommentsToSheetStandard();
+      }
+    } catch (e) {
+      console.log('Error applying comments to sheet:', e);
+      console.log('Sheet may have been recreated, skipping comment application');
     }
   }
 
@@ -244,7 +249,14 @@ class CommentCache {
     console.log('Applying TRICKY comments optimized...');
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
+    if (!sheet) {
+      console.log('Sheet not found, cannot apply comments');
+      return;
+    }
+    if (sheet.getLastRow() < 2) {
+      console.log('Sheet has no data, cannot apply comments');
+      return;
+    }
     
     const comments = this.loadAllComments();
     const data = sheet.getDataRange().getValues();
@@ -310,7 +322,14 @@ class CommentCache {
   applyCommentsToSheetStandard() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
+    if (!sheet) {
+      console.log('Sheet not found, cannot apply comments');
+      return;
+    }
+    if (sheet.getLastRow() < 2) {
+      console.log('Sheet has no data, cannot apply comments');
+      return;
+    }
     
     const comments = this.loadAllComments();
     const data = sheet.getDataRange().getValues();
