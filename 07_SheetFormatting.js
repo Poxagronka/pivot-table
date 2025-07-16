@@ -11,23 +11,16 @@ function createEnhancedPivotTable(appData) {
 function createTrickyOptimizedPivotTable(appData) {
   console.log('Creating TRICKY optimized pivot table...');
   const config = getCurrentConfig();
-  const sheet = getOrCreateSheet(config);
-  Utilities.sleep(2000);
+  const spreadsheetId = config.SHEET_ID;
+  const sheetName = config.SHEET_NAME;
   
+  const sheetId = getOrCreateSheetAdvanced(spreadsheetId, sheetName);
   const wow = calculateWoWMetrics(appData);
-  Utilities.sleep(1000);
-  
   const { tableData, formatData, hyperlinkData, groupData } = buildTrickyTableData(appData, wow);
-  Utilities.sleep(1000);
   
-  writeDataToSheet(sheet, tableData);
-  Utilities.sleep(3000);
-  
-  applyBatchFormatting(sheet, formatData, hyperlinkData, tableData.length);
-  Utilities.sleep(3000);
-  
-  applyTrickyGrouping(sheet, groupData);
-  Utilities.sleep(2000);
+  writeDataAdvanced(spreadsheetId, sheetId, tableData);
+  applyBatchFormattingAdvanced(spreadsheetId, sheetId, formatData, hyperlinkData, tableData.length);
+  applyTrickyGroupingAdvanced(spreadsheetId, sheetId, groupData);
   
   console.log('TRICKY optimized pivot table completed');
 }
@@ -35,23 +28,16 @@ function createTrickyOptimizedPivotTable(appData) {
 function createStandardPivotTable(appData) {
   console.log('Creating standard pivot table...');
   const config = getCurrentConfig();
-  const sheet = getOrCreateSheet(config);
-  Utilities.sleep(2000);
+  const spreadsheetId = config.SHEET_ID;
+  const sheetName = config.SHEET_NAME;
   
+  const sheetId = getOrCreateSheetAdvanced(spreadsheetId, sheetName);
   const wow = calculateWoWMetrics(appData);
-  Utilities.sleep(1000);
-  
   const { tableData, formatData, hyperlinkData, groupData } = buildStandardTableData(appData, wow);
-  Utilities.sleep(1000);
   
-  writeDataToSheet(sheet, tableData);
-  Utilities.sleep(3000);
-  
-  applyBatchFormatting(sheet, formatData, hyperlinkData, tableData.length);
-  Utilities.sleep(3000);
-  
-  applyStandardGrouping(sheet, groupData);
-  Utilities.sleep(2000);
+  writeDataAdvanced(spreadsheetId, sheetId, tableData);
+  applyBatchFormattingAdvanced(spreadsheetId, sheetId, formatData, hyperlinkData, tableData.length);
+  applyStandardGroupingAdvanced(spreadsheetId, sheetId, groupData);
   
   console.log('Standard pivot table completed');
 }
@@ -59,25 +45,368 @@ function createStandardPivotTable(appData) {
 function createOverallPivotTable(appData) {
   console.log('Creating overall pivot table...');
   const config = getCurrentConfig();
-  const sheet = getOrCreateSheet(config);
-  Utilities.sleep(2000);
+  const spreadsheetId = config.SHEET_ID;
+  const sheetName = config.SHEET_NAME;
   
+  const sheetId = getOrCreateSheetAdvanced(spreadsheetId, sheetName);
   const wow = calculateWoWMetrics(appData);
-  Utilities.sleep(1000);
-  
   const { tableData, formatData, groupData } = buildOverallTableData(appData, wow);
-  Utilities.sleep(1000);
   
-  writeDataToSheet(sheet, tableData);
-  Utilities.sleep(3000);
-  
-  applyBatchFormatting(sheet, formatData, null, tableData.length);
-  Utilities.sleep(3000);
-  
-  applyOverallGrouping(sheet, groupData);
-  Utilities.sleep(2000);
+  writeDataAdvanced(spreadsheetId, sheetId, tableData);
+  applyBatchFormattingAdvanced(spreadsheetId, sheetId, formatData, null, tableData.length);
+  applyOverallGroupingAdvanced(spreadsheetId, sheetId, groupData);
   
   console.log('Overall pivot table completed');
+}
+
+function getOrCreateSheetAdvanced(spreadsheetId, sheetName) {
+  console.log(`Getting/creating sheet: ${sheetName}`);
+  
+  try {
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    const existingSheet = spreadsheet.sheets.find(sheet => sheet.properties.title === sheetName);
+    
+    if (existingSheet) {
+      console.log(`Clearing existing sheet: ${sheetName}`);
+      Sheets.Spreadsheets.batchUpdate({
+        requests: [{
+          updateCells: {
+            range: { sheetId: existingSheet.properties.sheetId },
+            fields: 'userEnteredValue,userEnteredFormat'
+          }
+        }]
+      }, spreadsheetId);
+      return existingSheet.properties.sheetId;
+    }
+    
+    console.log(`Creating new sheet: ${sheetName}`);
+    const response = Sheets.Spreadsheets.batchUpdate({
+      requests: [{
+        addSheet: {
+          properties: {
+            title: sheetName,
+            gridProperties: { rowCount: 1000, columnCount: 20 }
+          }
+        }
+      }]
+    }, spreadsheetId);
+    
+    return response.replies[0].addSheet.properties.sheetId;
+  } catch (e) {
+    console.error('Error in getOrCreateSheetAdvanced:', e);
+    throw e;
+  }
+}
+
+function writeDataAdvanced(spreadsheetId, sheetId, tableData) {
+  console.log(`Writing ${tableData.length} rows to sheet...`);
+  
+  const requests = [{
+    updateCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 0,
+        endRowIndex: tableData.length,
+        startColumnIndex: 0,
+        endColumnIndex: tableData[0].length
+      },
+      rows: tableData.map(row => ({
+        values: row.map(cell => ({
+          userEnteredValue: { stringValue: cell.toString() }
+        }))
+      })),
+      fields: 'userEnteredValue'
+    }
+  }];
+  
+  Sheets.Spreadsheets.batchUpdate({ requests: requests }, spreadsheetId);
+  console.log('Data written successfully');
+}
+
+function applyBatchFormattingAdvanced(spreadsheetId, sheetId, formatData, hyperlinkData, numRows) {
+  console.log('Applying batch formatting...');
+  const requests = [];
+  const headers = getUnifiedHeaders();
+  const numCols = headers.length;
+  
+  requests.push(...getHeaderFormatRequestsAdvanced(sheetId, numCols));
+  requests.push(...getColumnFormatRequestsAdvanced(sheetId, numRows, numCols));
+  requests.push(...getRowFormatRequestsAdvanced(sheetId, formatData, numCols));
+  
+  if (hyperlinkData && hyperlinkData.length > 0) {
+    requests.push(...getHyperlinkFormatRequestsAdvanced(sheetId, hyperlinkData));
+  }
+  
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId: sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser'
+    }
+  });
+  
+  requests.push({
+    updateSheetProperties: {
+      properties: { sheetId: sheetId, gridProperties: { frozenRowCount: 1 } },
+      fields: 'gridProperties.frozenRowCount'
+    }
+  });
+  
+  if (requests.length > 0) {
+    console.log(`Executing ${requests.length} format requests...`);
+    const batchSize = 100;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      Sheets.Spreadsheets.batchUpdate({ requests: batch }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(1000);
+      }
+    }
+  }
+  
+  console.log('Formatting applied successfully');
+}
+
+function getHeaderFormatRequestsAdvanced(sheetId, numCols) {
+  return [{
+    repeatCell: {
+      range: { sheetId: sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols },
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: { red: 0.258, green: 0.522, blue: 0.957 },
+          textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true, fontSize: 10 },
+          horizontalAlignment: 'CENTER',
+          verticalAlignment: 'MIDDLE',
+          wrapStrategy: 'WRAP'
+        }
+      },
+      fields: 'userEnteredFormat'
+    }
+  }];
+}
+
+function getColumnFormatRequestsAdvanced(sheetId, numRows, numCols) {
+  const requests = [];
+  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
+  
+  columnWidths.forEach(col => {
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: sheetId, dimension: 'COLUMNS', startIndex: col.c - 1, endIndex: col.c },
+        properties: { pixelSize: col.w },
+        fields: 'pixelSize'
+      }
+    });
+  });
+  
+  if (numRows > 1) {
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 4, endColumnIndex: 5 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.00' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 7, endColumnIndex: 8 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.000' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 15, endColumnIndex: 16 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.00' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+  }
+  
+  return requests;
+}
+
+function getRowFormatRequestsAdvanced(sheetId, formatData, numCols) {
+  const requests = [];
+  const rowsByType = { APP: [], WEEK: [], SOURCE_APP: [], CAMPAIGN: [] };
+  
+  formatData.forEach(item => {
+    if (rowsByType[item.type]) {
+      rowsByType[item.type].push(item.row - 1);
+    }
+  });
+  
+  const formatConfigs = {
+    APP: { bg: COLORS.APP_ROW.background, fg: COLORS.APP_ROW.fontColor, bold: true, size: 10 },
+    WEEK: { bg: COLORS.WEEK_ROW.background, fg: null, bold: false, size: 10 },
+    SOURCE_APP: { bg: COLORS.SOURCE_APP_ROW.background, fg: null, bold: false, size: 9 },
+    CAMPAIGN: { bg: COLORS.CAMPAIGN_ROW.background, fg: null, bold: false, size: 9 }
+  };
+  
+  Object.entries(rowsByType).forEach(([type, rows]) => {
+    const config = formatConfigs[type];
+    
+    if (rows.length > 0) {
+      const ranges = rows.map(rowIndex => ({
+        sheetId: sheetId,
+        startRowIndex: rowIndex,
+        endRowIndex: rowIndex + 1,
+        startColumnIndex: 0,
+        endColumnIndex: numCols
+      }));
+      
+      requests.push({
+        repeatCell: {
+          ranges: ranges,
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: hexToRgb(config.bg),
+              textFormat: {
+                foregroundColor: config.fg ? hexToRgb(config.fg) : { red: 0, green: 0, blue: 0 },
+                bold: config.bold,
+                fontSize: config.size
+              },
+              verticalAlignment: 'MIDDLE'
+            }
+          },
+          fields: 'userEnteredFormat'
+        }
+      });
+    }
+  });
+  
+  return requests;
+}
+
+function getHyperlinkFormatRequestsAdvanced(sheetId, hyperlinkData) {
+  return hyperlinkData.map(link => ({
+    repeatCell: {
+      range: { 
+        sheetId: sheetId,
+        startRowIndex: link.row - 1,
+        endRowIndex: link.row,
+        startColumnIndex: link.col - 1,
+        endColumnIndex: link.col
+      },
+      cell: {
+        userEnteredFormat: {
+          textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 }, underline: false }
+        }
+      },
+      fields: 'userEnteredFormat.textFormat'
+    }
+  }));
+}
+
+function applyTrickyGroupingAdvanced(spreadsheetId, sheetId, groupData) {
+  console.log('Applying TRICKY grouping...');
+  const requests = [];
+  
+  groupData.sourceApps.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  groupData.weeks.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  groupData.apps.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
+    const batchSize = 50;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      Sheets.Spreadsheets.batchUpdate({ requests: batch }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(500);
+      }
+    }
+  }
+  
+  console.log('TRICKY grouping applied successfully');
+}
+
+function applyStandardGroupingAdvanced(spreadsheetId, sheetId, groupData) {
+  console.log('Applying standard grouping...');
+  const requests = [];
+  
+  groupData.weeks.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  groupData.apps.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
+    const batchSize = 50;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      Sheets.Spreadsheets.batchUpdate({ requests: batch }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(500);
+      }
+    }
+  }
+  
+  console.log('Standard grouping applied successfully');
+}
+
+function applyOverallGroupingAdvanced(spreadsheetId, sheetId, groupData) {
+  console.log('Applying overall grouping...');
+  const requests = [];
+  
+  groupData.apps.forEach(group => {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
+      }
+    });
+  });
+  
+  if (requests.length > 0) {
+    console.log(`Creating ${requests.length} groups...`);
+    const batchSize = 50;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      Sheets.Spreadsheets.batchUpdate({ requests: batch }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(500);
+      }
+    }
+  }
+  
+  console.log('Overall grouping applied successfully');
 }
 
 function buildTrickyTableData(appData, wow) {
@@ -294,306 +623,6 @@ function buildOverallTableData(appData, wow) {
   });
   
   return { tableData, formatData, groupData };
-}
-
-function getOrCreateSheet(config) {
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
-    Utilities.sleep(1000);
-  }
-  return sheet;
-}
-
-function writeDataToSheet(sheet, tableData) {
-  console.log(`Writing ${tableData.length} rows to sheet...`);
-  const range = sheet.getRange(1, 1, tableData.length, tableData[0].length);
-  range.setValues(tableData);
-  SpreadsheetApp.flush();
-}
-
-function applyBatchFormatting(sheet, formatData, hyperlinkData, numRows) {
-  console.log('Applying batch formatting...');
-  const requests = [];
-  const headers = getUnifiedHeaders();
-  const numCols = headers.length;
-  
-  requests.push(...getHeaderFormatRequests(numCols));
-  requests.push(...getColumnFormatRequests(numRows, numCols));
-  requests.push(...getRowFormatRequests(formatData, numCols));
-  requests.push(...getConditionalFormatRequests(numRows, numCols));
-  
-  if (hyperlinkData && hyperlinkData.length > 0) {
-    requests.push(...getHyperlinkFormatRequests(hyperlinkData));
-  }
-  
-  if (requests.length > 0) {
-    console.log(`Executing ${requests.length} format requests...`);
-    const batchSize = 50;
-    for (let i = 0; i < requests.length; i += batchSize) {
-      const batch = requests.slice(i, i + batchSize);
-      Sheets.Spreadsheets.batchUpdate({
-        requests: batch
-      }, SpreadsheetApp.getActiveSpreadsheet().getId());
-      
-      if (i + batchSize < requests.length) {
-        Utilities.sleep(1000);
-      }
-    }
-  }
-  
-  sheet.hideColumns(1);
-  sheet.setFrozenRows(1);
-  SpreadsheetApp.flush();
-}
-
-function getHeaderFormatRequests(numCols) {
-  return [{
-    repeatCell: {
-      range: { startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols },
-      cell: {
-        userEnteredFormat: {
-          backgroundColor: { red: 0.258, green: 0.522, blue: 0.957 },
-          textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true, fontSize: 10 },
-          horizontalAlignment: 'CENTER',
-          verticalAlignment: 'MIDDLE',
-          wrapStrategy: 'WRAP'
-        }
-      },
-      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)'
-    }
-  }];
-}
-
-function getColumnFormatRequests(numRows, numCols) {
-  const requests = [];
-  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
-  
-  columnWidths.forEach(col => {
-    requests.push({
-      updateDimensionProperties: {
-        range: { sheetId: 0, dimension: 'COLUMNS', startIndex: col.c - 1, endIndex: col.c },
-        properties: { pixelSize: col.w },
-        fields: 'pixelSize'
-      }
-    });
-  });
-  
-  if (numRows > 1) {
-    requests.push({
-      repeatCell: {
-        range: { startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 4, endColumnIndex: 5 },
-        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.00' } } },
-        fields: 'userEnteredFormat.numberFormat'
-      }
-    });
-    
-    requests.push({
-      repeatCell: {
-        range: { startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 7, endColumnIndex: 8 },
-        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.000' } } },
-        fields: 'userEnteredFormat.numberFormat'
-      }
-    });
-    
-    requests.push({
-      repeatCell: {
-        range: { startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 15, endColumnIndex: 16 },
-        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.00' } } },
-        fields: 'userEnteredFormat.numberFormat'
-      }
-    });
-  }
-  
-  return requests;
-}
-
-function getRowFormatRequests(formatData, numCols) {
-  const requests = [];
-  const rowsByType = { APP: [], WEEK: [], SOURCE_APP: [], CAMPAIGN: [] };
-  
-  formatData.forEach(item => {
-    if (rowsByType[item.type]) {
-      rowsByType[item.type].push(item.row - 1);
-    }
-  });
-  
-  const formatConfigs = {
-    APP: { bg: COLORS.APP_ROW.background, fg: COLORS.APP_ROW.fontColor, bold: true, size: 10 },
-    WEEK: { bg: COLORS.WEEK_ROW.background, fg: null, bold: false, size: 10 },
-    SOURCE_APP: { bg: COLORS.SOURCE_APP_ROW.background, fg: null, bold: false, size: 9 },
-    CAMPAIGN: { bg: COLORS.CAMPAIGN_ROW.background, fg: null, bold: false, size: 9 }
-  };
-  
-  Object.entries(rowsByType).forEach(([type, rows]) => {
-    const config = formatConfigs[type];
-    rows.forEach(rowIndex => {
-      requests.push({
-        repeatCell: {
-          range: { startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: numCols },
-          cell: {
-            userEnteredFormat: {
-              backgroundColor: hexToRgb(config.bg),
-              textFormat: {
-                foregroundColor: config.fg ? hexToRgb(config.fg) : { red: 0, green: 0, blue: 0 },
-                bold: config.bold,
-                fontSize: config.size
-              },
-              verticalAlignment: 'MIDDLE'
-            }
-          },
-          fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment)'
-        }
-      });
-    });
-  });
-  
-  return requests;
-}
-
-function getConditionalFormatRequests(numRows, numCols) {
-  const requests = [];
-  
-  if (numRows > 1) {
-    requests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: [{ startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 5, endColumnIndex: 6 }],
-          booleanRule: {
-            condition: { type: 'NUMBER_GREATER', values: [{ numberValue: 0 }] },
-            format: {
-              backgroundColor: hexToRgb(COLORS.POSITIVE.background),
-              textFormat: { foregroundColor: hexToRgb(COLORS.POSITIVE.fontColor) }
-            }
-          }
-        },
-        index: 0
-      }
-    });
-    
-    requests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: [{ startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 5, endColumnIndex: 6 }],
-          booleanRule: {
-            condition: { type: 'NUMBER_LESS', values: [{ numberValue: 0 }] },
-            format: {
-              backgroundColor: hexToRgb(COLORS.NEGATIVE.background),
-              textFormat: { foregroundColor: hexToRgb(COLORS.NEGATIVE.fontColor) }
-            }
-          }
-        },
-        index: 1
-      }
-    });
-  }
-  
-  return requests;
-}
-
-function getHyperlinkFormatRequests(hyperlinkData) {
-  return hyperlinkData.map(link => ({
-    repeatCell: {
-      range: { startRowIndex: link.row - 1, endRowIndex: link.row, startColumnIndex: link.col - 1, endColumnIndex: link.col },
-      cell: {
-        userEnteredFormat: {
-          textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 }, underline: false }
-        }
-      },
-      fields: 'userEnteredFormat.textFormat'
-    }
-  }));
-}
-
-function applyTrickyGrouping(sheet, groupData) {
-  console.log('Applying TRICKY grouping...');
-  const requests = [];
-  
-  groupData.sourceApps.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  groupData.weeks.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  groupData.apps.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  if (requests.length > 0) {
-    console.log(`Creating ${requests.length} groups...`);
-    Sheets.Spreadsheets.batchUpdate({
-      requests: requests
-    }, SpreadsheetApp.getActiveSpreadsheet().getId());
-  }
-  
-  SpreadsheetApp.flush();
-}
-
-function applyStandardGrouping(sheet, groupData) {
-  console.log('Applying standard grouping...');
-  const requests = [];
-  
-  groupData.weeks.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  groupData.apps.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  if (requests.length > 0) {
-    console.log(`Creating ${requests.length} groups...`);
-    Sheets.Spreadsheets.batchUpdate({
-      requests: requests
-    }, SpreadsheetApp.getActiveSpreadsheet().getId());
-  }
-  
-  SpreadsheetApp.flush();
-}
-
-function applyOverallGrouping(sheet, groupData) {
-  console.log('Applying overall grouping...');
-  const requests = [];
-  
-  groupData.apps.forEach(group => {
-    requests.push({
-      addDimensionGroup: {
-        range: { sheetId: 0, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count }
-      }
-    });
-  });
-  
-  if (requests.length > 0) {
-    console.log(`Creating ${requests.length} groups...`);
-    Sheets.Spreadsheets.batchUpdate({
-      requests: requests
-    }, SpreadsheetApp.getActiveSpreadsheet().getId());
-  }
-  
-  SpreadsheetApp.flush();
 }
 
 function createWeekRow(week, weekTotals, weekWoW) {

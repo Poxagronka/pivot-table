@@ -118,24 +118,40 @@ function clearProjectDataSilent(projectName) {
 }
 
 function recreateSheetFast(spreadsheet, sheetName) {
+  console.log(`Fast recreating sheet: ${sheetName}`);
+  const spreadsheetId = spreadsheet.getId();
+  
   try {
-    const oldSheet = spreadsheet.getSheetByName(sheetName);
-    if (oldSheet) {
-      spreadsheet.deleteSheet(oldSheet);
-      Utilities.sleep(2000);
+    const sheetMetadata = Sheets.Spreadsheets.get(spreadsheetId);
+    const existingSheet = sheetMetadata.sheets.find(s => s.properties.title === sheetName);
+    
+    if (existingSheet) {
+      console.log(`Deleting existing sheet: ${sheetName}`);
+      Sheets.Spreadsheets.batchUpdate({
+        requests: [{
+          deleteSheet: {
+            sheetId: existingSheet.properties.sheetId
+          }
+        }]
+      }, spreadsheetId);
     }
     
-    const newSheet = spreadsheet.insertSheet(sheetName);
-    Utilities.sleep(2000);
-    console.log(`Sheet ${sheetName} recreated`);
+    console.log(`Creating new sheet: ${sheetName}`);
+    Sheets.Spreadsheets.batchUpdate({
+      requests: [{
+        addSheet: {
+          properties: {
+            title: sheetName,
+            gridProperties: { rowCount: 1000, columnCount: 20 }
+          }
+        }
+      }]
+    }, spreadsheetId);
+    
+    console.log(`Sheet ${sheetName} recreated successfully`);
   } catch (e) {
     console.error(`Error recreating sheet ${sheetName}:`, e);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (sheet) {
-      sheet.clear();
-      Utilities.sleep(1000);
-      console.log(`Fallback: Sheet ${sheetName} cleared`);
-    }
+    throw e;
   }
 }
 
@@ -334,9 +350,12 @@ function getOrCreateProjectSheet(projectName) {
 }
 
 function sortProjectSheets() {
+  console.log('Sorting project sheets using Advanced API...');
+  
   try {
-    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
-    const sheets = spreadsheet.getSheets();
+    const spreadsheetId = MAIN_SHEET_ID;
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    const sheets = spreadsheet.sheets;
     
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
     
@@ -345,9 +364,9 @@ function sortProjectSheets() {
     const hiddenSheets = [];
     
     sheets.forEach(sheet => {
-      const sheetName = sheet.getName();
+      const sheetName = sheet.properties.title;
       const projectIndex = projectOrder.indexOf(sheetName);
-      const isHidden = sheet.isSheetHidden();
+      const isHidden = sheet.properties.hidden;
       
       if (projectIndex !== -1) {
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
@@ -373,25 +392,27 @@ function sortProjectSheets() {
     console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
     console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
     
-    let position = 1;
+    const requests = [];
     
     finalOrder.forEach((sheet, index) => {
-      try {
-        spreadsheet.setActiveSheet(sheet);
-        Utilities.sleep(1000);
-        
-        spreadsheet.moveActiveSheet(position);
-        position++;
-        
-        if (index < finalOrder.length - 1) {
-          Utilities.sleep(1500);
+      requests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: sheet.properties.sheetId,
+            index: index
+          },
+          fields: 'index'
         }
-      } catch (e) {
-        console.error(`Error moving sheet ${sheet.getName()}:`, e);
-      }
+      });
     });
     
-    Utilities.sleep(2000);
+    if (requests.length > 0) {
+      console.log(`Executing ${requests.length} sheet reordering requests...`);
+      Sheets.Spreadsheets.batchUpdate({
+        requests: requests
+      }, spreadsheetId);
+    }
+    
     console.log('Project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);
