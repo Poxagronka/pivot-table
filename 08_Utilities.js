@@ -118,135 +118,26 @@ function clearProjectDataSilent(projectName) {
 }
 
 function recreateSheetFast(spreadsheet, sheetName) {
-  console.log(`Fast recreating sheet: ${sheetName}`);
-  const spreadsheetId = spreadsheet.getId();
-  
   try {
-    const sheetMetadata = Sheets.Spreadsheets.get(spreadsheetId);
-    const existingSheet = sheetMetadata.sheets.find(s => s.properties.title === sheetName);
-    
-    if (existingSheet) {
-      console.log(`Deleting existing sheet: ${sheetName}`);
-      Sheets.Spreadsheets.batchUpdate({
-        requests: [{
-          deleteSheet: {
-            sheetId: existingSheet.properties.sheetId
-          }
-        }]
-      }, spreadsheetId);
+    const oldSheet = spreadsheet.getSheetByName(sheetName);
+    if (oldSheet) {
+      spreadsheet.deleteSheet(oldSheet);
     }
     
-    console.log(`Creating new sheet: ${sheetName}`);
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        addSheet: {
-          properties: {
-            title: sheetName,
-            gridProperties: { rowCount: 1000, columnCount: 20 }
-          }
-        }
-      }]
-    }, spreadsheetId);
-    
-    console.log(`Sheet ${sheetName} recreated successfully`);
+    const newSheet = spreadsheet.insertSheet(sheetName);
+    console.log(`Sheet ${sheetName} recreated`);
   } catch (e) {
     console.error(`Error recreating sheet ${sheetName}:`, e);
-    throw e;
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (sheet) {
+      sheet.clear();
+      console.log(`Fallback: Sheet ${sheetName} cleared`);
+    }
   }
 }
 
 function updateProjectDataOptimized(projectName) {
-  if (projectName === 'TRICKY') {
-    updateProjectDataOptimizedTricky();
-    return;
-  }
-  
-  updateProjectDataOptimizedStandard(projectName);
-}
-
-function updateProjectDataOptimizedTricky() {
-  console.log('=== STARTING TRICKY OPTIMIZED UPDATE ===');
-  
-  const config = getProjectConfig('TRICKY');
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log('TRICKY: No existing data to update');
-    return;
-  }
-  
-  console.log('TRICKY: Initializing optimized cache...');
-  const trickyCache = initTrickyOptimizedCache();
-  
-  console.log('TRICKY: Caching comments...');
-  const cache = new CommentCache('TRICKY');
-  cache.syncCommentsFromSheet();
-  
-  console.log('TRICKY: Finding earliest week date...');
-  const earliestDate = findEarliestWeekDate(sheet);
-  if (!earliestDate) {
-    console.log('TRICKY: No week data found');
-    return;
-  }
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const endDate = new Date(today);
-  
-  if (dayOfWeek === 0) {
-    endDate.setDate(today.getDate() - 1);
-  } else {
-    endDate.setDate(today.getDate() - dayOfWeek);
-  }
-  
-  const dateRange = {
-    from: formatDateForAPI(earliestDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`TRICKY: Fetching optimized data ${dateRange.from} to ${dateRange.to}`);
-  
-  const raw = fetchProjectCampaignData('TRICKY', dateRange);
-  
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log('TRICKY: No API data');
-    return;
-  }
-  
-  console.log('TRICKY: Processing API data with optimizations...');
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject('TRICKY');
-  
-  try {
-    const processed = processApiData(raw);
-    
-    if (Object.keys(processed).length === 0) {
-      console.log('TRICKY: No valid processed data');
-      return;
-    }
-    
-    console.log('TRICKY: Recreating sheet...');
-    recreateSheetFast(spreadsheet, config.SHEET_NAME);
-    
-    console.log('TRICKY: Creating optimized pivot table...');
-    createEnhancedPivotTable(processed);
-    Utilities.sleep(5000);
-    
-    console.log('TRICKY: Applying cached comments...');
-    cache.applyCommentsToSheet();
-    Utilities.sleep(2000);
-    
-    console.log('=== TRICKY OPTIMIZED UPDATE COMPLETED ===');
-    console.log(`TRICKY: Cache stats - ${trickyCache?.processed || 0} processed, ${trickyCache?.cacheHits || 0} cache hits`);
-    
-  } finally {
-    setCurrentProject(originalProject);
-  }
-}
-
-function updateProjectDataOptimizedStandard(projectName) {
-  console.log(`Starting standard update for ${projectName}`);
+  console.log(`Starting optimized update for ${projectName}`);
   
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -260,7 +151,6 @@ function updateProjectDataOptimizedStandard(projectName) {
   const cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
   console.log(`${projectName}: Comments cached`);
-  Utilities.sleep(1000);
   
   const earliestDate = findEarliestWeekDate(sheet);
   if (!earliestDate) {
@@ -300,7 +190,6 @@ function updateProjectDataOptimizedStandard(projectName) {
   }
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  Utilities.sleep(5000);
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -310,10 +199,7 @@ function updateProjectDataOptimizedStandard(projectName) {
     } else {
       createEnhancedPivotTable(processed);
     }
-    Utilities.sleep(3000);
-    
     cache.applyCommentsToSheet();
-    Utilities.sleep(2000);
   } finally {
     setCurrentProject(originalProject);
   }
@@ -350,12 +236,9 @@ function getOrCreateProjectSheet(projectName) {
 }
 
 function sortProjectSheets() {
-  console.log('Sorting project sheets using Advanced API...');
-  
   try {
-    const spreadsheetId = MAIN_SHEET_ID;
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    const sheets = spreadsheet.sheets;
+    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    const sheets = spreadsheet.getSheets();
     
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
     
@@ -364,9 +247,9 @@ function sortProjectSheets() {
     const hiddenSheets = [];
     
     sheets.forEach(sheet => {
-      const sheetName = sheet.properties.title;
+      const sheetName = sheet.getName();
       const projectIndex = projectOrder.indexOf(sheetName);
-      const isHidden = sheet.properties.hidden;
+      const isHidden = sheet.isSheetHidden();
       
       if (projectIndex !== -1) {
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
@@ -392,26 +275,21 @@ function sortProjectSheets() {
     console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
     console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
     
-    const requests = [];
+    let position = 1;
     
     finalOrder.forEach((sheet, index) => {
-      requests.push({
-        updateSheetProperties: {
-          properties: {
-            sheetId: sheet.properties.sheetId,
-            index: index
-          },
-          fields: 'index'
+      try {
+        spreadsheet.setActiveSheet(sheet);
+        spreadsheet.moveActiveSheet(position);
+        position++;
+        
+        if (index < finalOrder.length - 1) {
+          Utilities.sleep(500);
         }
-      });
+      } catch (e) {
+        console.error(`Error moving sheet ${sheet.getName()}:`, e);
+      }
     });
-    
-    if (requests.length > 0) {
-      console.log(`Executing ${requests.length} sheet reordering requests...`);
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, spreadsheetId);
-    }
     
     console.log('Project sheets sorted successfully');
   } catch (e) {

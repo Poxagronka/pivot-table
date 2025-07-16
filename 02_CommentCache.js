@@ -1,9 +1,11 @@
+/**
+ * Comment Cache Management - ОБНОВЛЕНО: поддержка унифицированной структуры колонок
+ */
 class CommentCache {
   constructor(projectName = null) {
     this.projectName = projectName || CURRENT_PROJECT;
     this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
     this.cacheSheet = this.getOrCreateCacheSheet();
-    this.isTricky = this.projectName === 'TRICKY';
   }
 
   getOrCreateCacheSheet() {
@@ -22,30 +24,6 @@ class CommentCache {
   }
 
   loadAllComments() {
-    if (this.isTricky) {
-      return this.loadAllCommentsTrickyOptimized();
-    }
-    return this.loadAllCommentsStandard();
-  }
-
-  loadAllCommentsTrickyOptimized() {
-    console.log('Loading TRICKY comments optimized...');
-    const comments = {};
-    const data = this.cacheSheet.getDataRange().getValues();
-    
-    for (let i = 1; i < data.length; i++) {
-      const [appName, weekRange, level, identifier, sourceApp, comment, lastUpdated] = data[i];
-      if (comment) {
-        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp);
-        comments[key] = comment;
-      }
-    }
-    
-    console.log(`TRICKY comments loaded: ${Object.keys(comments).length} entries`);
-    return comments;
-  }
-
-  loadAllCommentsStandard() {
     const comments = {};
     const data = this.cacheSheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
@@ -100,91 +78,6 @@ class CommentCache {
   }
 
   syncCommentsFromSheet() {
-    if (this.isTricky) {
-      this.syncCommentsFromSheetTrickyOptimized();
-    } else {
-      this.syncCommentsFromSheetStandard();
-    }
-  }
-
-  syncCommentsFromSheetTrickyOptimized() {
-    console.log('Syncing TRICKY comments optimized...');
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    
-    const data = sheet.getDataRange().getValues();
-    const commentsToSave = [];
-    let currentApp = '';
-    let currentWeek = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2];
-      const comment = data[i][19];
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-        currentWeek = '';
-      } else if (level === 'WEEK' && currentApp) {
-        currentWeek = nameOrRange;
-        if (comment) {
-          commentsToSave.push({
-            appName: currentApp,
-            weekRange: currentWeek,
-            level: 'WEEK',
-            comment: comment,
-            identifier: null,
-            sourceApp: null
-          });
-        }
-      } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        if (comment) {
-          const sourceAppDisplayName = nameOrRange;
-          commentsToSave.push({
-            appName: currentApp,
-            weekRange: currentWeek,
-            level: 'SOURCE_APP',
-            comment: comment,
-            identifier: sourceAppDisplayName,
-            sourceApp: null
-          });
-        }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
-        
-        commentsToSave.push({
-          appName: currentApp,
-          weekRange: currentWeek,
-          level: 'CAMPAIGN',
-          comment: comment,
-          identifier: campaignIdValue,
-          sourceApp: sourceAppName
-        });
-      }
-    }
-    
-    console.log(`TRICKY optimized: Found ${commentsToSave.length} comments to save`);
-    
-    commentsToSave.forEach(commentData => {
-      this.saveComment(
-        commentData.appName,
-        commentData.weekRange,
-        commentData.level,
-        commentData.comment,
-        commentData.identifier,
-        commentData.sourceApp
-      );
-    });
-    
-    console.log('TRICKY comments sync completed');
-  }
-
-  syncCommentsFromSheetStandard() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return;
@@ -197,7 +90,7 @@ class CommentCache {
       const level = data[i][0];
       const nameOrRange = data[i][1];
       const idOrEmpty = data[i][2];
-      const comment = data[i][19];
+      const comment = data[i][19]; // ОБНОВЛЕНО: Comments теперь в колонке 19 (унифицированная структура)
       
       if (level === 'APP') {
         currentApp = nameOrRange;
@@ -233,103 +126,9 @@ class CommentCache {
   }
 
   applyCommentsToSheet() {
-    try {
-      if (this.isTricky) {
-        this.applyCommentsToSheetTrickyOptimized();
-      } else {
-        this.applyCommentsToSheetStandard();
-      }
-    } catch (e) {
-      console.log('Error applying comments to sheet:', e);
-      console.log('Sheet may have been recreated, skipping comment application');
-    }
-  }
-
-  applyCommentsToSheetTrickyOptimized() {
-    console.log('Applying TRICKY comments optimized...');
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet) {
-      console.log('Sheet not found, cannot apply comments');
-      return;
-    }
-    if (sheet.getLastRow() < 2) {
-      console.log('Sheet has no data, cannot apply comments');
-      return;
-    }
-    
-    const comments = this.loadAllComments();
-    const data = sheet.getDataRange().getValues();
-    const commentUpdates = [];
-    let currentApp = '';
-    let currentWeek = '';
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2];
-      
-      if (level === 'APP') {
-        currentApp = nameOrRange;
-        currentWeek = '';
-      } else if (level === 'WEEK' && currentApp) {
-        currentWeek = nameOrRange;
-        const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
-        const weekComment = comments[weekKey];
-        if (weekComment) {
-          commentUpdates.push({ row: i + 1, comment: weekComment });
-        }
-      } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        const sourceAppDisplayName = nameOrRange;
-        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName);
-        const sourceAppComment = comments[sourceAppKey];
-        if (sourceAppComment) {
-          commentUpdates.push({ row: i + 1, comment: sourceAppComment });
-        }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
-        const sourceAppName = nameOrRange;
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
-        
-        const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, sourceAppName);
-        const campaignComment = comments[campaignKey];
-        if (campaignComment) {
-          commentUpdates.push({ row: i + 1, comment: campaignComment });
-        }
-      }
-    }
-    
-    console.log(`TRICKY optimized: Applying ${commentUpdates.length} comments`);
-    
-    if (commentUpdates.length > 0) {
-      const batchSize = 100;
-      for (let i = 0; i < commentUpdates.length; i += batchSize) {
-        const batch = commentUpdates.slice(i, i + batchSize);
-        batch.forEach(update => {
-          sheet.getRange(update.row, 19).setValue(update.comment);
-        });
-        
-        if (i + batchSize < commentUpdates.length) {
-          Utilities.sleep(100);
-        }
-      }
-    }
-    
-    console.log('TRICKY comments application completed');
-  }
-
-  applyCommentsToSheetStandard() {
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet) {
-      console.log('Sheet not found, cannot apply comments');
-      return;
-    }
-    if (sheet.getLastRow() < 2) {
-      console.log('Sheet has no data, cannot apply comments');
-      return;
-    }
+    if (!sheet || sheet.getLastRow() < 2) return;
     
     const comments = this.loadAllComments();
     const data = sheet.getDataRange().getValues();
@@ -349,14 +148,14 @@ class CommentCache {
         const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
         const weekComment = comments[weekKey];
         if (weekComment) {
-          sheet.getRange(i + 1, 19).setValue(weekComment);
+          sheet.getRange(i + 1, 19).setValue(weekComment); // ОБНОВЛЕНО: колонка 19
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
         const sourceAppDisplayName = nameOrRange;
         const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName);
         const sourceAppComment = comments[sourceAppKey];
         if (sourceAppComment) {
-          sheet.getRange(i + 1, 19).setValue(sourceAppComment);
+          sheet.getRange(i + 1, 19).setValue(sourceAppComment); // ОБНОВЛЕНО: колонка 19
         }
       } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
         const sourceAppName = nameOrRange;
@@ -367,7 +166,7 @@ class CommentCache {
         const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, sourceAppName);
         const campaignComment = comments[campaignKey];
         if (campaignComment) {
-          sheet.getRange(i + 1, 19).setValue(campaignComment);
+          sheet.getRange(i + 1, 19).setValue(campaignComment); // ОБНОВЛЕНО: колонка 19
         }
       }
     }
