@@ -76,7 +76,7 @@ function cacheProjectComments(projectName) {
   var cache = new CommentCache(projectName);
   cache.syncCommentsFromSheet();
   
-  console.log(`${projectName}: Comments cached successfully`);
+  console.log(`${projectName}: Comments cached (groups unchanged)`);
 }
 
 function updateProjectData(projectName) {
