@@ -166,6 +166,8 @@ function applyBatchFormattingAdvanced(spreadsheetId, sheetId, formatData, hyperl
   }
   
   console.log('Formatting applied successfully');
+  
+  applyConditionalFormattingAdvanced(spreadsheetId, sheetId, numRows);
 }
 
 function getHeaderFormatRequestsAdvanced(sheetId, numCols) {
@@ -203,6 +205,30 @@ function getColumnFormatRequestsAdvanced(sheetId, numRows, numCols) {
   if (numRows > 1) {
     requests.push({
       repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 0, endColumnIndex: numCols },
+        cell: { userEnteredFormat: { verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat.verticalAlignment'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 18, endColumnIndex: 19 },
+        cell: { userEnteredFormat: { wrapStrategy: 'WRAP', horizontalAlignment: 'LEFT' } },
+        fields: 'userEnteredFormat.wrapStrategy,userEnteredFormat.horizontalAlignment'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 17, endColumnIndex: 18 },
+        cell: { userEnteredFormat: { wrapStrategy: 'WRAP', horizontalAlignment: 'LEFT' } },
+        fields: 'userEnteredFormat.wrapStrategy,userEnteredFormat.horizontalAlignment'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
         range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 4, endColumnIndex: 5 },
         cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.00' } } },
         fields: 'userEnteredFormat.numberFormat'
@@ -212,6 +238,30 @@ function getColumnFormatRequestsAdvanced(sheetId, numRows, numCols) {
     requests.push({
       repeatCell: {
         range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 7, endColumnIndex: 8 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.000' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 8, endColumnIndex: 9 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 9, endColumnIndex: 10 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.0' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+    
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 12, endColumnIndex: 13 },
         cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$0.000' } } },
         fields: 'userEnteredFormat.numberFormat'
       }
@@ -258,22 +308,24 @@ function getRowFormatRequestsAdvanced(sheetId, formatData, numCols) {
         endColumnIndex: numCols
       }));
       
-      requests.push({
-        repeatCell: {
-          ranges: ranges,
-          cell: {
-            userEnteredFormat: {
-              backgroundColor: hexToRgb(config.bg),
-              textFormat: {
-                foregroundColor: config.fg ? hexToRgb(config.fg) : { red: 0, green: 0, blue: 0 },
-                bold: config.bold,
-                fontSize: config.size
-              },
-              verticalAlignment: 'MIDDLE'
-            }
-          },
-          fields: 'userEnteredFormat'
-        }
+      ranges.forEach(range => {
+        requests.push({
+          repeatCell: {
+            range: range,
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: hexToRgb(config.bg),
+                textFormat: {
+                  foregroundColor: config.fg ? hexToRgb(config.fg) : { red: 0, green: 0, blue: 0 },
+                  bold: config.bold,
+                  fontSize: config.size
+                },
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat'
+          }
+        });
       });
     }
   });
@@ -716,6 +768,11 @@ function hexToRgb(hex) {
     green: parseInt(result[2], 16) / 255,
     blue: parseInt(result[3], 16) / 255
   } : { red: 0, green: 0, blue: 0 };
+}
+
+function applyConditionalFormattingAdvanced(spreadsheetId, sheetId, numRows) {
+  console.log('Skipping conditional formatting for performance');
+  return;
 }
 
 function createProjectPivotTable(projectName, appData) {
