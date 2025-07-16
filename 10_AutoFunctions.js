@@ -1,5 +1,5 @@
 function autoCacheAllProjects() {
-  console.log('=== AUTO CACHE STARTED (HOURLY) ===');
+  console.log('=== AUTO CACHE STARTED ===');
   
   if (!isAutoCacheEnabled()) {
     console.log('Auto cache is disabled in settings, skipping');
@@ -10,7 +10,7 @@ function autoCacheAllProjects() {
     ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(function(proj, index) {
       try {
         if (index > 0) {
-          Utilities.sleep(1000);
+          Utilities.sleep(2000);
         }
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
@@ -18,7 +18,7 @@ function autoCacheAllProjects() {
         console.error(`Error caching ${proj}:`, e);
       }
     });
-    console.log('=== AUTO CACHE COMPLETED (HOURLY) ===');
+    console.log('=== AUTO CACHE COMPLETED ===');
   } catch (e) {
     console.error('AUTO CACHE FATAL ERROR:', e);
   }
@@ -230,7 +230,7 @@ function showAutomationStatus() {
   msg += '💾 AUTO CACHE:\n';
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
   if (cacheEnabled && cacheTrigger) {
-    msg += '✅ Enabled - Every hour\n';
+    msg += '✅ Enabled - Daily at 2:00 AM\n';
   } else if (cacheEnabled && !cacheTrigger) {
     msg += '⚠️ Enabled but trigger missing\n';
   } else {
@@ -281,10 +281,10 @@ function enableAutoCache() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
+    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
     saveSettingToSheet('automation.autoCache', true);
     
-    console.log('Auto cache enabled (hourly)');
+    console.log('Auto cache enabled');
   } catch (e) {
     console.error('Failed to enable auto cache:', e);
     throw e;
@@ -379,8 +379,8 @@ function syncTriggersWithSettings() {
     var updateTriggers = getUpdateTriggers();
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
-      console.log('Created auto cache trigger (hourly)');
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
       console.log('Deleted auto cache trigger');
@@ -418,8 +418,8 @@ function recreateAllTriggers() {
     var updateEnabled = isAutoUpdateEnabled();
     
     if (cacheEnabled) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
-      console.log('Cache trigger recreated (hourly)');
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+      console.log('Cache trigger recreated');
     }
     
     if (updateEnabled) {
@@ -427,7 +427,7 @@ function recreateAllTriggers() {
       console.log('Update triggers recreated');
     }
     
-    ui.alert('✅ Triggers Recreated', 'All triggers have been recreated!\n\n⏰ New schedule:\n• Cache: Every hour\n• Updates: 5:00-6:00 AM daily', ui.ButtonSet.OK);
+    ui.alert('✅ Triggers Recreated', 'All triggers have been recreated with exact timing!\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• Updates: 5:00-6:10 AM (10min apart)', ui.ButtonSet.OK);
     
   } catch (e) {
     console.error('Error recreating triggers:', e);

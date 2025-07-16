@@ -1,11 +1,7 @@
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
     console.error('Invalid appData provided to calculateWoWMetrics');
-    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
-  }
-
-  if (CURRENT_PROJECT === 'OVERALL') {
-    return calculateOverallWoWMetrics(appData);
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 
   try {
@@ -60,6 +56,8 @@ function calculateWoWMetrics(appData) {
               }
             });
           });
+        } else if (CURRENT_PROJECT === 'OVERALL') {
+          allCampaigns = week.campaigns || [];
         } else {
           allCampaigns = week.campaigns || [];
           
@@ -92,30 +90,32 @@ function calculateWoWMetrics(appData) {
     });
 
     const campaignWoW = {};
-    const campaigns = {};
-    Object.values(campaignData).forEach(d => {
-      if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
-      campaigns[d.campaignId].push(d);
-    });
-
-    Object.keys(campaigns).forEach(campaignId => {
-      campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-      campaigns[campaignId].forEach((curr, i) => {
-        const key = `${campaignId}_${curr.weekStart}`;
-        campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-        
-        if (i > 0) {
-          const prev = campaigns[campaignId][i - 1];
-          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-          const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
-          campaignWoW[key] = { 
-            spendChangePercent: spendPct, 
-            eProfitChangePercent: profitPct, 
-            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
-          };
-        }
+    if (CURRENT_PROJECT !== 'OVERALL') {
+      const campaigns = {};
+      Object.values(campaignData).forEach(d => {
+        if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
+        campaigns[d.campaignId].push(d);
       });
-    });
+
+      Object.keys(campaigns).forEach(campaignId => {
+        campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        campaigns[campaignId].forEach((curr, i) => {
+          const key = `${campaignId}_${curr.weekStart}`;
+          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = campaigns[campaignId][i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
+            campaignWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
+            };
+          }
+        });
+      });
+    }
 
     const appWeekWoW = {};
     Object.keys(appWeekData).forEach(appName => {
@@ -159,90 +159,11 @@ function calculateWoWMetrics(appData) {
       });
     }
 
-    return { campaignWoW, appWeekWoW, sourceAppWoW, networkWoW: {} };
+    return { campaignWoW, appWeekWoW, sourceAppWoW };
   } catch (e) {
     console.error('Error calculating WoW metrics:', e);
-    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {}, networkWoW: {} };
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
-}
-
-function calculateOverallWoWMetrics(appData) {
-  const appWeekData = {};
-  const networkData = {};
-
-  Object.values(appData).forEach(app => {
-    appWeekData[app.appName] = {};
-    
-    Object.values(app.weeks).forEach(week => {
-      let weekSpend = 0;
-      let weekProfit = 0;
-      
-      if (week.networks) {
-        Object.values(week.networks).forEach(network => {
-          weekSpend += network.spend || 0;
-          weekProfit += network.eProfitForecast || 0;
-          
-          if (!networkData[network.networkId]) {
-            networkData[network.networkId] = {};
-          }
-          
-          networkData[network.networkId][week.weekStart] = {
-            weekStart: week.weekStart,
-            spend: network.spend,
-            profit: network.eProfitForecast
-          };
-        });
-      }
-      
-      appWeekData[app.appName][week.weekStart] = { 
-        weekStart: week.weekStart, 
-        spend: weekSpend, 
-        profit: weekProfit 
-      };
-    });
-  });
-
-  const appWeekWoW = {};
-  Object.keys(appWeekData).forEach(appName => {
-    const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-    weeks.forEach((curr, i) => {
-      const key = `${appName}_${curr.weekStart}`;
-      appWeekWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-      
-      if (i > 0) {
-        const prev = weeks[i - 1];
-        const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-        const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-        appWeekWoW[key] = { 
-          spendChangePercent: spendPct, 
-          eProfitChangePercent: profitPct, 
-          growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
-        };
-      }
-    });
-  });
-
-  const networkWoW = {};
-  Object.keys(networkData).forEach(networkId => {
-    const weeks = Object.values(networkData[networkId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
-    weeks.forEach((curr, i) => {
-      const key = `${networkId}_${curr.weekStart}`;
-      networkWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-      
-      if (i > 0) {
-        const prev = weeks[i - 1];
-        const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
-        const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
-        networkWoW[key] = { 
-          spendChangePercent: spendPct, 
-          eProfitChangePercent: profitPct, 
-          growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
-        };
-      }
-    });
-  });
-
-  return { campaignWoW: {}, appWeekWoW, sourceAppWoW: {}, networkWoW };
 }
 
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
@@ -408,80 +329,7 @@ function generateReportForDateRange(startDate, endDate) {
 }
 
 function updateProjectData(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No existing data to update`);
-    return;
-  }
-  
-  let earliestDate = null;
-  const data = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === 'WEEK') {
-      const weekRange = data[i][1];
-      const [startStr] = weekRange.split(' - ');
-      const startDate = new Date(startStr);
-      if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
-    }
-  }
-  
-  if (!earliestDate) {
-    console.log(`${projectName}: No week data found`);
-    return;
-  }
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  let endDate = new Date(today);
-  
-  if (dayOfWeek === 0) {
-    endDate.setDate(today.getDate() - 1);
-  } else {
-    endDate.setDate(today.getDate() - dayOfWeek);
-  }
-  
-  const dateRange = {
-    from: formatDateForAPI(earliestDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
-  
-  const raw = fetchProjectCampaignData(projectName, dateRange);
-  
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No data returned from API`);
-    return;
-  }
-  
-  const processed = processProjectApiData(projectName, raw);
-  
-  if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid data to process`);
-    return;
-  }
-  
-  clearProjectDataSilent(projectName);
-  
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    if (projectName === 'OVERALL') {
-      createOverallPivotTable(processed);
-    } else {
-      createEnhancedPivotTable(processed);
-    }
-    const cache = new CommentCache(projectName);
-    cache.applyCommentsToSheet();
-  } finally {
-    setCurrentProject(originalProject);
-  }
-  
-  console.log(`${projectName}: Update completed`);
+  updateProjectDataOptimized(projectName);
 }
 
 function updateAllDataToCurrent() {

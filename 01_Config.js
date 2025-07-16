@@ -2,12 +2,49 @@ var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Apps Database';
 
+var BEARER_TOKEN_CACHE = null;
+var BEARER_TOKEN_CACHE_TIME = null;
+var FALLBACK_BEARER_TOKEN = null;
+
 function getBearerToken() {
   try {
-    const settings = loadSettingsFromSheet();
-    return settings.bearerToken || '';
+    const now = new Date().getTime();
+    if (BEARER_TOKEN_CACHE && BEARER_TOKEN_CACHE_TIME && (now - BEARER_TOKEN_CACHE_TIME) < 300000) {
+      return BEARER_TOKEN_CACHE;
+    }
+    
+    const cachedToken = CacheService.getScriptCache().get('BEARER_TOKEN');
+    if (cachedToken) {
+      BEARER_TOKEN_CACHE = cachedToken;
+      BEARER_TOKEN_CACHE_TIME = now;
+      return cachedToken;
+    }
+    
+    const settings = loadSettingsFromSheetWithRetry();
+    const token = settings.bearerToken || '';
+    
+    if (token && token.length > 50) {
+      BEARER_TOKEN_CACHE = token;
+      BEARER_TOKEN_CACHE_TIME = now;
+      FALLBACK_BEARER_TOKEN = token;
+      CacheService.getScriptCache().put('BEARER_TOKEN', token, 3600);
+    }
+    
+    return token;
   } catch (e) {
     console.error('Error loading bearer token:', e);
+    if (FALLBACK_BEARER_TOKEN) {
+      console.log('Using fallback bearer token');
+      return FALLBACK_BEARER_TOKEN;
+    }
+    
+    const props = PropertiesService.getScriptProperties();
+    const propToken = props.getProperty('BEARER_TOKEN');
+    if (propToken) {
+      console.log('Using property service bearer token');
+      return propToken;
+    }
+    
     return '';
   }
 }
@@ -25,9 +62,16 @@ function isBearerTokenConfigured() {
   return token && token.length > 50;
 }
 
+function clearTrickyCaches() {
+  BUNDLE_ID_CACHE = {};
+  APPS_DB_CACHE = null;
+  APPS_DB_CACHE_TIME = null;
+  console.log('TRICKY caches cleared');
+}
+
 function getTargetEROAS(projectName, appName = null) {
   try {
-    const settings = loadSettingsFromSheet();
+    const settings = loadSettingsFromSheetWithRetry();
     
     if (projectName === 'TRICKY') {
       return settings.targetEROAS.tricky || 250;
@@ -56,7 +100,7 @@ function getTargetEROAS(projectName, appName = null) {
 
 function getGrowthThresholds(projectName) {
   try {
-    const settings = loadSettingsFromSheet();
+    const settings = loadSettingsFromSheetWithRetry();
     return settings.growthThresholds[projectName] || getDefaultGrowthThresholds();
   } catch (e) {
     console.error('Error loading growth thresholds:', e);
@@ -88,7 +132,7 @@ function getDefaultGrowthThresholds() {
 
 function isAutoCacheEnabled() {
   try {
-    const settings = loadSettingsFromSheet();
+    const settings = loadSettingsFromSheetWithRetry();
     return settings.automation.autoCache;
   } catch (e) {
     return false;
@@ -97,11 +141,77 @@ function isAutoCacheEnabled() {
 
 function isAutoUpdateEnabled() {
   try {
-    const settings = loadSettingsFromSheet();
+    const settings = loadSettingsFromSheetWithRetry();
     return settings.automation.autoUpdate;
   } catch (e) {
     return false;
   }
+}
+
+function getUpdateTriggersStatus() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    const updateFunctions = [
+      'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
+      'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall'
+    ];
+    
+    const updateTriggers = triggers.filter(function(t) {
+      return updateFunctions.includes(t.getHandlerFunction());
+    });
+    
+    return {
+      enabled: isAutoUpdateEnabled(),
+      triggersCount: updateTriggers.length,
+      expectedCount: 8,
+      isComplete: updateTriggers.length === 8,
+      triggersList: updateTriggers.map(function(t) {
+        return t.getHandlerFunction();
+      })
+    };
+  } catch (e) {
+    console.error('Error getting update triggers status:', e);
+    return {
+      enabled: false,
+      triggersCount: 0,
+      expectedCount: 8,
+      isComplete: false,
+      triggersList: []
+    };
+  }
+}
+
+function loadSettingsFromSheetWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const settings = loadSettingsFromSheet();
+      return settings;
+    } catch (e) {
+      console.error(`Settings load attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) {
+        return getDefaultSettings();
+      }
+      Utilities.sleep(1000 * attempt);
+    }
+  }
+}
+
+function getDefaultSettings() {
+  return {
+    bearerToken: FALLBACK_BEARER_TOKEN || '',
+    targetEROAS: { tricky: 250, business: 140, ceg: 150 },
+    automation: { autoCache: false, autoUpdate: false },
+    growthThresholds: {
+      TRICKY: getDefaultGrowthThresholds(),
+      MOLOCO: getDefaultGrowthThresholds(),
+      REGULAR: getDefaultGrowthThresholds(),
+      GOOGLE_ADS: getDefaultGrowthThresholds(),
+      APPLOVIN: getDefaultGrowthThresholds(),
+      MINTEGRAL: getDefaultGrowthThresholds(),
+      INCENT: getDefaultGrowthThresholds(),
+      OVERALL: getDefaultGrowthThresholds()
+    }
+  };
 }
 
 function getTrickyTargetEROAS(appName) { return getTargetEROAS('TRICKY', appName); }
@@ -135,17 +245,6 @@ var UNIFIED_MEASURES = [
   { id: "e_roas_forecast", day: 365 }, 
   { id: "e_profit_forecast", day: 730 },
   { id: "e_roas_forecast", day: 730 }
-];
-
-var OVERALL_MEASURES = [
-  { id: "cpi", day: null },
-  { id: "installs", day: null },
-  { id: "spend", day: null },
-  { id: "retention_rate", day: 1 },
-  { id: "roas", day: 1 },
-  { id: "retention_rate", day: 7 },
-  { id: "e_roas_forecast", day: 365 },
-  { id: "e_profit_forecast", day: 730 }
 ];
 
 var PROJECTS = {
@@ -335,10 +434,9 @@ var PROJECTS = {
       },
       GROUP_BY: [
         { dimension: "DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_NETWORK_HID" },
         { dimension: "APP" }
       ],
-      MEASURES: OVERALL_MEASURES
+      MEASURES: UNIFIED_MEASURES
     }
   }
 };
@@ -420,7 +518,6 @@ var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
-  NETWORK_ROW: { background: '#f0f8ff' },
   SOURCE_APP_ROW: { background: '#f0f8ff' },
   CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },

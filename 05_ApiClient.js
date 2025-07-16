@@ -1,6 +1,7 @@
 var BUNDLE_ID_CACHE = {};
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
+var TRICKY_OPTIMIZED_CACHE = null;
 
 function fetchCampaignData(dateRange) {
   const config = getCurrentConfig();
@@ -251,6 +252,53 @@ function getGraphQLQuery() {
   }`;
 }
 
+function initTrickyOptimizedCache() {
+  if (CURRENT_PROJECT !== 'TRICKY') return null;
+  
+  if (TRICKY_OPTIMIZED_CACHE) return TRICKY_OPTIMIZED_CACHE;
+  
+  console.log('Initializing TRICKY optimized cache...');
+  const appsDb = new AppsDatabase('TRICKY');
+  appsDb.ensureCacheUpToDate();
+  const appsDbCache = appsDb.loadFromCache();
+  
+  TRICKY_OPTIMIZED_CACHE = {
+    appsDbCache: appsDbCache,
+    bundleIdCache: {},
+    processed: 0,
+    cacheHits: 0
+  };
+  
+  console.log(`TRICKY cache initialized: ${Object.keys(appsDbCache).length} apps`);
+  return TRICKY_OPTIMIZED_CACHE;
+}
+
+function batchExtractBundleIds(campaignNames) {
+  if (CURRENT_PROJECT !== 'TRICKY') return {};
+  
+  const cache = initTrickyOptimizedCache();
+  const results = {};
+  let newExtractions = 0;
+  
+  campaignNames.forEach(campaignName => {
+    if (cache.bundleIdCache[campaignName] !== undefined) {
+      results[campaignName] = cache.bundleIdCache[campaignName];
+      cache.cacheHits++;
+    } else {
+      const bundleId = extractBundleIdFromCampaign(campaignName);
+      cache.bundleIdCache[campaignName] = bundleId;
+      results[campaignName] = bundleId;
+      newExtractions++;
+    }
+  });
+  
+  if (newExtractions > 0) {
+    console.log(`Batch extracted ${newExtractions} bundle IDs, ${cache.cacheHits} cache hits`);
+  }
+  
+  return results;
+}
+
 function getOptimizedAppsDb() {
   const now = new Date().getTime();
   
@@ -301,40 +349,202 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   return bundleId;
 }
 
-function getNetworkDisplayName(networkId) {
-  const networkMap = {
-    'appgrowth_int': 'AppGrowth',
-    'inmobidsp_int': 'InMobidsp', 
-    'thespotlight_int': 'TheSpotlight',
-    'aura_int': 'Aura',
-    'moloco_int': 'Moloco',
-    'mintegral_int': 'Mintegral',
-    'googleadwords_int': 'Google Ads',
-    'applovin_int': 'AppLovin',
-    'ayetstudios_int': 'Ayet Studios',
-    'engagerewards_int': 'Engage Rewards',
-    'adjoe_int': 'Adjoe',
-    'mistplay_int': 'Mistplay',
-    '234187180623265792': 'AppGrowth',
-    '445856363109679104': 'Moloco',
-    '378302368699121664': 'Google Ads',
-    '261208778387488768': 'AppLovin',
-    '756604737398243328': 'Mintegral',
-    '1580763469207044096': 'Incent Network 1',
-    '932245122865692672': 'Incent Network 2',
-    '6958061424287416320': 'Incent Network 3',
-    '6070852297695428608': 'Incent Network 4',
-    '5354779956943519744': 'Incent Network 5'
-  };
-  
-  return networkMap[networkId] || networkId;
+function processApiData(rawData, includeLastWeek = null) {
+  if (CURRENT_PROJECT === 'TRICKY') {
+    return processApiDataTrickyOptimized(rawData, includeLastWeek);
+  }
+  return processApiDataStandard(rawData, includeLastWeek);
 }
 
-function processApiData(rawData, includeLastWeek = null) {
-  if (CURRENT_PROJECT === 'OVERALL') {
-    return processOverallApiData(rawData, includeLastWeek);
-  }
+function processApiDataTrickyOptimized(rawData, includeLastWeek = null) {
+  const stats = rawData.data.analytics.richStats.stats;
+  const appData = {};
+
+  const today = new Date();
+  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
+
+  const dayOfWeek = today.getDay();
+  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
+
+  console.log(`TRICKY Optimized: Processing ${stats.length} records...`);
+  console.log(`Current week start: ${currentWeekStart}`);
+  console.log(`Include last week: ${shouldIncludeLastWeek}`);
+
+  const cache = initTrickyOptimizedCache();
   
+  const campaignNames = [];
+  const validRows = [];
+  
+  stats.forEach((row, index) => {
+    try {
+      const date = row[0].value;
+      const monday = getMondayOfWeek(new Date(date));
+      const weekKey = formatDateForAPI(monday);
+
+      if (weekKey >= currentWeekStart) return;
+      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
+
+      const campaign = row[1];
+      const app = row[2];
+      const metricsStartIndex = 3;
+      
+      if (row.length < metricsStartIndex + 12) return;
+      
+      const spendValue = parseFloat(row[metricsStartIndex + 3].value) || 0;
+      if (spendValue <= 0) return;
+      
+      let campaignName = 'Unknown';
+      if (campaign) {
+        if (campaign.campaignName) {
+          campaignName = campaign.campaignName;
+        } else if (campaign.value) {
+          campaignName = campaign.value;
+        }
+      }
+      
+      campaignNames.push(campaignName);
+      validRows.push({ row, index, date, weekKey, campaign, app, campaignName, spendValue });
+      
+    } catch (error) {
+      console.error(`Error pre-processing row ${index}:`, error);
+    }
+  });
+
+  console.log(`TRICKY Optimized: Pre-filtered to ${validRows.length} valid rows`);
+  
+  const bundleIdMap = batchExtractBundleIds(campaignNames);
+  console.log(`TRICKY Optimized: Bundle ID extraction completed`);
+
+  const groupedData = {};
+  
+  validRows.forEach(({ row, date, weekKey, campaign, app, campaignName, spendValue }) => {
+    try {
+      const metricsStartIndex = 3;
+      
+      const metrics = {
+        cpi: parseFloat(row[metricsStartIndex].value) || 0,
+        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
+        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
+        spend: spendValue,
+        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
+        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,
+        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,
+        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
+        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,
+        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,
+        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
+        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0
+      };
+
+      const sunday = getSundayOfWeek(new Date(date));
+      const appKey = app.id;
+      const bundleId = bundleIdMap[campaignName];
+      const geo = extractGeoFromCampaign(campaignName);
+      const sourceApp = extractSourceApp(campaignName);
+      
+      const campaignId = campaign?.campaignId || campaign?.id || 'Unknown';
+
+      const campaignData = {
+        date: date,
+        campaignId: campaignId,
+        campaignName: campaignName,
+        ...metrics,
+        status: campaign?.status || 'Unknown',
+        type: campaign?.type || 'Unknown',
+        geo,
+        sourceApp: sourceApp,
+        isAutomated: campaign?.isAutomated || false,
+        extractedBundleId: bundleId
+      };
+      
+      if (!groupedData[appKey]) {
+        groupedData[appKey] = {
+          appId: app.id,
+          appName: app.name,
+          platform: app.platform,
+          bundleId: app.bundleId,
+          weeks: {}
+        };
+      }
+      
+      if (!groupedData[appKey].weeks[weekKey]) {
+        groupedData[appKey].weeks[weekKey] = {
+          weekStart: formatDateForAPI(getMondayOfWeek(new Date(date))),
+          weekEnd: formatDateForAPI(sunday),
+          campaigns: []
+        };
+      }
+      
+      groupedData[appKey].weeks[weekKey].campaigns.push(campaignData);
+      cache.processed++;
+      
+    } catch (error) {
+      console.error(`Error processing grouped row:`, error);
+    }
+  });
+
+  console.log(`TRICKY Optimized: Grouped ${cache.processed} campaigns`);
+  console.log(`TRICKY Optimized: Starting source app optimization...`);
+
+  Object.keys(groupedData).forEach(appKey => {
+    const appInfo = groupedData[appKey];
+    
+    if (!appData[appKey]) {
+      appData[appKey] = {
+        appId: appInfo.appId,
+        appName: appInfo.appName,
+        platform: appInfo.platform,
+        bundleId: appInfo.bundleId,
+        weeks: {}
+      };
+    }
+    
+    Object.keys(appInfo.weeks).forEach(weekKey => {
+      const weekInfo = appInfo.weeks[weekKey];
+      
+      const bundleGroups = {};
+      weekInfo.campaigns.forEach(campaign => {
+        const bundleId = campaign.extractedBundleId || 'unknown';
+        if (!bundleGroups[bundleId]) {
+          bundleGroups[bundleId] = [];
+        }
+        bundleGroups[bundleId].push(campaign);
+      });
+      
+      const sourceApps = {};
+      const sortedBundleIds = Object.keys(bundleGroups).sort();
+      
+      sortedBundleIds.forEach(bundleId => {
+        const campaigns = bundleGroups[bundleId];
+        campaigns.sort((a, b) => b.spend - a.spend);
+        
+        const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, cache.appsDbCache);
+        
+        sourceApps[bundleId] = {
+          sourceAppId: bundleId,
+          sourceAppName: sourceAppDisplayName,
+          sourceAppIconUrl: '',
+          sourceAppStoreUrl: '',
+          campaigns: campaigns
+        };
+      });
+      
+      appData[appKey].weeks[weekKey] = {
+        weekStart: weekInfo.weekStart,
+        weekEnd: weekInfo.weekEnd,
+        sourceApps: sourceApps,
+        campaigns: []
+      };
+    });
+  });
+
+  console.log(`TRICKY Optimized: Processing completed - ${cache.processed} records processed`);
+  console.log(`TRICKY Optimized: Cache efficiency - ${cache.cacheHits} hits`);
+  return appData;
+}
+
+function processApiDataStandard(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
 
@@ -350,12 +560,6 @@ function processApiData(rawData, includeLastWeek = null) {
   console.log(`Last week start: ${lastWeekStart}`);
   console.log(`Include last week: ${shouldIncludeLastWeek}`);
 
-  let appsDbCache = null;
-  if (CURRENT_PROJECT === 'TRICKY') {
-    appsDbCache = getOptimizedAppsDb();
-  }
-
-  const trickyWeeklyData = {};
   let processedCount = 0;
 
   stats.forEach((row, index) => {
@@ -372,9 +576,17 @@ function processApiData(rawData, includeLastWeek = null) {
         return;
       }
 
-      const campaign = row[1];
-      const app = row[2];
-      const metricsStartIndex = 3;
+      let campaign, app, metricsStartIndex;
+      
+      if (CURRENT_PROJECT === 'OVERALL') {
+        campaign = null;
+        app = row[1];
+        metricsStartIndex = 2;
+      } else {
+        campaign = row[1];
+        app = row[2];
+        metricsStartIndex = 3;
+      }
       
       const metrics = {
         cpi: parseFloat(row[metricsStartIndex].value) || 0,
@@ -394,6 +606,42 @@ function processApiData(rawData, includeLastWeek = null) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
+      if (CURRENT_PROJECT === 'OVERALL') {
+        if (!appData[appKey]) {
+          appData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            weeks: {}
+          };
+        }
+
+        if (!appData[appKey].weeks[weekKey]) {
+          appData[appKey].weeks[weekKey] = {
+            weekStart: formatDateForAPI(monday),
+            weekEnd: formatDateForAPI(sunday),
+            campaigns: []
+          };
+        }
+        
+        const virtualCampaignData = {
+          date: date,
+          campaignId: `app_${app.id}_${weekKey}`,
+          campaignName: app.name,
+          ...metrics,
+          status: 'Active',
+          type: 'Overall',
+          geo: 'ALL',
+          sourceApp: app.name,
+          isAutomated: false
+        };
+        
+        appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
+        processedCount++;
+        return;
+      }
+
       let campaignName = 'Unknown';
       let campaignId = 'Unknown';
       
@@ -422,172 +670,6 @@ function processApiData(rawData, includeLastWeek = null) {
         isAutomated: campaign?.isAutomated || false
       };
 
-      if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
-        const bundleId = getCachedBundleId(campaignName);
-        
-        if (!trickyWeeklyData[appKey]) {
-          trickyWeeklyData[appKey] = {
-            appId: app.id,
-            appName: app.name,
-            platform: app.platform,
-            bundleId: app.bundleId,
-            weeks: {}
-          };
-        }
-        
-        if (!trickyWeeklyData[appKey].weeks[weekKey]) {
-          trickyWeeklyData[appKey].weeks[weekKey] = {
-            weekStart: formatDateForAPI(monday),
-            weekEnd: formatDateForAPI(sunday),
-            campaigns: []
-          };
-        }
-        
-        campaignData.extractedBundleId = bundleId;
-        trickyWeeklyData[appKey].weeks[weekKey].campaigns.push(campaignData);
-        
-      } else {
-        if (!appData[appKey]) {
-          appData[appKey] = {
-            appId: app.id,
-            appName: app.name,
-            platform: app.platform,
-            bundleId: app.bundleId,
-            weeks: {}
-          };
-        }
-
-        if (!appData[appKey].weeks[weekKey]) {
-          appData[appKey].weeks[weekKey] = {
-            weekStart: formatDateForAPI(monday),
-            weekEnd: formatDateForAPI(sunday),
-            campaigns: []
-          };
-        }
-        
-        appData[appKey].weeks[weekKey].campaigns.push(campaignData);
-      }
-
-      processedCount++;
-      
-      if (processedCount % 100 === 0) {
-        console.log(`Processed ${processedCount}/${stats.length} records...`);
-      }
-
-    } catch (error) {
-      console.error(`Error processing row ${index}:`, error);
-    }
-  });
-
-  if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
-    console.log('Optimized TRICKY grouping...');
-    
-    Object.keys(trickyWeeklyData).forEach(appKey => {
-      const appInfo = trickyWeeklyData[appKey];
-      
-      if (!appData[appKey]) {
-        appData[appKey] = {
-          appId: appInfo.appId,
-          appName: appInfo.appName,
-          platform: appInfo.platform,
-          bundleId: appInfo.bundleId,
-          weeks: {}
-        };
-      }
-      
-      Object.keys(appInfo.weeks).forEach(weekKey => {
-        const weekInfo = appInfo.weeks[weekKey];
-        
-        const bundleGroups = {};
-        weekInfo.campaigns.forEach(campaign => {
-          const bundleId = campaign.extractedBundleId || 'unknown';
-          if (!bundleGroups[bundleId]) {
-            bundleGroups[bundleId] = [];
-          }
-          bundleGroups[bundleId].push(campaign);
-        });
-        
-        const sourceApps = {};
-        const sortedBundleIds = Object.keys(bundleGroups).sort();
-        
-        sortedBundleIds.forEach(bundleId => {
-          const campaigns = bundleGroups[bundleId];
-          campaigns.sort((a, b) => b.spend - a.spend);
-          
-          const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
-          
-          sourceApps[bundleId] = {
-            sourceAppId: bundleId,
-            sourceAppName: sourceAppDisplayName,
-            sourceAppIconUrl: '',
-            sourceAppStoreUrl: '',
-            campaigns: campaigns
-          };
-        });
-        
-        appData[appKey].weeks[weekKey] = {
-          weekStart: weekInfo.weekStart,
-          weekEnd: weekInfo.weekEnd,
-          sourceApps: sourceApps,
-          campaigns: []
-        };
-      });
-    });
-    
-    console.log('TRICKY optimized grouping completed');
-  }
-
-  console.log(`Processing completed: ${processedCount} records processed`);
-  return appData;
-}
-
-function processOverallApiData(rawData, includeLastWeek = null) {
-  const stats = rawData.data.analytics.richStats.stats;
-  const appData = {};
-  const today = new Date();
-  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
-  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
-  const dayOfWeek = today.getDay();
-  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
-
-  console.log(`Processing OVERALL: ${stats.length} records...`);
-
-  stats.forEach((row, index) => {
-    try {
-      const date = row[0].value;
-      const monday = getMondayOfWeek(new Date(date));
-      const weekKey = formatDateForAPI(monday);
-
-      if (weekKey >= currentWeekStart) return;
-      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
-
-      const network = row[1];
-      const app = row[2];
-      const metricsStartIndex = 3;
-      
-      if (row.length < metricsStartIndex + 8) return;
-      
-      const metrics = {
-        cpi: parseFloat(row[metricsStartIndex].value) || 0,
-        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-        spend: parseFloat(row[metricsStartIndex + 2].value) || 0,
-        rrD1: parseFloat(row[metricsStartIndex + 3].value) || 0,
-        roas: parseFloat(row[metricsStartIndex + 4].value) || 0,
-        rrD7: parseFloat(row[metricsStartIndex + 5].value) || 0,
-        eRoasForecast: parseFloat(row[metricsStartIndex + 6].value) || 0,
-        eProfitForecast: parseFloat(row[metricsStartIndex + 7].value) || 0,
-        ipm: 0,
-        eArpuForecast: 0,
-        roasD7: 0,
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 6].value) || 0
-      };
-      
-      const sunday = getSundayOfWeek(new Date(date));
-      const appKey = app.id;
-
-      const networkId = network.id || network.value || 'unknown';
-      const networkName = getNetworkDisplayName(networkId);
-
       if (!appData[appKey]) {
         appData[appKey] = {
           appId: app.id,
@@ -602,38 +684,23 @@ function processOverallApiData(rawData, includeLastWeek = null) {
         appData[appKey].weeks[weekKey] = {
           weekStart: formatDateForAPI(monday),
           weekEnd: formatDateForAPI(sunday),
-          networks: {}
+          campaigns: []
         };
       }
-
-      if (!appData[appKey].weeks[weekKey].networks[networkId]) {
-        appData[appKey].weeks[weekKey].networks[networkId] = {
-          networkId: networkId,
-          networkName: networkName,
-          ...metrics
-        };
-      } else {
-        const existing = appData[appKey].weeks[weekKey].networks[networkId];
-        const totalInstalls = existing.installs + metrics.installs;
-        const totalSpend = existing.spend + metrics.spend;
-        
-        existing.cpi = totalInstalls > 0 ? totalSpend / totalInstalls : 0;
-        existing.installs = totalInstalls;
-        existing.spend = totalSpend;
-        existing.rrD1 = ((existing.rrD1 * existing.installs) + (metrics.rrD1 * metrics.installs)) / totalInstalls;
-        existing.roas = totalSpend > 0 ? ((existing.roas * existing.spend) + (metrics.roas * metrics.spend)) / totalSpend : 0;
-        existing.rrD7 = ((existing.rrD7 * existing.installs) + (metrics.rrD7 * metrics.installs)) / totalInstalls;
-        existing.eRoasForecast = totalSpend > 0 ? ((existing.eRoasForecast * existing.spend) + (metrics.eRoasForecast * metrics.spend)) / totalSpend : 0;
-        existing.eProfitForecast += metrics.eProfitForecast;
-        existing.eRoasForecastD730 = existing.eRoasForecast;
+      
+      appData[appKey].weeks[weekKey].campaigns.push(campaignData);
+      processedCount++;
+      
+      if (processedCount % 100 === 0) {
+        console.log(`Processed ${processedCount}/${stats.length} records...`);
       }
 
     } catch (error) {
-      console.error('Error processing OVERALL row:', error);
+      console.error(`Error processing row ${index}:`, error);
     }
   });
 
-  console.log(`OVERALL processing completed: ${Object.keys(appData).length} apps`);
+  console.log(`Processing completed: ${processedCount} records processed`);
   return appData;
 }
 
@@ -764,5 +831,6 @@ function clearTrickyCaches() {
   BUNDLE_ID_CACHE = {};
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
+  TRICKY_OPTIMIZED_CACHE = null;
   console.log('TRICKY caches cleared');
 }
