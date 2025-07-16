@@ -1,18 +1,21 @@
+/**
+ * Menu Functions - ОБНОВЛЕНО: добавлено принудительное обновление настроек
+ */
+
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   var menu = ui.createMenu('📊 Campaign Report');
   
-  menu.addItem('📈 Generate Report (Any Period)...', 'smartReportWizard')
-      .addItem('🔄 Update All to Current', 'updateAllProjectsInBatches')
+  menu.addItem('📈 Generate Report...', 'smartReportWizard')
+      .addItem('🔄 Update All to Current', 'updateAllProjectsToCurrent')
       .addItem('🎯 Update Selected Projects', 'updateSelectedProjectsToCurrent')
       .addSeparator()
       .addItem('⚙️ Open Settings Sheet', 'openSettingsSheet')
       .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
       .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
       .addItem('📊 System Status', 'showQuickStatus')
-      .addItem('🔄 Recreate Triggers', 'recreateAllTriggers')
       .addSeparator()
       .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
       .addItem('🔍 Quick API Check', 'quickAPICheckAll')
@@ -22,97 +25,6 @@ function onOpen() {
       .addItem('🐛 Debug Single Project', 'debugSingleProject')
       .addItem('🐙 GitHub Repository', 'openGitHubRepo')
       .addToUi();
-}
-
-function updateAllProjectsInBatches() {
-  var ui = SpreadsheetApp.getUi();
-  
-  if (!isBearerTokenConfigured()) {
-    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
-    return;
-  }
-  
-  var result = ui.alert('🔄 Update All Projects', 
-    'Update all projects in batches to avoid timeouts?\n\nBatch 1: TRICKY, MOLOCO, REGULAR, GOOGLE_ADS\nBatch 2: APPLOVIN, MINTEGRAL, INCENT, OVERALL\n\nThis will be slower but more reliable.', 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
-  
-  try {
-    var batch1 = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS'];
-    var batch2 = ['APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
-    
-    console.log('Starting batch 1...');
-    var batch1Results = updateProjectBatch(batch1, 1);
-    
-    if (batch1Results.successCount > 0) {
-      console.log('Waiting 30 seconds before batch 2...');
-      Utilities.sleep(30000);
-    }
-    
-    console.log('Starting batch 2...');
-    var batch2Results = updateProjectBatch(batch2, 2);
-    
-    var totalSuccess = batch1Results.successCount + batch2Results.successCount;
-    var totalErrors = batch1Results.errors.concat(batch2Results.errors);
-    
-    try {
-      console.log('Sorting project sheets...');
-      Utilities.sleep(5000);
-      sortProjectSheetsWithRetry();
-    } catch (e) {
-      console.error('Error sorting sheets:', e);
-      totalErrors.push(`Sorting: ${e.toString().substring(0, 50)}...`);
-    }
-    
-    var message = `✅ Batch update completed!\n\n• Successfully updated: ${totalSuccess}/8 projects`;
-    if (totalErrors.length > 0) {
-      message += `\n• Errors:\n${totalErrors.join('\n')}`;
-      message += '\n\n💡 TIP: Try updating failed projects individually.';
-    }
-    
-    ui.alert('Update Complete', message, ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert('Error', 'Error during batch update: ' + e.toString(), ui.ButtonSet.OK);
-  }
-}
-
-function updateProjectBatch(projects, batchNumber) {
-  var successCount = 0;
-  var errors = [];
-  
-  console.log(`=== BATCH ${batchNumber} START ===`);
-  
-  projects.forEach(function(proj, index) {
-    try {
-      console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
-      
-      if (index > 0) {
-        console.log('Waiting 8 seconds before next project...');
-        Utilities.sleep(8000);
-      }
-      
-      updateProjectDataOptimized(proj);
-      successCount++;
-      console.log(`${proj} updated successfully`);
-      
-    } catch (e) {
-      console.error(`Error updating ${proj}:`, e);
-      var errorMsg = e.toString();
-      if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
-        errors.push(`${proj}: Timeout - try individually`);
-      } else {
-        errors.push(`${proj}: ${errorMsg.substring(0, 50)}...`);
-      }
-      
-      console.log('Waiting 5 seconds after error...');
-      Utilities.sleep(5000);
-    }
-  });
-  
-  console.log(`=== BATCH ${batchNumber} END ===`);
-  
-  return { successCount: successCount, errors: errors };
 }
 
 function updateSelectedProjectsToCurrent() {
@@ -141,38 +53,33 @@ function updateSelectedProjectsToCurrent() {
     var successCount = 0;
     var errors = [];
     
+    ui.alert('Processing...', `Updating ${selected.length} projects. Please wait...`, ui.ButtonSet.OK);
+    
     selected.forEach(function(proj, index) {
       try {
         var projectName = proj.toUpperCase();
         console.log(`Updating ${projectName} (${index + 1}/${selected.length})...`);
         
         if (index > 0) {
-          console.log('Waiting 8 seconds before next project...');
-          Utilities.sleep(8000);
+          console.log('Waiting before next project...');
+          Utilities.sleep(4000);
         }
         
-        updateProjectDataOptimized(projectName);
+        updateProjectDataWithRetry(projectName);
         successCount++;
         console.log(`${projectName} updated successfully`);
         
       } catch (e) {
         console.error(`Error updating ${proj}:`, e);
-        var errorMsg = e.toString();
-        if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
-          errors.push(`${proj}: Timeout - try individually`);
-        } else {
-          errors.push(`${proj}: ${errorMsg.substring(0, 50)}...`);
-        }
-        
-        console.log('Waiting 5 seconds after error...');
-        Utilities.sleep(5000);
+        errors.push(`${proj}: ${e.toString().substring(0, 50)}...`);
+        Utilities.sleep(2000);
       }
     });
     
     if (successCount > 0) {
       try {
         console.log('Sorting project sheets...');
-        Utilities.sleep(3000);
+        Utilities.sleep(2000);
         sortProjectSheetsWithRetry();
       } catch (e) {
         console.error('Error sorting sheets:', e);
@@ -192,7 +99,7 @@ function updateSelectedProjectsToCurrent() {
   }
 }
 
-function updateSingleProject() {
+function updateAllProjectsToCurrent() {
   var ui = SpreadsheetApp.getUi();
   
   if (!isBearerTokenConfigured()) {
@@ -200,23 +107,60 @@ function updateSingleProject() {
     return;
   }
   
-  var project = showChoice('Select Project to Update:', MENU_PROJECTS);
-  if (!project) return;
+  var result = ui.alert('🔄 Update All Projects', 
+    'This will update all projects with the latest data (up to last complete week).\n\nThis may take several minutes. Continue?', 
+    ui.ButtonSet.YES_NO);
   
-  var projectName = MENU_PROJECTS[project-1].toUpperCase();
+  if (result !== ui.Button.YES) return;
   
   try {
-    console.log(`Updating single project: ${projectName}`);
-    updateProjectDataOptimized(projectName);
-    ui.alert('✅ Success', `${projectName} updated successfully!`, ui.ButtonSet.OK);
-  } catch (e) {
-    console.error(`Error updating ${projectName}:`, e);
-    var errorMsg = e.toString();
-    if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
-      ui.alert('⏱️ Timeout', `${projectName} update timed out. Try reducing date range or check API status.`, ui.ButtonSet.OK);
-    } else {
-      ui.alert('❌ Error', `Error updating ${projectName}:\n\n${errorMsg}`, ui.ButtonSet.OK);
+    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    var successCount = 0;
+    var errors = [];
+    
+    ui.alert('Processing...', 'Starting batch update. Please wait...', ui.ButtonSet.OK);
+    
+    projects.forEach(function(proj, index) {
+      try {
+        console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
+        
+        if (index > 0) {
+          console.log('Waiting before next project...');
+          Utilities.sleep(5000);
+        }
+        
+        updateProjectDataWithRetry(proj);
+        successCount++;
+        console.log(`${proj} updated successfully`);
+        
+      } catch (e) {
+        console.error(`Error updating ${proj}:`, e);
+        errors.push(`${proj}: ${e.toString().substring(0, 50)}...`);
+        Utilities.sleep(3000);
+      }
+    });
+    
+    if (successCount > 0) {
+      try {
+        console.log('Sorting project sheets...');
+        Utilities.sleep(2000);
+        sortProjectSheetsWithRetry();
+        console.log('Sheets sorted successfully');
+      } catch (e) {
+        console.error('Error sorting sheets:', e);
+        errors.push(`Sorting: ${e.toString().substring(0, 50)}...`);
+      }
     }
+    
+    var message = `✅ Update completed!\n\n• Successfully updated: ${successCount}/${projects.length} projects`;
+    if (errors.length > 0) {
+      message += `\n• Errors:\n${errors.join('\n')}`;
+      message += '\n\n💡 TIP: Try updating projects individually if errors persist.';
+    }
+    
+    ui.alert('Update Complete', message, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Error during update: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
 
@@ -262,7 +206,7 @@ function showQuickStatus() {
   
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-  var updateTriggers = getUpdateTriggers();
+  var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
   
   var cacheEnabled = isAutoCacheEnabled();
   var updateEnabled = isAutoUpdateEnabled();
@@ -274,11 +218,11 @@ function showQuickStatus() {
   if (!cacheEnabled && cacheTrigger) {
     syncIssues.push('• Cache trigger exists but disabled (will remove)');
   }
-  if (updateEnabled && updateTriggers.length !== 8) {
-    syncIssues.push('• Update triggers incomplete (will auto-create)');
+  if (updateEnabled && !updateTrigger) {
+    syncIssues.push('• Update trigger missing (will auto-create)');
   }
-  if (!updateEnabled && updateTriggers.length > 0) {
-    syncIssues.push('• Update triggers exist but disabled (will remove)');
+  if (!updateEnabled && updateTrigger) {
+    syncIssues.push('• Update trigger exists but disabled (will remove)');
   }
   
   if (syncIssues.length > 0) {
@@ -290,33 +234,13 @@ function showQuickStatus() {
   
   message += '📅 AUTOMATION SCHEDULE:\n';
   message += '• Auto Cache: Daily at 2:00 AM\n';
-  message += '• Auto Update: Exact times:\n';
-  message += '  - TRICKY: 5:00 AM\n';
-  message += '  - MOLOCO: 5:00 AM\n';
-  message += '  - REGULAR: 5:00 AM\n';
-  message += '  - GOOGLE_ADS: 5:00 AM\n';
-  message += '  - APPLOVIN: 5:00 AM\n';
-  message += '  - MINTEGRAL: 5:00 AM\n';
-  message += '  - INCENT: 6:00 AM\n';
-  message += '  - OVERALL: 6:00 AM\n\n';
+  message += '• Auto Update: Daily at 5:00 AM\n';
+  message += '• Previous week data: Included starting from Tuesday\n\n';
   
-  message += '💡 TIP: Use "📈 Generate Report" for flexible periods (any number of days)\n';
-  message += '🔧 Use "🔄 Update All" for batch processing or update projects individually\n';
-  message += '⚠️ Large periods (>180 days) may cause timeouts - use date ranges instead';
+  message += '💡 TIP: Use Settings sheet to configure all options\n';
+  message += '🔧 Use "Force Update Settings" if you have old targets';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
-}
-
-function getUpdateTriggers() {
-  var triggers = ScriptApp.getProjectTriggers();
-  var updateFunctions = [
-    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
-    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall'
-  ];
-  
-  return triggers.filter(function(t) {
-    return updateFunctions.includes(t.getHandlerFunction());
-  });
 }
 
 function quickAPICheckAll() {
@@ -368,7 +292,7 @@ function smartReportWizard() {
   var scope = showChoice('📈 Generate Report - Step 1/3', ['All Projects Together', 'Single Project', 'Custom Selection']);
   if (!scope) return;
   
-  var period = showChoice('📅 Select Period - Step 2/3', ['Last 30 days', 'Last 60 days', 'Last 90 days', 'Custom days (any number)', 'Date range (specific dates)']);
+  var period = showChoice('📅 Select Period - Step 2/3', ['Last 30 days', 'Last 60 days', 'Last 90 days', 'Custom days', 'Date range']);
   if (!period) return;
   
   var days = [30, 60, 90];
@@ -377,7 +301,7 @@ function smartReportWizard() {
     if (period <= 3) {
       quickGenerateAllForDays(days[period-1]);
     } else if (period === 4) {
-      var customDays = promptCustomDays();
+      var customDays = promptNumber('Enter days:', [120, 360]);
       if (customDays) quickGenerateAllForDays(customDays);
     } else {
       var dates = promptDateRange();
@@ -391,7 +315,7 @@ function smartReportWizard() {
     if (period <= 3) {
       generateProjectReport(projectName, days[period-1]);
     } else if (period === 4) {
-      var customDays = promptCustomDays();
+      var customDays = promptNumber('Enter days:', [120, 360]);
       if (customDays) generateProjectReport(projectName, customDays);
     } else {
       var dates = promptDateRange();
@@ -404,7 +328,7 @@ function smartReportWizard() {
     if (period <= 3) {
       runSelectedProjects(selected, days[period-1]);
     } else if (period === 4) {
-      var customDays = promptCustomDays();
+      var customDays = promptNumber('Enter days:', [120, 360]);
       if (customDays) runSelectedProjects(selected, customDays);
     } else {
       var dates = promptDateRange();
@@ -472,7 +396,7 @@ function syncTriggersWithSettings() {
     var triggers = ScriptApp.getProjectTriggers();
     
     var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
-    var updateTriggers = getUpdateTriggers();
+    var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
@@ -482,13 +406,12 @@ function syncTriggersWithSettings() {
       console.log('Deleted auto cache trigger');
     }
     
-    if (settings.automation.autoUpdate && updateTriggers.length !== 8) {
-      clearAllUpdateTriggers();
-      createUpdateTriggers();
-      console.log('Created update triggers');
-    } else if (!settings.automation.autoUpdate && updateTriggers.length > 0) {
-      clearAllUpdateTriggers();
-      console.log('Deleted all update triggers');
+    if (settings.automation.autoUpdate && !updateTrigger) {
+      ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
+      console.log('Created auto update trigger');
+    } else if (!settings.automation.autoUpdate && updateTrigger) {
+      ScriptApp.deleteTrigger(updateTrigger);
+      console.log('Deleted auto update trigger');
     }
     
     console.log('Triggers synchronized with Settings sheet');
@@ -498,46 +421,12 @@ function syncTriggersWithSettings() {
   }
 }
 
-function clearAllUpdateTriggers() {
-  var updateFunctions = [
-    'autoUpdateTricky', 'autoUpdateMoloco', 'autoUpdateRegular', 'autoUpdateGoogleAds',
-    'autoUpdateApplovin', 'autoUpdateMintegral', 'autoUpdateIncent', 'autoUpdateOverall',
-    'autoUpdateAllProjects'
-  ];
-  
-  ScriptApp.getProjectTriggers()
-    .filter(function(t) { return updateFunctions.includes(t.getHandlerFunction()); })
-    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
-}
-
-function createUpdateTriggers() {
-  var schedule = [
-    { func: 'autoUpdateTricky', hour: 5, minute: 0 },
-    { func: 'autoUpdateMoloco', hour: 5, minute: 10 },
-    { func: 'autoUpdateRegular', hour: 5, minute: 20 },
-    { func: 'autoUpdateGoogleAds', hour: 5, minute: 30 },
-    { func: 'autoUpdateApplovin', hour: 5, minute: 40 },
-    { func: 'autoUpdateMintegral', hour: 5, minute: 50 },
-    { func: 'autoUpdateIncent', hour: 6, minute: 0 },
-    { func: 'autoUpdateOverall', hour: 6, minute: 10 }
-  ];
-  
-  schedule.forEach(function(item) {
-    ScriptApp.newTrigger(item.func)
-      .timeBased()
-      .everyDays(1)
-      .atHour(item.hour)
-      .nearMinute(item.minute)
-      .create();
-  });
-}
-
 function updateProjectDataWithRetry(projectName, maxRetries = 2) {
   var baseDelay = 3000;
   
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      updateProjectDataOptimized(projectName);
+      updateProjectData(projectName);
       return;
     } catch (e) {
       console.error(`${projectName} update attempt ${attempt} failed:`, e);
@@ -597,52 +486,6 @@ function showMultiChoice(title, options) {
     if (n >= 1 && n <= options.length) validSelections.push(options[n-1]);
   }
   return validSelections;
-}
-
-function promptCustomDays() {
-  var ui = SpreadsheetApp.getUi();
-  var message = 'Enter number of days for report:\n\n';
-  message += '📅 Common periods:\n';
-  message += '• 7 days - Last week\n';
-  message += '• 14 days - Last 2 weeks\n';
-  message += '• 30 days - Last month\n';
-  message += '• 90 days - Last quarter\n';
-  message += '• 180 days - Last 6 months\n';
-  message += '• 365 days - Last year\n\n';
-  message += '⚠️ Note: Large periods (>180 days) may cause timeouts\n';
-  message += '💡 Tip: Use "Date range" for specific periods or large datasets';
-  
-  var result = ui.prompt('Custom Days', message, ui.ButtonSet.OK_CANCEL);
-  if (result.getSelectedButton() !== ui.Button.OK) return null;
-  
-  var input = result.getResponseText().trim();
-  var days = parseInt(input);
-  
-  if (isNaN(days) || days < 1) {
-    ui.alert('❌ Invalid Input', 'Please enter a valid number of days (minimum 1).', ui.ButtonSet.OK);
-    return null;
-  }
-  
-  if (days > 730) {
-    ui.alert('❌ Period Too Large', 
-      `${days} days (over 2 years) is too large and will likely cause timeouts.\n\nMaximum recommended: 365 days\n\nFor large historical data, use "Date range" option with smaller chunks.`, 
-      ui.ButtonSet.OK);
-    return null;
-  }
-  
-  if (days > 365) {
-    var confirm = ui.alert('⚠️ Large Period Warning', 
-      `You entered ${days} days (over 1 year).\n\nThis may cause timeouts or performance issues.\n\nRecommendation: Use "Date range" for better control.\n\nContinue anyway?`, 
-      ui.ButtonSet.YES_NO);
-    if (confirm !== ui.Button.YES) return null;
-  } else if (days > 180) {
-    var confirm = ui.alert('⚠️ Performance Warning', 
-      `You entered ${days} days (${Math.round(days/30)} months).\n\nThis may take longer to process and could timeout.\n\nContinue?`, 
-      ui.ButtonSet.YES_NO);
-    if (confirm !== ui.Button.YES) return null;
-  }
-  
-  return days;
 }
 
 function promptNumber(prompt, suggestions) {
@@ -720,14 +563,7 @@ function runSelectedProjectsDateRange(projects, start, end) {
   SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function generateProjectReport(projectName, days) { 
-  console.log(`Generating ${projectName} report for ${days} days`);
-  if (days > 180) {
-    console.log(`Warning: Large period (${days} days) - monitoring for timeouts`);
-  }
-  setCurrentProject(projectName); 
-  generateReport(days); 
-}
+function generateProjectReport(projectName, days) { setCurrentProject(projectName); generateReport(days); }
 function generateProjectReportForDateRange(projectName, startDate, endDate) { setCurrentProject(projectName); generateReportForDateRange(startDate, endDate); }
 function debugProjectReportGeneration(projectName) { setCurrentProject(projectName); debugReportGeneration(); }
 
@@ -858,39 +694,4 @@ function openGitHubRepo() {
   ).setWidth(400).setHeight(300);
   
   ui.showModalDialog(htmlOutput, 'Opening GitHub Repository...');
-}
-
-function recreateAllTriggers() {
-  var ui = SpreadsheetApp.getUi();
-  
-  var result = ui.alert('🔄 Recreate Triggers', 
-    'Recreate all automation triggers?\n\n⏰ New schedule:\n• Cache: 2:00 AM\n• Updates: 5:00-6:10 AM (10min apart)', 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
-  
-  try {
-    console.log('Recreating all triggers...');
-    
-    clearAllUpdateTriggers();
-    
-    var cacheEnabled = isAutoCacheEnabled();
-    var updateEnabled = isAutoUpdateEnabled();
-    
-    if (cacheEnabled) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      console.log('Cache trigger recreated');
-    }
-    
-    if (updateEnabled) {
-      createUpdateTriggers();
-      console.log('Update triggers recreated');
-    }
-    
-    ui.alert('✅ Triggers Recreated', 'All triggers recreated successfully!', ui.ButtonSet.OK);
-    
-  } catch (e) {
-    console.error('Error recreating triggers:', e);
-    ui.alert('❌ Error', 'Error recreating triggers: ' + e.toString(), ui.ButtonSet.OK);
-  }
 }

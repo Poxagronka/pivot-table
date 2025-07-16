@@ -1,8 +1,13 @@
+/**
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: унифицированные метрики + исправленная ширина столбцов
+ */
+
 function createEnhancedPivotTable(appData) {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  else sheet.clear();
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -74,6 +79,7 @@ function createOverallPivotTable(appData) {
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  else sheet.clear();
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -117,6 +123,8 @@ function createOverallPivotTable(appData) {
 }
 
 function createOverallRowGrouping(sheet, tableData, appData) {
+  const numCols = getUnifiedHeaders().length;
+
   try {
     let rowPointer = 2;
     const sortedApps = Object.keys(appData).sort((a, b) => 
@@ -134,7 +142,7 @@ function createOverallRowGrouping(sheet, tableData, appData) {
 
       if (weekCount > 0) {
         try {
-          sheet.getRange(appStartRow + 1, 1, weekCount, 1).shiftRowGroupDepth(1);
+          sheet.getRange(appStartRow + 1, 1, weekCount, numCols).shiftRowGroupDepth(1);
           sheet.getRange(appStartRow + 1, 1, weekCount, 1).collapseGroups();
         } catch (e) {
           console.log('Error grouping weeks under app:', e);
@@ -142,7 +150,7 @@ function createOverallRowGrouping(sheet, tableData, appData) {
       }
     });
     
-    console.log('Overall row grouping completed');
+    console.log('Overall row grouping completed successfully');
     
   } catch (e) {
     console.error('Error in createOverallRowGrouping:', e);
@@ -220,6 +228,8 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
 }
 
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
+  const config = getCurrentConfig();
+  
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange
     .setBackground(COLORS.HEADER.background)
@@ -503,6 +513,8 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
 }
 
 function createRowGrouping(sheet, tableData, appData) {
+  const numCols = getUnifiedHeaders().length;
+
   try {
     let rowPointer = 2;
 
@@ -542,7 +554,7 @@ function createRowGrouping(sheet, tableData, appData) {
             
             if (campaignCount > 0) {
               try {
-                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
+                sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, numCols).shiftRowGroupDepth(1);
                 sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1).collapseGroups();
               } catch (e) {
                 console.log('Error grouping campaigns under source app:', e);
@@ -552,7 +564,7 @@ function createRowGrouping(sheet, tableData, appData) {
           
           if (weekContentRows > 0) {
             try {
-              sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).shiftRowGroupDepth(1);
+              sheet.getRange(weekStartRow + 1, 1, weekContentRows, numCols).shiftRowGroupDepth(1);
               sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1).collapseGroups();
             } catch (e) {
               console.log('Error grouping week content:', e);
@@ -566,7 +578,7 @@ function createRowGrouping(sheet, tableData, appData) {
           
           if (campaignCount > 0) {
             try {
-              sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).shiftRowGroupDepth(1);
+              sheet.getRange(weekStartRow + 1, 1, campaignCount, numCols).shiftRowGroupDepth(1);
               sheet.getRange(weekStartRow + 1, 1, campaignCount, 1).collapseGroups();
             } catch (e) {
               console.log('Error grouping campaigns under week:', e);
@@ -578,7 +590,7 @@ function createRowGrouping(sheet, tableData, appData) {
       const appContentRows = rowPointer - appStartRow - 1;
       if (appContentRows > 0) {
         try {
-          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).shiftRowGroupDepth(1);
+          sheet.getRange(appStartRow + 1, 1, appContentRows, numCols).shiftRowGroupDepth(1);
           sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
         } catch (e) {
           console.log('Error grouping app content:', e);
@@ -586,7 +598,7 @@ function createRowGrouping(sheet, tableData, appData) {
       }
     });
     
-    console.log('Row grouping completed');
+    console.log('Row grouping completed successfully');
     
   } catch (e) {
     console.error('Error in createRowGrouping:', e);

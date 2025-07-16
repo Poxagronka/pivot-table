@@ -1,3 +1,8 @@
+/**
+ * Utility Functions - ОБНОВЛЕНО: улучшена сортировка листов с Settings, To do и скрытыми листами
+ */
+
+// Date Utils
 function getMondayOfWeek(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -39,6 +44,7 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date);
 }
 
+// Sheet Utils
 function expandAllGroups(sheet) {
   try {
     const maxRows = sheet.getMaxRows();
@@ -81,148 +87,106 @@ function recreateGrouping(sheet) {
 }
 
 function clearAllDataSilent() {
-  const config = getCurrentConfig();
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
-  if (sheet && sheet.getLastRow() > 1) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const cache = new CommentCache();
-      cache.syncCommentsFromSheet();
-      console.log('Comments cached before clearing sheet');
+      const config = getCurrentConfig();
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet && oldSheet.getLastRow() > 1) {
+        try {
+          const cache = new CommentCache();
+          cache.syncCommentsFromSheet();
+          console.log('Comments cached before clearing sheet');
+        } catch (e) {
+          console.error('Error caching comments:', e);
+        }
+      }
+      
+      Utilities.sleep(1000);
+      
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
+      }
+      
+      newSheet.setName(config.SHEET_NAME);
+      
+      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
+      return;
     } catch (e) {
-      console.error('Error caching comments:', e);
+      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
   }
-  
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
 }
 
 function clearProjectDataSilent(projectName) {
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
-  if (sheet && sheet.getLastRow() > 1) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const cache = new CommentCache(projectName);
-      cache.syncCommentsFromSheet();
-      console.log(`${projectName}: Comments cached before clearing sheet`);
-    } catch (e) {
-      console.error(`${projectName}: Error caching comments:`, e);
-    }
-  }
-  
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  console.log(`${projectName}: Sheet recreated`);
-}
-
-function recreateSheetFast(spreadsheet, sheetName) {
-  try {
-    const oldSheet = spreadsheet.getSheetByName(sheetName);
-    if (oldSheet) {
-      spreadsheet.deleteSheet(oldSheet);
-    }
-    
-    const newSheet = spreadsheet.insertSheet(sheetName);
-    console.log(`Sheet ${sheetName} recreated`);
-  } catch (e) {
-    console.error(`Error recreating sheet ${sheetName}:`, e);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (sheet) {
-      sheet.clear();
-      console.log(`Fallback: Sheet ${sheetName} cleared`);
-    }
-  }
-}
-
-function updateProjectDataOptimized(projectName) {
-  console.log(`Starting optimized update for ${projectName}`);
-  
-  const config = getProjectConfig(projectName);
-  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  
-  if (!sheet || sheet.getLastRow() < 2) {
-    console.log(`${projectName}: No existing data to update`);
-    return;
-  }
-  
-  const cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
-  console.log(`${projectName}: Comments cached`);
-  
-  const earliestDate = findEarliestWeekDate(sheet);
-  if (!earliestDate) {
-    console.log(`${projectName}: No week data found`);
-    return;
-  }
-  
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const endDate = new Date(today);
-  
-  if (dayOfWeek === 0) {
-    endDate.setDate(today.getDate() - 1);
-  } else {
-    endDate.setDate(today.getDate() - dayOfWeek);
-  }
-  
-  const dateRange = {
-    from: formatDateForAPI(earliestDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`${projectName}: Fetching ${dateRange.from} to ${dateRange.to}`);
-  
-  const raw = fetchProjectCampaignData(projectName, dateRange);
-  
-  if (!raw.data?.analytics?.richStats?.stats?.length) {
-    console.log(`${projectName}: No API data`);
-    return;
-  }
-  
-  const processed = processProjectApiData(projectName, raw);
-  
-  if (Object.keys(processed).length === 0) {
-    console.log(`${projectName}: No valid processed data`);
-    return;
-  }
-  
-  recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    if (projectName === 'OVERALL') {
-      createOverallPivotTable(processed);
-    } else {
-      createEnhancedPivotTable(processed);
-    }
-    cache.applyCommentsToSheet();
-  } finally {
-    setCurrentProject(originalProject);
-  }
-  
-  console.log(`${projectName}: Update completed successfully`);
-}
-
-function findEarliestWeekDate(sheet) {
-  const data = sheet.getDataRange().getValues();
-  let earliestDate = null;
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === 'WEEK') {
-      const weekRange = data[i][1];
-      const startStr = weekRange.split(' - ')[0];
-      const startDate = new Date(startStr);
-      if (!earliestDate || startDate < earliestDate) {
-        earliestDate = startDate;
+      const config = getProjectConfig(projectName);
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      
+      if (!spreadsheet) {
+        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
       }
+      
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet && oldSheet.getLastRow() > 1) {
+        try {
+          const cache = new CommentCache(projectName);
+          cache.syncCommentsFromSheet();
+          console.log(`${projectName}: Comments cached before clearing sheet`);
+        } catch (e) {
+          console.error(`${projectName}: Error caching comments:`, e);
+        }
+      }
+      
+      Utilities.sleep(1500);
+      
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
+      
+      Utilities.sleep(500);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
+      }
+      
+      Utilities.sleep(500);
+      
+      newSheet.setName(config.SHEET_NAME);
+      
+      console.log(`${projectName}: Sheet recreated successfully`);
+      return;
+    } catch (e) {
+      console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
   }
-  
-  return earliestDate;
 }
 
 function getOrCreateProjectSheet(projectName) {
@@ -235,16 +199,19 @@ function getOrCreateProjectSheet(projectName) {
   return sheet;
 }
 
+// ОБНОВЛЕНО: улучшенная сортировка листов с Settings, To do и скрытыми листами в алфавитном порядке
 function sortProjectSheets() {
   try {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
+    // ОБНОВЛЕНО: добавлены Settings и To do в конец списка
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
     
-    const projectSheets = [];
-    const visibleOtherSheets = [];
-    const hiddenSheets = [];
+    // Разделяем листы на категории
+    const projectSheets = [];      // Листы из projectOrder
+    const visibleOtherSheets = []; // Видимые листы не из projectOrder
+    const hiddenSheets = [];       // Скрытые листы
     
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
@@ -252,18 +219,23 @@ function sortProjectSheets() {
       const isHidden = sheet.isSheetHidden();
       
       if (projectIndex !== -1) {
+        // Лист из основного списка
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
       } else if (isHidden) {
+        // Скрытый лист
         hiddenSheets.push({ sheet, name: sheetName });
       } else {
+        // Видимый лист, не входящий в основной список
         visibleOtherSheets.push({ sheet, name: sheetName });
       }
     });
     
+    // Сортируем каждую категорию
     projectSheets.sort((a, b) => a.index - b.index);
     visibleOtherSheets.sort((a, b) => a.name.localeCompare(b.name));
     hiddenSheets.sort((a, b) => a.name.localeCompare(b.name));
     
+    // Объединяем в финальный порядок: основные листы + видимые прочие + скрытые в алфавитном порядке
     const finalOrder = [
       ...projectSheets.map(item => item.sheet),
       ...visibleOtherSheets.map(item => item.sheet),
@@ -275,6 +247,7 @@ function sortProjectSheets() {
     console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
     console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
     
+    // Переставляем листы с паузами
     let position = 1;
     
     finalOrder.forEach((sheet, index) => {
@@ -283,8 +256,9 @@ function sortProjectSheets() {
         spreadsheet.moveActiveSheet(position);
         position++;
         
+        // Небольшая пауза между перемещениями
         if (index < finalOrder.length - 1) {
-          Utilities.sleep(500);
+          Utilities.sleep(200);
         }
       } catch (e) {
         console.error(`Error moving sheet ${sheet.getName()}:`, e);
@@ -298,6 +272,7 @@ function sortProjectSheets() {
   }
 }
 
+// String Utils
 function sanitizeString(str) {
   if (!str) return '';
   return str.toString().trim().replace(/[^\w\s-]/g, '').substring(0, 100);
@@ -309,6 +284,7 @@ function truncateString(str, maxLength = 50) {
   return str.substring(0, maxLength - 3) + '...';
 }
 
+// Array Utils
 function removeDuplicates(arr) {
   return [...new Set(arr)];
 }
@@ -332,6 +308,7 @@ function sortByProperty(arr, property, ascending = true) {
   });
 }
 
+// Number Utils
 function formatCurrency(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -353,6 +330,7 @@ function isValidNumber(value) {
   return typeof value === 'number' && !isNaN(value) && isFinite(value);
 }
 
+// Error Handling
 function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
   try {
     return fn();
@@ -384,6 +362,7 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
   return attempt();
 }
 
+// Performance Utils
 function measureExecutionTime(fn, label = 'Function') {
   const startTime = new Date().getTime();
   const result = fn();
@@ -400,12 +379,13 @@ function batchOperation(items, batchSize, operation) {
     results.push(...batchResults);
     
     if (i + batchSize < items.length) {
-      Utilities.sleep(500);
+      Utilities.sleep(100);
     }
   }
   return results;
 }
 
+// Project Utils
 function getConfiguredProjects() {
   const configured = [];
   Object.keys(PROJECTS).forEach(projectName => {

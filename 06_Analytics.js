@@ -1,3 +1,7 @@
+/**
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика на основе eROAS D730
+ */
+
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
     console.error('Invalid appData provided to calculateWoWMetrics');
@@ -329,7 +333,80 @@ function generateReportForDateRange(startDate, endDate) {
 }
 
 function updateProjectData(projectName) {
-  updateProjectDataOptimized(projectName);
+  const config = getProjectConfig(projectName);
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No existing data to update`);
+    return;
+  }
+  
+  let earliestDate = null;
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === 'WEEK') {
+      const weekRange = data[i][1];
+      const [startStr] = weekRange.split(' - ');
+      const startDate = new Date(startStr);
+      if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
+    }
+  }
+  
+  if (!earliestDate) {
+    console.log(`${projectName}: No week data found`);
+    return;
+  }
+  
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  let endDate = new Date(today);
+  
+  if (dayOfWeek === 0) {
+    endDate.setDate(today.getDate() - 1);
+  } else {
+    endDate.setDate(today.getDate() - dayOfWeek);
+  }
+  
+  const dateRange = {
+    from: formatDateForAPI(earliestDate),
+    to: formatDateForAPI(endDate)
+  };
+  
+  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
+  
+  const raw = fetchProjectCampaignData(projectName, dateRange);
+  
+  if (!raw.data?.analytics?.richStats?.stats?.length) {
+    console.log(`${projectName}: No data returned from API`);
+    return;
+  }
+  
+  const processed = processProjectApiData(projectName, raw);
+  
+  if (Object.keys(processed).length === 0) {
+    console.log(`${projectName}: No valid data to process`);
+    return;
+  }
+  
+  clearProjectDataSilent(projectName);
+  
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    if (projectName === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
+    const cache = new CommentCache(projectName);
+    cache.applyCommentsToSheet();
+  } finally {
+    setCurrentProject(originalProject);
+  }
+  
+  console.log(`${projectName}: Update completed`);
 }
 
 function updateAllDataToCurrent() {
