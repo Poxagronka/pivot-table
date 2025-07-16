@@ -1,324 +1,295 @@
-/**
- * Comment Cache Management - Multi Project Support
- * Handles saving and loading comments from a hidden sheet
- * Includes automatic caching functionality at 2AM daily
- * NOW SUPPORTS CAMPAIGN-LEVEL AND SOURCE_APP-LEVEL COMMENTS
- */
 class CommentCache {
   constructor(projectName = null) {
-    // If no project specified, use current project
     this.projectName = projectName || CURRENT_PROJECT;
     this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
     this.cacheSheet = this.getOrCreateCacheSheet();
+    this.COMMENT_COLUMN = 18;
   }
 
-  /**
-   * Get or create the comments cache sheet for current project
-   */
   getOrCreateCacheSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     let sheet = spreadsheet.getSheetByName(this.config.COMMENTS_CACHE_SHEET);
     if (!sheet) {
       sheet = spreadsheet.insertSheet(this.config.COMMENTS_CACHE_SHEET);
       sheet.hideSheet();
-      // Headers: AppName, WeekRange, Level, Identifier, SourceApp, Comment, LastUpdated
-      sheet.getRange(1, 1, 1, 7).setValues([['AppName', 'WeekRange', 'Level', 'Identifier', 'SourceApp', 'Comment', 'LastUpdated']]);
+      sheet.getRange(1, 1, 1, 6).setValues([['AppName', 'WeekRange', 'CampaignId', 'SourceApp', 'Comment', 'LastUpdated']]);
     }
     return sheet;
   }
 
-  /**
-   * Generate a unique key for comment identification
-   * Supports WEEK, SOURCE_APP, and CAMPAIGN level comments
-   */
-  getCommentKey(appName, weekRange, level, identifier = null, sourceApp = null) {
-    return `${appName}|||${weekRange}|||${level}|||${identifier || 'N/A'}|||${sourceApp || 'N/A'}`;
+  getCommentKey(appName, weekRange, campaignId, sourceApp) {
+    return `${appName}|||${weekRange}|||${campaignId || 'WEEK'}|||${sourceApp || 'N/A'}`;
   }
 
-  /**
-   * Load all comments from cache sheet
-   */
   loadAllComments() {
-    const comments = {};
     const data = this.cacheSheet.getDataRange().getValues();
+    const comments = {};
+    
     for (let i = 1; i < data.length; i++) {
-      const [appName, weekRange, level, identifier, sourceApp, comment, lastUpdated] = data[i];
-      if (comment) {
-        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp);
-        comments[key] = comment;
+      const [appName, weekRange, campaignId, sourceApp, comment, lastUpdated] = data[i];
+      if (comment && comment.trim()) {
+        const key = this.getCommentKey(appName, weekRange, campaignId, sourceApp);
+        comments[key] = {
+          comment: comment.trim(),
+          lastUpdated: lastUpdated
+        };
       }
     }
+    
+    console.log(`${this.projectName}: Loaded ${Object.keys(comments).length} comments from cache`);
     return comments;
   }
 
-  /**
-   * Save a comment to cache
-   */
-  saveComment(appName, weekRange, level, comment, identifier = null, sourceApp = null) {
-    if (!comment || !comment.trim()) return;
-    
-    const data = this.cacheSheet.getDataRange().getValues();
-    let found = false;
-    
-    // Update existing or add new
-    for (let i = 1; i < data.length; i++) {
-      const rowAppName = data[i][0];
-      const rowWeekRange = data[i][1];
-      const rowLevel = data[i][2];
-      const rowIdentifier = data[i][3];
-      const rowSourceApp = data[i][4];
-      
-      if (rowAppName === appName && 
-          rowWeekRange === weekRange && 
-          rowLevel === level &&
-          rowIdentifier === (identifier || 'N/A') &&
-          rowSourceApp === (sourceApp || 'N/A')) {
-        // Only update if new comment is longer (appending text)
-        const existingComment = data[i][5] || '';
-        if (comment.length > existingComment.length) {
-          this.cacheSheet.getRange(i + 1, 6, 1, 2).setValues([[comment, new Date()]]);
-        }
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      const lastRow = this.cacheSheet.getLastRow();
-      this.cacheSheet.getRange(lastRow + 1, 1, 1, 7).setValues([[
-        appName, 
-        weekRange, 
-        level,
-        identifier || 'N/A', 
-        sourceApp || 'N/A', 
-        comment, 
-        new Date()
-      ]]);
-    }
-  }
-
-  /**
-   * Sync comments from the main sheet to cache
-   * ОПТИМИЗИРОВАНО: Не раскрывает группы - getDataRange читает все данные
-   */
   syncCommentsFromSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
     
+    if (!sheet || sheet.getLastRow() < 2) {
+      console.log(`${this.projectName}: No data to sync`);
+      return;
+    }
+
     const data = sheet.getDataRange().getValues();
+    const commentsToSave = [];
     let currentApp = '';
     let currentWeek = '';
+    let currentSourceApp = '';
     
+    console.log(`${this.projectName}: Syncing ${data.length} rows...`);
+
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2]; // ID column
-      const comment = data[i][15]; // Comments column (last column)
+      const idOrEmpty = data[i][2];
+      const comment = data[i][this.COMMENT_COLUMN];
       
       if (level === 'APP') {
         currentApp = nameOrRange;
         currentWeek = '';
+        currentSourceApp = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
-        if (comment) {
-          // Save week-level comment
-          this.saveComment(currentApp, currentWeek, 'WEEK', comment);
+        currentSourceApp = '';
+        if (comment && comment.trim()) {
+          commentsToSave.push({
+            appName: currentApp,
+            weekRange: currentWeek,
+            campaignId: 'WEEK',
+            sourceApp: 'N/A',
+            comment: comment.trim()
+          });
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        // Save source app-level comment
-        if (comment) {
-          const sourceAppDisplayName = nameOrRange; // Publisher + App Name or bundle ID
-          this.saveComment(currentApp, currentWeek, 'SOURCE_APP', comment, sourceAppDisplayName);
+        currentSourceApp = nameOrRange;
+        if (comment && comment.trim()) {
+          commentsToSave.push({
+            appName: currentApp,
+            weekRange: currentWeek,
+            campaignId: 'SOURCE_APP',
+            sourceApp: currentSourceApp,
+            comment: comment.trim()
+          });
         }
-      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-        // Save campaign-level comment
-        const sourceAppName = nameOrRange; // Source App name
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
+      } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment && comment.trim()) {
+        let campaignId = idOrEmpty;
+        if (typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK')) {
+          const match = idOrEmpty.match(/campaigns\/([^"]+)/);
+          campaignId = match ? match[1] : 'Unknown';
+        }
         
-        this.saveComment(currentApp, currentWeek, 'CAMPAIGN', comment, campaignIdValue, sourceAppName);
+        commentsToSave.push({
+          appName: currentApp,
+          weekRange: currentWeek,
+          campaignId: campaignId,
+          sourceApp: currentSourceApp || nameOrRange,
+          comment: comment.trim()
+        });
       }
     }
-  }
 
-  /**
-   * Extract campaign ID from HYPERLINK formula
-   */
-  extractCampaignIdFromHyperlink(hyperlinkFormula) {
-    try {
-      // Extract from =HYPERLINK("https://app.appgrowth.com/campaigns/12345", "12345")
-      const match = hyperlinkFormula.match(/campaigns\/([^"]+)/);
-      return match ? match[1] : 'Unknown';
-    } catch (e) {
-      return 'Unknown';
+    console.log(`${this.projectName}: Found ${commentsToSave.length} comments to save`);
+    
+    if (commentsToSave.length > 0) {
+      this.batchSaveComments(commentsToSave);
     }
   }
 
-  /**
-   * Apply cached comments back to the main sheet
-   */
+  batchSaveComments(commentsToSave) {
+    const existingData = this.cacheSheet.getDataRange().getValues();
+    const existingComments = {};
+    
+    for (let i = 1; i < existingData.length; i++) {
+      const [appName, weekRange, campaignId, sourceApp] = existingData[i];
+      const key = this.getCommentKey(appName, weekRange, campaignId, sourceApp);
+      existingComments[key] = i + 1;
+    }
+
+    const newRows = [];
+    const updateRows = [];
+    
+    commentsToSave.forEach(commentData => {
+      const key = this.getCommentKey(
+        commentData.appName,
+        commentData.weekRange,
+        commentData.campaignId,
+        commentData.sourceApp
+      );
+      
+      const row = [
+        commentData.appName,
+        commentData.weekRange,
+        commentData.campaignId,
+        commentData.sourceApp,
+        commentData.comment,
+        new Date()
+      ];
+      
+      if (existingComments[key]) {
+        updateRows.push({ row: existingComments[key], data: row });
+      } else {
+        newRows.push(row);
+      }
+    });
+
+    updateRows.forEach(update => {
+      this.cacheSheet.getRange(update.row, 1, 1, 6).setValues([update.data]);
+    });
+
+    if (newRows.length > 0) {
+      const startRow = this.cacheSheet.getLastRow() + 1;
+      this.cacheSheet.getRange(startRow, 1, newRows.length, 6).setValues(newRows);
+    }
+
+    console.log(`${this.projectName}: Updated ${updateRows.length} comments, added ${newRows.length} new`);
+  }
+
   applyCommentsToSheet() {
     const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
     const sheet = spreadsheet.getSheetByName(this.config.SHEET_NAME);
-    if (!sheet || sheet.getLastRow() < 2) return;
     
+    if (!sheet || sheet.getLastRow() < 2) {
+      console.log(`${this.projectName}: No sheet data to apply comments to`);
+      return;
+    }
+
     const comments = this.loadAllComments();
+    if (Object.keys(comments).length === 0) {
+      console.log(`${this.projectName}: No comments to apply`);
+      return;
+    }
+
     const data = sheet.getDataRange().getValues();
+    const commentUpdates = [];
     let currentApp = '';
     let currentWeek = '';
-    
+    let currentSourceApp = '';
+
     for (let i = 1; i < data.length; i++) {
       const level = data[i][0];
       const nameOrRange = data[i][1];
-      const idOrEmpty = data[i][2]; // ID column
+      const idOrEmpty = data[i][2];
       
       if (level === 'APP') {
         currentApp = nameOrRange;
         currentWeek = '';
+        currentSourceApp = '';
       } else if (level === 'WEEK' && currentApp) {
         currentWeek = nameOrRange;
-        // Apply week-level comment
-        const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK');
+        currentSourceApp = '';
+        
+        const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK', 'N/A');
         const weekComment = comments[weekKey];
         if (weekComment) {
-          sheet.getRange(i + 1, 16).setValue(weekComment); // Comments column
+          commentUpdates.push({ row: i + 1, comment: weekComment.comment });
         }
       } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-        // Apply source app-level comment
-        const sourceAppDisplayName = nameOrRange; // Publisher + App Name or bundle ID
-        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName);
+        currentSourceApp = nameOrRange;
+        
+        const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', currentSourceApp);
         const sourceAppComment = comments[sourceAppKey];
         if (sourceAppComment) {
-          sheet.getRange(i + 1, 16).setValue(sourceAppComment); // Comments column
+          commentUpdates.push({ row: i + 1, comment: sourceAppComment.comment });
         }
       } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
-        // Apply campaign-level comment
-        const sourceAppName = nameOrRange; // Source App name
-        const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-          ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-          : idOrEmpty;
+        let campaignId = idOrEmpty;
+        if (typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK')) {
+          const match = idOrEmpty.match(/campaigns\/([^"]+)/);
+          campaignId = match ? match[1] : 'Unknown';
+        }
         
-        const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', campaignIdValue, sourceAppName);
+        const campaignKey = this.getCommentKey(currentApp, currentWeek, campaignId, currentSourceApp || nameOrRange);
         const campaignComment = comments[campaignKey];
         if (campaignComment) {
-          sheet.getRange(i + 1, 16).setValue(campaignComment); // Comments column
+          commentUpdates.push({ row: i + 1, comment: campaignComment.comment });
+        }
+      }
+    }
+
+    console.log(`${this.projectName}: Applying ${commentUpdates.length} comments`);
+    
+    if (commentUpdates.length > 0) {
+      const batchSize = 100;
+      for (let i = 0; i < commentUpdates.length; i += batchSize) {
+        const batch = commentUpdates.slice(i, i + batchSize);
+        batch.forEach(update => {
+          sheet.getRange(update.row, 19).setValue(update.comment);
+        });
+        
+        if (i + batchSize < commentUpdates.length) {
+          SpreadsheetApp.flush();
+          Utilities.sleep(200);
         }
       }
     }
   }
 
-  /**
-   * Sync comments from the main sheet to cache (quiet version)
-   * ПЕРЕИМЕНОВАНО: теперь идентична обычной версии, так как раскрытие групп убрано
-   */
+  clearCache() {
+    if (this.cacheSheet.getLastRow() > 1) {
+      this.cacheSheet.deleteRows(2, this.cacheSheet.getLastRow() - 1);
+    }
+    console.log(`${this.projectName}: Cache cleared`);
+  }
+
   syncCommentsFromSheetQuiet() {
-    // Теперь идентична syncCommentsFromSheet(), так как мы убрали expandAllGroups
     this.syncCommentsFromSheet();
   }
 }
 
-/**
- * GROUP MANAGEMENT
- * Enhanced group management for reliable collapsing
- */
-
-/**
- * Collapse all groups recursively - most reliable method
- * Collapses groups one by one, starting from deepest level
- * Structure: APP groups contain WEEK groups, which contain SOURCE_APP groups (TRICKY only), which contain CAMPAIGN rows
- */
 function collapseAllGroupsRecursively(sheet) {
-  console.log('Starting recursive collapse (one-by-one method)...');
-  
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) {
-    console.log('No data to process');
-    return;
-  }
+  if (data.length < 2) return;
   
-  // First pass: Identify all group boundaries
   const groups = identifyGroups(data);
-  
-  console.log(`Found ${groups.apps.length} app groups, ${groups.weeks.length} week groups, ${groups.sourceApps.length} source app groups`);
-  
-  // Collapse in order: deepest level first
   let totalCollapsed = 0;
   
-  // 1. Collapse source app groups (deepest level for TRICKY)
   if (groups.sourceApps.length > 0) {
-    console.log('Collapsing source app groups...');
-    let sourceAppCollapsed = 0;
-    groups.sourceApps.forEach((group, index) => {
+    groups.sourceApps.forEach(group => {
       try {
         sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
-        sourceAppCollapsed++;
-        SpreadsheetApp.flush();
-        Utilities.sleep(50);
-        
-        if (index % 5 === 0 && index > 0) {
-          console.log(`  Collapsed ${index} source app groups...`);
-        }
-      } catch (e) {
-        console.log(`  Could not collapse source app group at row ${group.start}: ${e.toString()}`);
-      }
+        totalCollapsed++;
+      } catch (e) {}
     });
-    console.log(`  Collapsed ${sourceAppCollapsed} of ${groups.sourceApps.length} source app groups`);
-    totalCollapsed += sourceAppCollapsed;
   }
   
-  // 2. Collapse week groups
-  console.log('Collapsing week groups...');
-  let weekCollapsed = 0;
-  groups.weeks.forEach((group, index) => {
+  groups.weeks.forEach(group => {
     try {
       sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
-      weekCollapsed++;
-      SpreadsheetApp.flush();
-      Utilities.sleep(50);
-      
-      if (index % 5 === 0 && index > 0) {
-        console.log(`  Collapsed ${index} week groups...`);
-      }
-    } catch (e) {
-      console.log(`  Could not collapse week group at row ${group.start}: ${e.toString()}`);
-    }
+      totalCollapsed++;
+    } catch (e) {}
   });
-  console.log(`  Collapsed ${weekCollapsed} of ${groups.weeks.length} week groups`);
-  totalCollapsed += weekCollapsed;
   
-  // 3. Collapse app groups (top level)
-  console.log('Collapsing app groups...');
-  let appCollapsed = 0;
-  groups.apps.forEach((group, index) => {
+  groups.apps.forEach(group => {
     try {
       sheet.getRange(group.start, 1, group.count, 1).collapseGroups();
-      appCollapsed++;
-      SpreadsheetApp.flush();
-      Utilities.sleep(50);
-    } catch (e) {
-      console.log(`  Could not collapse app group at row ${group.start}: ${e.toString()}`);
-    }
+      totalCollapsed++;
+    } catch (e) {}
   });
-  console.log(`  Collapsed ${appCollapsed} of ${groups.apps.length} app groups`);
-  totalCollapsed += appCollapsed;
   
-  console.log(`Recursive collapse completed: ${totalCollapsed} total groups collapsed`);
+  console.log(`Collapsed ${totalCollapsed} groups`);
 }
 
-/**
- * Identify all groups in the sheet data
- * Returns object with arrays of app, week, and source app groups
- * Campaigns are not groups, just regular rows
- */
 function identifyGroups(data) {
-  const groups = {
-    apps: [],
-    weeks: [],
-    sourceApps: []
-  };
-  
+  const groups = { apps: [], weeks: [], sourceApps: [] };
   let currentApp = null;
   let appStartRow = null;
   let weekStartRow = null;
@@ -328,7 +299,6 @@ function identifyGroups(data) {
     const level = data[i][0];
     
     if (level === 'APP') {
-      // Close previous source app if exists
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
         groups.sourceApps.push({
           start: sourceAppStartRow + 1,
@@ -337,7 +307,6 @@ function identifyGroups(data) {
         });
       }
       
-      // Close previous week if exists
       if (weekStartRow !== null && i > weekStartRow + 1) {
         groups.weeks.push({
           start: weekStartRow + 1,
@@ -346,7 +315,6 @@ function identifyGroups(data) {
         });
       }
       
-      // Close previous app if exists
       if (appStartRow !== null && i > appStartRow + 1) {
         groups.apps.push({
           start: appStartRow + 1,
@@ -355,14 +323,12 @@ function identifyGroups(data) {
         });
       }
       
-      // Start new app
       currentApp = data[i][1];
       appStartRow = i;
       weekStartRow = null;
       sourceAppStartRow = null;
       
     } else if (level === 'WEEK') {
-      // Close previous source app if exists
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
         groups.sourceApps.push({
           start: sourceAppStartRow + 1,
@@ -371,7 +337,6 @@ function identifyGroups(data) {
         });
       }
       
-      // Close previous week if exists
       if (weekStartRow !== null && i > weekStartRow + 1) {
         groups.weeks.push({
           start: weekStartRow + 1,
@@ -380,12 +345,10 @@ function identifyGroups(data) {
         });
       }
       
-      // Start new week
       weekStartRow = i;
       sourceAppStartRow = null;
       
     } else if (level === 'SOURCE_APP') {
-      // Close previous source app if exists
       if (sourceAppStartRow !== null && i > sourceAppStartRow + 1) {
         groups.sourceApps.push({
           start: sourceAppStartRow + 1,
@@ -394,16 +357,10 @@ function identifyGroups(data) {
         });
       }
       
-      // Start new source app
       sourceAppStartRow = i;
-      
-    } else if (level === 'CAMPAIGN') {
-      // Campaigns are just rows, not groups - nothing to do
-      continue;
     }
   }
   
-  // Close any remaining groups
   if (sourceAppStartRow !== null && data.length > sourceAppStartRow + 1) {
     groups.sourceApps.push({
       start: sourceAppStartRow + 1,
@@ -431,30 +388,38 @@ function identifyGroups(data) {
   return groups;
 }
 
-/**
- * Expand all groups in the sheet - used ONLY when user explicitly needs to see data
- */
 function expandAllGroups(sheet) {
   try {
     const maxRows = sheet.getMaxRows();
-    let expanded = true;
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    while (expanded && attempts < maxAttempts) {
-      attempts++;
+    for (let i = 0; i < 5; i++) {
       try {
         sheet.getRange(1, 1, maxRows, 1).expandGroups();
-        SpreadsheetApp.flush();
-        Utilities.sleep(50);
       } catch (e) {
-        // No more groups to expand
-        expanded = false;
+        break;
       }
     }
-    
-    console.log(`Groups expanded after ${attempts} attempts`);
   } catch (e) {
     console.log('Error expanding groups:', e);
   }
+}
+
+function testCommentCacheFixed() {
+  console.log('=== TESTING FIXED COMMENT CACHE ===');
+  
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR'];
+  
+  projects.forEach(projectName => {
+    console.log(`Testing ${projectName}...`);
+    const cache = new CommentCache(projectName);
+    
+    cache.syncCommentsFromSheet();
+    const comments = cache.loadAllComments();
+    
+    console.log(`${projectName}: ${Object.keys(comments).length} comments loaded`);
+    
+    if (Object.keys(comments).length > 0) {
+      cache.applyCommentsToSheet();
+      console.log(`${projectName}: Comments applied successfully`);
+    }
+  });
 }
