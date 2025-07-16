@@ -720,18 +720,46 @@ function extractGeoFromCampaign(campaignName) {
   if (!campaignName) return 'OTHER';
   
   if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
-    const geoMap = {
-      '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
-      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR'
-    };
+  const geoMap = {
+    '| USA |': 'USA',  // United States
+    '| CAN |': 'CAN',  // Canada
+    '| GBR |': 'GBR',  // United Kingdom
+    '| DEU |': 'DEU',  // Germany
+    '| FRA |': 'FRA',  // France
+    '| ITA |': 'ITA',  // Italy
+    '| ESP |': 'ESP',  // Spain
+    '| AUS |': 'AUS',  // Australia
+    '| NZL |': 'NZL',  // New Zealand
+    '| JPN |': 'JPN',  // Japan
+    '| KOR |': 'KOR',  // South Korea
+    '| CHN |': 'CHN',  // China
+    '| IND |': 'IND',  // India
+    '| BRA |': 'BRA',  // Brazil
+    '| MEX |': 'MEX',  // Mexico
+    '| RUS |': 'RUS',  // Russia
+    '| ZAF |': 'ZAF',  // South Africa
+    '| SAU |': 'SAU',  // Saudi Arabia
+    '| TUR |': 'TUR',  // Turkey
+    '| NLD |': 'NLD',  // Netherlands
+    '| BEL |': 'BEL',  // Belgium
+    '| SWE |': 'SWE',  // Sweden
+    '| NOR |': 'NOR',  // Norway
+    '| DNK |': 'DNK',  // Denmark
+    '| FIN |': 'FIN',  // Finland
+    '| CHE |': 'CHE',  // Switzerland
+    '| AUT |': 'AUT',  // Austria
+    '| SGP |': 'SGP',  // Singapore
+    '| ARE |': 'ARE',  // UAE
+    '| ARG |': 'ARG',  // Argentina
+    '| COL |': 'COL'   // Colombia
+  };
 
-    for (const [pattern, geo] of Object.entries(geoMap)) {
-      if (campaignName.includes(pattern)) {
-        return geo;
-      }
-    }
-    return 'OTHER';
+  for (const [pattern, geo] of Object.entries(geoMap)) {
+    if (campaignName.includes(pattern)) return geo;
   }
+  return 'OTHER';
+}
+
   
   if (CURRENT_PROJECT === 'OVERALL') {
     return 'ALL';
