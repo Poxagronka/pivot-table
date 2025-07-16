@@ -231,7 +231,7 @@ function updateProjectDataOptimizedTricky() {
     
     console.log('TRICKY: Creating optimized pivot table...');
     createEnhancedPivotTable(processed);
-    Utilities.sleep(3000);
+    Utilities.sleep(5000);
     
     console.log('TRICKY: Applying cached comments...');
     cache.applyCommentsToSheet();
@@ -300,7 +300,7 @@ function updateProjectDataOptimizedStandard(projectName) {
   }
   
   recreateSheetFast(spreadsheet, config.SHEET_NAME);
-  Utilities.sleep(3000);
+  Utilities.sleep(5000);
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);

@@ -11,7 +11,11 @@ function createTrickyOptimizedPivotTable(appData) {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
+  }
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -128,6 +132,8 @@ function addTrickyOptimizedCampaignRows(tableData, campaigns, weekKey, wow, form
 function applyAdvancedFormattingBatch(sheet, numRows, numCols, formatData, appData, hyperlinkData) {
   try {
     const spreadsheetId = sheet.getParent().getId();
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
     const sheetId = sheet.getSheetId();
     const requests = [];
     
@@ -470,6 +476,8 @@ function applyAdvancedFormattingBatch(sheet, numRows, numCols, formatData, appDa
 function applyAdvancedConditionalFormatting(sheet, numRows, appData) {
   try {
     const spreadsheetId = sheet.getParent().getId();
+    SpreadsheetApp.flush();
+    Utilities.sleep(500);
     const sheetId = sheet.getSheetId();
     const requests = [];
     
@@ -596,6 +604,8 @@ function applyAdvancedConditionalFormatting(sheet, numRows, appData) {
 function createTrickyOptimizedRowGrouping(sheet, tableData, appData) {
   try {
     const spreadsheetId = sheet.getParent().getId();
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
     const sheetId = sheet.getSheetId();
     const requests = [];
     
@@ -754,7 +764,11 @@ function createStandardEnhancedPivotTable(appData) {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
+  }
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -867,7 +881,11 @@ function createOverallPivotTable(appData) {
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
+  }
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -917,6 +935,8 @@ function createOverallPivotTable(appData) {
 function applyOverallFormattingBatch(sheet, numRows, numCols, formatData, appData) {
   try {
     const spreadsheetId = sheet.getParent().getId();
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
     const sheetId = sheet.getSheetId();
     const requests = [];
     
@@ -1048,6 +1068,8 @@ function applyOverallFormattingBatch(sheet, numRows, numCols, formatData, appDat
 function createOverallRowGrouping(sheet, tableData, appData) {
   try {
     const spreadsheetId = sheet.getParent().getId();
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
     const sheetId = sheet.getSheetId();
     const requests = [];
     
