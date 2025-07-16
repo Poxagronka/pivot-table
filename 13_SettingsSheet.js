@@ -91,7 +91,7 @@ function migrateExistingSettings(sheet) {
     sheet.getRange('B4').setValue(savedAutoCache ? 'TRUE' : 'FALSE');
     sheet.getRange('B5').setValue(savedAutoUpdate ? 'TRUE' : 'FALSE');
     
-    console.log('Settings migrated to hardcoded schedule structure');
+    console.log('Settings migrated to simplified trigger structure');
   }
 }
 
@@ -114,7 +114,8 @@ function createSettingsLayout(sheet) {
   
   sheet.setRowHeight(2, 20);
   
-  sheet.getRange('A3:I3').merge().setValue('🤖 AUTOMATION').setBackground('#ff9800').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.getRange('A3:I3').merge().setValue('🤖 AUTOMATION');
+  sheet.getRange('A3:I3').setBackground('#ff9800').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(3, 30);
   
   sheet.getRange('A4').setValue('Auto Cache Enabled:').setFontWeight('bold');
@@ -127,7 +128,7 @@ function createSettingsLayout(sheet) {
   
   sheet.getRange('A5').setValue('Auto Update Enabled:').setFontWeight('bold');
   sheet.getRange('B5').setValue('FALSE');
-  sheet.getRange('C5:I5').merge().setValue('Exact times 5:00-6:00 AM (Google Apps Script will distribute)').setFontStyle('italic');
+  sheet.getRange('C5:I5').merge().setValue('TRICKY at 5:00 AM (optimized), Others at 5:15 AM').setFontStyle('italic');
   sheet.getRange('A5:A5').setBackground('#fff3e0');
   sheet.getRange('B5:B5').setBackground('#f8f9fa');
   sheet.getRange('C5:I5').setBackground('#f8f9fa');
@@ -135,14 +136,14 @@ function createSettingsLayout(sheet) {
   
   sheet.setRowHeight(6, 15);
   
-  sheet.getRange('A7:I7').merge().setValue('🕐 EXACT TIME TRIGGERS').setBackground('#4caf50').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.getRange('A7:I7').merge().setValue('🕐 SIMPLIFIED TRIGGERS').setBackground('#4caf50').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(7, 30);
   
   sheet.getRange('A8:I10').merge();
   sheet.getRange('A8').setValue(
-    '⚙️ EXACT TIME TRIGGERS (Google Apps Script distributes automatically):\n' +
-    'First 6 projects: 5:00 AM (TRICKY, MOLOCO, REGULAR, GOOGLE_ADS, APPLOVIN, MINTEGRAL)\n' +
-    'Last 2 projects: 6:00 AM (INCENT, OVERALL) - Apps Script will spread them out automatically'
+    '⚙️ NEW SIMPLIFIED SCHEDULE:\n' +
+    '• TRICKY: 5:00 AM - Separate optimized processing with caching\n' +
+    '• All Others: 5:15 AM - Batch processing (MOLOCO, REGULAR, GOOGLE_ADS, APPLOVIN, MINTEGRAL, INCENT, OVERALL)'
   );
   sheet.getRange('A8:I10').setBackground('#e8f5e8').setWrap(true).setBorder(true, true, true, true, false, false).setVerticalAlignment('middle').setHorizontalAlignment('center').setFontWeight('bold').setFontSize(11);
   
@@ -225,9 +226,9 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A29').setValue('🤖 Automation Benefits:').setFontWeight('bold').setFontSize(11);
   sheet.getRange('A30:I32').merge();
   sheet.getRange('A30').setValue(
-    '• EXACT TIME TRIGGERS: Google Apps Script automatically distributes execution\n' +
-    '• RELIABLE TIMING: No configuration needed, no time ranges\n' +
-    '• INDEPENDENT TRIGGERS: Each project isolated for better reliability'
+    '• SIMPLIFIED TRIGGERS: Only 2 update triggers instead of 8\n' +
+    '• OPTIMIZED TRICKY: Separate processing with caching for better performance\n' +
+    '• BATCH PROCESSING: All other projects update together for efficiency'
   );
   sheet.getRange('A30:I32').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
@@ -253,7 +254,7 @@ function createSettingsLayout(sheet) {
     '🔵 SCALING DOWN: Major spend cut (e.g. -15)\n' +
     '🟡 MODERATE: Small changes (e.g. ±3/±2)\n' +
     '⚪ STABLE: Minimal change (e.g. ±2)\n\n' +
-    '💡 TIP: After changing numbers, click Menu → 🔄 Refresh Settings'
+    '💡 TIP: After changing numbers, click Menu → Settings → Refresh Settings'
   );
   sheet.getRange('A40:I48').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false).setVerticalAlignment('top');
   
@@ -568,12 +569,12 @@ function openSettingsSheet() {
   const sheet = getOrCreateSettingsSheet();
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
   spreadsheet.setActiveSheet(sheet);
-  SpreadsheetApp.getUi().alert('Settings Sheet', 'Settings sheet opened!\n\n🤖 EXACT TIME TRIGGERS: Apps Script distributes automatically\n🎯 Fixed Target Logic:\n• TRICKY: 250% (entire project)\n• Business: 140% (apps with "Business")\n• Others: 150% (default)\n\nUse "🔄 Refresh Settings" after making changes.', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('Settings Sheet', 'Settings sheet opened!\n\n🤖 SIMPLIFIED TRIGGERS:\n• TRICKY: 5:00 AM (optimized)\n• Others: 5:15 AM (batch)\n\nUse Menu → Settings → Refresh Settings after making changes.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function forceUpdateSettingsSheet() {
   const ui = SpreadsheetApp.getUi();
-  const result = ui.alert('🔄 Force Update Settings', 'Force update the Settings sheet?\n\nThis will create the structure with hardcoded schedule.', ui.ButtonSet.YES_NO);
+  const result = ui.alert('🔄 Force Update Settings', 'Force update the Settings sheet?\n\nThis will create the structure with simplified triggers.', ui.ButtonSet.YES_NO);
   
   if (result === ui.Button.YES) {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -588,6 +589,6 @@ function forceUpdateSettingsSheet() {
     populateDefaultSettings(sheet);
     clearSettingsCache();
     
-    ui.alert('✅ Updated', 'Settings sheet updated with exact time triggers!\n\n🤖 EXACT TIMING: Google Apps Script distributes automatically\n• No time ranges\n• Exact execution times\n• Independent triggers', ui.ButtonSet.OK);
+    ui.alert('✅ Updated', 'Settings sheet updated with simplified triggers!\n\n• TRICKY: Separate optimized processing\n• Others: Batch processing', ui.ButtonSet.OK);
   }
 }
