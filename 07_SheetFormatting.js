@@ -392,6 +392,9 @@ function applyTrickyGroupingAdvanced(spreadsheetId, sheetId, groupData) {
         Utilities.sleep(500);
       }
     }
+    
+    Utilities.sleep(1000);
+    collapseAllGroupsAdvanced(spreadsheetId, sheetId, groupData);
   }
   
   console.log('TRICKY grouping applied successfully');
@@ -428,6 +431,9 @@ function applyStandardGroupingAdvanced(spreadsheetId, sheetId, groupData) {
         Utilities.sleep(500);
       }
     }
+    
+    Utilities.sleep(1000);
+    collapseAllGroupsAdvanced(spreadsheetId, sheetId, groupData);
   }
   
   console.log('Standard grouping applied successfully');
@@ -456,6 +462,9 @@ function applyOverallGroupingAdvanced(spreadsheetId, sheetId, groupData) {
         Utilities.sleep(500);
       }
     }
+    
+    Utilities.sleep(1000);
+    collapseAllGroupsAdvanced(spreadsheetId, sheetId, groupData);
   }
   
   console.log('Overall grouping applied successfully');
@@ -771,8 +780,158 @@ function hexToRgb(hex) {
 }
 
 function applyConditionalFormattingAdvanced(spreadsheetId, sheetId, numRows) {
-  console.log('Skipping conditional formatting for performance');
-  return;
+  if (numRows <= 1) return;
+  
+  console.log('Applying conditional formatting...');
+  const requests = [];
+  
+  const spendWowCol = 5;
+  const eroasCol = 14;
+  const profitWowCol = 16;
+  const growthStatusCol = 17;
+  
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = spreadsheet.getSheets().find(s => s.getSheetId() === sheetId);
+  if (!sheet) return;
+  
+  const conditionalRules = [];
+  
+  const spendRange = sheet.getRange(2, spendWowCol + 1, numRows - 1, 1);
+  conditionalRules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('%')
+      .setBackground(COLORS.POSITIVE.background)
+      .setFontColor(COLORS.POSITIVE.fontColor)
+      .setRanges([spendRange])
+      .build()
+  );
+  
+  const profitRange = sheet.getRange(2, profitWowCol + 1, numRows - 1, 1);
+  conditionalRules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('%')
+      .setBackground(COLORS.POSITIVE.background)
+      .setFontColor(COLORS.POSITIVE.fontColor)
+      .setRanges([profitRange])
+      .build()
+  );
+  
+  const eroasRange = sheet.getRange(2, eroasCol + 1, numRows - 1, 1);
+  const targetEROAS = getTargetEROAS(CURRENT_PROJECT);
+  conditionalRules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2)),VALUE(SUBSTITUTE(O2,"%",""))>=${targetEROAS})`)
+      .setBackground(COLORS.POSITIVE.background)
+      .setFontColor(COLORS.POSITIVE.fontColor)
+      .setRanges([eroasRange])
+      .build()
+  );
+  conditionalRules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2)),VALUE(SUBSTITUTE(O2,"%",""))<${targetEROAS},VALUE(SUBSTITUTE(O2,"%",""))>=120)`)
+      .setBackground(COLORS.WARNING.background)
+      .setFontColor(COLORS.WARNING.fontColor)
+      .setRanges([eroasRange])
+      .build()
+  );
+  conditionalRules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2)),VALUE(SUBSTITUTE(O2,"%",""))<120)`)
+      .setBackground(COLORS.NEGATIVE.background)
+      .setFontColor(COLORS.NEGATIVE.fontColor)
+      .setRanges([eroasRange])
+      .build()
+  );
+  
+  const growthRange = sheet.getRange(2, growthStatusCol + 1, numRows - 1, 1);
+  const growthStatuses = [
+    { text: '🟢 Healthy Growth', bg: '#d4edda', fg: '#155724' },
+    { text: '🟢 Efficiency Improvement', bg: '#d1f2eb', fg: '#0c5460' },
+    { text: '🔴 Inefficient Growth', bg: '#f8d7da', fg: '#721c24' },
+    { text: '🟠 Declining Efficiency', bg: '#ff9800', fg: 'white' },
+    { text: '🔵 Scaling Down', bg: '#cce7ff', fg: '#004085' },
+    { text: '🟡 Moderate Growth', bg: '#fff3cd', fg: '#856404' },
+    { text: '🟡 Minimal Growth', bg: '#fff8e1', fg: '#f57f17' },
+    { text: '🟡 Moderate Decline', bg: '#fff3cd', fg: '#856404' },
+    { text: '⚪ Stable', bg: '#f5f5f5', fg: '#616161' },
+    { text: 'First Week', bg: '#e0e0e0', fg: '#757575' }
+  ];
+  
+  growthStatuses.forEach(status => {
+    conditionalRules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenTextContains(status.text)
+        .setBackground(status.bg)
+        .setFontColor(status.fg)
+        .setRanges([growthRange])
+        .build()
+    );
+  });
+  
+  sheet.setConditionalFormatRules(conditionalRules);
+  console.log('Conditional formatting applied');
+}
+
+function collapseAllGroupsAdvanced(spreadsheetId, sheetId, groupData) {
+  console.log('Collapsing groups...');
+  const requests = [];
+  
+  if (groupData.sourceApps) {
+    groupData.sourceApps.forEach(group => {
+      requests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count },
+            collapsed: true
+          },
+          fields: 'collapsed'
+        }
+      });
+    });
+  }
+  
+  if (groupData.weeks) {
+    groupData.weeks.forEach(group => {
+      requests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count },
+            collapsed: true
+          },
+          fields: 'collapsed'
+        }
+      });
+    });
+  }
+  
+  if (groupData.apps) {
+    groupData.apps.forEach(group => {
+      requests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: { sheetId: sheetId, dimension: 'ROWS', startIndex: group.startRow, endIndex: group.startRow + group.count },
+            collapsed: true
+          },
+          fields: 'collapsed'
+        }
+      });
+    });
+  }
+  
+  if (requests.length > 0) {
+    console.log(`Collapsing ${requests.length} groups...`);
+    const batchSize = 50;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      Sheets.Spreadsheets.batchUpdate({ requests: batch }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(500);
+      }
+    }
+  }
+  
+  console.log('Groups collapsed successfully');
 }
 
 function createProjectPivotTable(projectName, appData) {
