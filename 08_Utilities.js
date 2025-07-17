@@ -1,187 +1,160 @@
-function ensureSheetExists(spreadsheetId, sheetName, recreate = false) {
-  console.log(`Обеспечение существования листа: ${sheetName} (recreate: ${recreate})`);
-  
-  try {
-    console.log('Получение информации о таблице...');
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    const existingSheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
-    
-    const requests = [];
-    
-    if (existingSheet) {
-      console.log(`Существующий лист найден: ${sheetName} (ID: ${existingSheet.properties.sheetId})`);
-      if (recreate) {
-        console.log('Добавляем запрос на удаление листа...');
-        requests.push({
-          deleteSheet: {
-            sheetId: existingSheet.properties.sheetId
-          }
-        });
-      }
-    } else {
-      console.log(`Лист не найден: ${sheetName}`);
-    }
-    
-    if (!existingSheet || recreate) {
-      console.log('Добавляем запрос на создание листа...');
-      requests.push({
-        addSheet: {
-          properties: {
-            title: sheetName,
-            index: 0,
-            gridProperties: {
-              rowCount: 1000,
-              columnCount: 20
-            }
-          }
-        }
-      });
-    }
-    
-    if (requests.length > 0) {
-      console.log(`Выполняем batch update с ${requests.length} запросами...`);
-      const response = Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, spreadsheetId);
-      console.log('✅ Batch update выполнен успешно');
-      
-      if (recreate || !existingSheet) {
-        const addSheetResponse = response.replies.find(r => r.addSheet);
-        if (addSheetResponse) {
-          const newSheetId = addSheetResponse.addSheet.properties.sheetId;
-          console.log(`✅ Новый лист создан с ID: ${newSheetId}`);
-          return newSheetId;
-        }
-      }
-    } else {
-      console.log('Запросы не требуются');
-    }
-    
-    const finalSheetId = existingSheet ? existingSheet.properties.sheetId : 0;
-    console.log(`Возвращаем sheet ID: ${finalSheetId}`);
-    return finalSheetId;
-  } catch (e) {
-    console.error('❌ Ошибка обеспечения существования листа:', e);
-    return null;
-  }
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+function getSundayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() + (day === 0 ? 0 : 7 - day);
+  return new Date(d.setDate(diff));
+}
+
+function formatDateForAPI(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDateRange(days) {
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = new Date(today);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - days + 1);
+  return {
+    from: Utilities.formatDate(startDate, tz, 'yyyy-MM-dd'),
+    to: Utilities.formatDate(endDate, tz, 'yyyy-MM-dd')
+  };
+}
+
+function isValidDate(dateString) {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
+  const date = new Date(dateString);
+  return date instanceof Date && !isNaN(date);
 }
 
 function clearAllDataSilent() {
-  console.log('=== ОЧИСТКА ДАННЫХ ТЕКУЩЕГО ПРОЕКТА ===');
   const config = getCurrentConfig();
-  console.log(`Проект: ${CURRENT_PROJECT}`);
-  console.log(`Sheet ID: ${config.SHEET_ID}`);
-  console.log(`Sheet Name: ${config.SHEET_NAME}`);
   
-  try {
-    console.log('Этап 1: Проверка существующего листа...');
-    const existingSheet = getSheetByName(config.SHEET_ID, config.SHEET_NAME);
-    
-    if (existingSheet) {
-      console.log('Существующий лист найден');
-      console.log('Этап 2: Синхронизация комментариев...');
-      try {
-        new CommentCache().syncCommentsFromSheet();
-        console.log('✅ Комментарии синхронизированы');
-      } catch (e) {
-        console.log('⚠️ Ошибка синхронизации комментариев:', e);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet?.getLastRow() > 1) {
+        try {
+          new CommentCache().syncCommentsFromSheet();
+        } catch (e) {}
       }
-    } else {
-      console.log('Существующий лист не найден');
+      
+      Utilities.sleep(1000);
+      
+      const requests = [];
+      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
+      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
+      
+      if (sheetId !== undefined) {
+        requests.push({
+          deleteSheet: { sheetId: sheetId }
+        });
+      }
+      
+      requests.push({
+        addSheet: {
+          properties: {
+            title: config.SHEET_NAME,
+            index: 0
+          }
+        }
+      });
+      
+      Sheets.Spreadsheets.batchUpdate({
+        requests: requests
+      }, config.SHEET_ID);
+      
+      return;
+    } catch (e) {
+      if (attempt === 2) throw e;
+      Utilities.sleep(3000 * Math.pow(2, attempt - 1));
     }
-    
-    console.log('Этап 3: Пересоздание листа...');
-    const newSheetId = ensureSheetExists(config.SHEET_ID, config.SHEET_NAME, true);
-    console.log(`✅ Лист ${config.SHEET_NAME} пересоздан с ID: ${newSheetId}`);
-    
-    return newSheetId;
-    
-  } catch (e) {
-    console.error('❌ Ошибка очистки данных:', e);
-    throw e;
   }
-  
-  console.log('=== ОЧИСТКА ДАННЫХ ЗАВЕРШЕНА ===');
 }
 
 function clearProjectDataSilent(projectName) {
-  console.log(`=== ОЧИСТКА ДАННЫХ ПРОЕКТА ${projectName} ===`);
   const config = getProjectConfig(projectName);
-  console.log(`Sheet ID: ${config.SHEET_ID}`);
-  console.log(`Sheet Name: ${config.SHEET_NAME}`);
   
-  try {
-    console.log('Этап 1: Проверка существующего листа...');
-    const existingSheet = getSheetByName(config.SHEET_ID, config.SHEET_NAME);
-    
-    if (existingSheet) {
-      console.log('Существующий лист найден');
-      console.log('Этап 2: Синхронизация комментариев...');
-      try {
-        new CommentCache(projectName).syncCommentsFromSheet();
-        console.log('✅ Комментарии синхронизированы');
-      } catch (e) {
-        console.log(`⚠️ Ошибка синхронизации комментариев для ${projectName}:`, e);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet?.getLastRow() > 1) {
+        try {
+          new CommentCache(projectName).syncCommentsFromSheet();
+        } catch (e) {}
       }
-    } else {
-      console.log('Существующий лист не найден');
+      
+      Utilities.sleep(1500);
+      
+      const requests = [];
+      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
+      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
+      
+      if (sheetId !== undefined) {
+        requests.push({
+          deleteSheet: { sheetId: sheetId }
+        });
+      }
+      
+      requests.push({
+        addSheet: {
+          properties: {
+            title: config.SHEET_NAME,
+            index: 0
+          }
+        }
+      });
+      
+      Sheets.Spreadsheets.batchUpdate({
+        requests: requests
+      }, config.SHEET_ID);
+      
+      return;
+    } catch (e) {
+      if (attempt === 2) throw e;
+      Utilities.sleep(3000 * Math.pow(2, attempt - 1) + 2000);
     }
-    
-    console.log('Этап 3: Пересоздание листа...');
-    const newSheetId = ensureSheetExists(config.SHEET_ID, config.SHEET_NAME, true);
-    console.log(`✅ Лист ${projectName} пересоздан с ID: ${newSheetId}`);
-    
-    return newSheetId;
-    
-  } catch (e) {
-    console.error(`❌ Ошибка очистки данных ${projectName}:`, e);
-    throw e;
-  }
-  
-  console.log(`=== ОЧИСТКА ДАННЫХ ${projectName} ЗАВЕРШЕНА ===`);
-}
-
-function getSheetByName(spreadsheetId, sheetName) {
-  console.log(`Получение листа: ${sheetName} из таблицы ${spreadsheetId}`);
-  try {
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    console.log(`Таблица получена, листов: ${spreadsheet.sheets.length}`);
-    
-    const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
-    if (sheet) {
-      console.log(`✅ Лист найден: ${sheetName} (ID: ${sheet.properties.sheetId})`);
-      return sheet;
-    } else {
-      console.log(`❌ Лист не найден: ${sheetName}`);
-      const sheetNames = spreadsheet.sheets.map(s => s.properties.title).join(', ');
-      console.log(`Доступные листы: ${sheetNames}`);
-      return null;
-    }
-  } catch (e) {
-    console.error('❌ Ошибка получения листа:', e);
-    return null;
   }
 }
 
 function getOrCreateProjectSheet(projectName) {
-  console.log(`Получение или создание листа для проекта: ${projectName}`);
   const config = getProjectConfig(projectName);
-  console.log(`Конфигурация: Sheet ID = ${config.SHEET_ID}, Sheet Name = ${config.SHEET_NAME}`);
+  const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
+  const sheet = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME);
   
-  const sheetId = ensureSheetExists(config.SHEET_ID, config.SHEET_NAME);
-  return { sheetId, sheet: getSheetByName(config.SHEET_ID, config.SHEET_NAME) };
+  if (!sheet) {
+    Sheets.Spreadsheets.batchUpdate({
+      requests: [{
+        addSheet: {
+          properties: {
+            title: config.SHEET_NAME
+          }
+        }
+      }]
+    }, config.SHEET_ID);
+  }
+  
+  return SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
 }
 
 function sortProjectSheets() {
-  console.log('=== СОРТИРОВКА ЛИСТОВ ПРОЕКТОВ ===');
-  
   try {
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
-    console.log(`Желаемый порядок: ${projectOrder.join(', ')}`);
-    
-    console.log('Получение информации о таблице...');
     const spreadsheet = Sheets.Spreadsheets.get(MAIN_SHEET_ID);
-    console.log(`Найдено листов: ${spreadsheet.sheets.length}`);
     
     const sheets = spreadsheet.sheets.map(s => ({
       id: s.properties.sheetId,
@@ -189,11 +162,6 @@ function sortProjectSheets() {
       hidden: s.properties.hidden || false,
       index: s.properties.index
     }));
-    
-    console.log('Текущие листы:');
-    sheets.forEach(sheet => {
-      console.log(`  ${sheet.index}: ${sheet.title} (ID: ${sheet.id}, hidden: ${sheet.hidden})`);
-    });
     
     const projectSheets = [];
     const visibleOtherSheets = [];
@@ -210,24 +178,15 @@ function sortProjectSheets() {
       }
     });
     
-    console.log(`Проектные листы: ${projectSheets.length}`);
-    console.log(`Видимые другие листы: ${visibleOtherSheets.length}`);
-    console.log(`Скрытые листы: ${hiddenSheets.length}`);
-    
     projectSheets.sort((a, b) => a.order - b.order);
     visibleOtherSheets.sort((a, b) => a.title.localeCompare(b.title));
     hiddenSheets.sort((a, b) => a.title.localeCompare(b.title));
     
     const finalOrder = [...projectSheets, ...visibleOtherSheets, ...hiddenSheets];
-    console.log('Финальный порядок:');
-    finalOrder.forEach((sheet, index) => {
-      console.log(`  ${index}: ${sheet.title}`);
-    });
-    
     const requests = [];
+    
     finalOrder.forEach((sheet, index) => {
       if (sheet.index !== index) {
-        console.log(`Изменение позиции: ${sheet.title} с ${sheet.index} на ${index}`);
         requests.push({
           updateSheetProperties: {
             properties: {
@@ -241,229 +200,316 @@ function sortProjectSheets() {
     });
     
     if (requests.length > 0) {
-      console.log(`Выполняем сортировку с ${requests.length} запросами...`);
       Sheets.Spreadsheets.batchUpdate({
         requests: requests
       }, MAIN_SHEET_ID);
-      console.log('✅ Сортировка выполнена успешно');
-    } else {
-      console.log('Сортировка не требуется - все листы уже в правильном порядке');
     }
-    
   } catch (e) {
-    console.error('❌ Ошибка сортировки листов:', e);
     throw e;
   }
-  
-  console.log('=== СОРТИРОВКА ЛИСТОВ ЗАВЕРШЕНА ===');
 }
 
-function getDateRange(days) {
-  console.log(`Создание диапазона дат на ${days} дней назад`);
-  
-  const today = new Date();
-  const endDate = new Date(today);
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - days);
-  
-  const result = {
-    from: formatDateForAPI(startDate),
-    to: formatDateForAPI(endDate)
-  };
-  
-  console.log(`Диапазон дат: ${result.from} - ${result.to}`);
-  return result;
+function sanitizeString(str) {
+  if (!str) return '';
+  return str.toString().trim().replace(/[^\w\s-]/g, '').substring(0, 100);
 }
 
-function formatDateForAPI(date) {
-  if (!date || !(date instanceof Date)) {
-    console.error('Некорректная дата для форматирования:', date);
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
+function truncateString(str, maxLength = 50) {
+  if (!str) return '';
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength - 3) + '...';
 }
 
-function getMondayOfWeek(date) {
-  if (!date || !(date instanceof Date)) {
-    console.error('Некорректная дата для получения понедельника:', date);
-    return new Date();
-  }
-  
-  const monday = new Date(date);
-  const dayOfWeek = monday.getDay();
-  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  monday.setDate(monday.getDate() - daysToSubtract);
-  monday.setHours(0, 0, 0, 0);
-  
-  return monday;
+function removeDuplicates(arr) {
+  return [...new Set(arr)];
 }
 
-function getSundayOfWeek(date) {
-  if (!date || !(date instanceof Date)) {
-    console.error('Некорректная дата для получения воскресенья:', date);
-    return new Date();
-  }
-  
-  const sunday = new Date(date);
-  const dayOfWeek = sunday.getDay();
-  const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  sunday.setDate(sunday.getDate() + daysToAdd);
-  sunday.setHours(23, 59, 59, 999);
-  
-  return sunday;
+function groupBy(arr, keyFn) {
+  return arr.reduce((groups, item) => {
+    const key = keyFn(item);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+    return groups;
+  }, {});
 }
 
-function getWeekRange(date) {
-  const monday = getMondayOfWeek(date);
-  const sunday = getSundayOfWeek(date);
-  
-  return {
-    start: formatDateForAPI(monday),
-    end: formatDateForAPI(sunday)
-  };
+function sortByProperty(arr, property, ascending = true) {
+  return arr.sort((a, b) => {
+    const aVal = a[property];
+    const bVal = b[property];
+    if (aVal === bVal) return 0;
+    const comparison = aVal < bVal ? -1 : 1;
+    return ascending ? comparison : -comparison;
+  });
 }
 
-function getCurrentWeekStart() {
-  const today = new Date();
-  return getMondayOfWeek(today);
+function formatCurrency(amount, currency = 'USD') {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
 }
 
-function isPreviousWeek(weekStartDate) {
-  const today = new Date();
-  const currentWeekStart = getCurrentWeekStart();
-  const previousWeekStart = new Date(currentWeekStart);
-  previousWeekStart.setDate(currentWeekStart.getDate() - 7);
-  
-  const compareDate = new Date(weekStartDate);
-  return compareDate.getTime() === previousWeekStart.getTime();
+function formatPercentage(value, decimals = 1) {
+  return (value * 100).toFixed(decimals) + '%';
 }
 
-function shouldIncludeWeek(weekStartDate) {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const currentWeekStart = getCurrentWeekStart();
-  const compareDate = new Date(weekStartDate);
-  
-  if (compareDate.getTime() >= currentWeekStart.getTime()) {
-    return false;
-  }
-  
-  if (dayOfWeek >= 2 || dayOfWeek === 0) {
-    return true;
-  }
-  
-  return !isPreviousWeek(weekStartDate);
+function roundToDecimals(num, decimals = 2) {
+  return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }
 
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
+function isValidNumber(value) {
+  return typeof value === 'number' && !isNaN(value) && isFinite(value);
 }
 
-function subtractDays(date, days) {
-  return addDays(date, -days);
-}
-
-function isValidDateString(dateString) {
-  if (!dateString || typeof dateString !== 'string') return false;
-  
-  const regex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!regex.test(dateString)) return false;
-  
-  const date = new Date(dateString);
-  return date instanceof Date && !isNaN(date.getTime());
-}
-
-function parseDate(dateString) {
-  if (!isValidDateString(dateString)) {
-    console.error('Некорректный формат даты:', dateString);
-    return new Date();
-  }
-  
-  return new Date(dateString);
-}
-
-function testApiConnection(projectName = null) {
-  console.log('=== ТЕСТ API ПОДКЛЮЧЕНИЯ ===');
-  
-  if (projectName) {
-    setCurrentProject(projectName);
-    console.log(`Тестируем проект: ${projectName}`);
-  } else {
-    console.log(`Тестируем текущий проект: ${CURRENT_PROJECT}`);
-  }
-  
+function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
   try {
-    console.log('Этап 1: Проверка конфигурации...');
-    const config = getCurrentConfig();
-    console.log(`✅ Конфигурация загружена: ${config.SHEET_NAME}`);
-    
-    console.log('Этап 2: Проверка Bearer Token...');
-    if (!config.BEARER_TOKEN || config.BEARER_TOKEN.length < 50) {
-      throw new Error('Bearer Token не настроен или слишком короткий');
-    }
-    console.log(`✅ Bearer Token найден (длина: ${config.BEARER_TOKEN.length})`);
-    
-    console.log('Этап 3: Создание тестового запроса...');
-    const dateRange = getDateRange(7);
-    console.log(`✅ Диапазон дат создан: ${dateRange.from} - ${dateRange.to}`);
-    
-    console.log('Этап 4: Выполнение API запроса...');
-    const raw = fetchCampaignData(dateRange);
-    console.log(`✅ API запрос выполнен успешно`);
-    
-    console.log('Этап 5: Проверка структуры ответа...');
-    if (!raw.data?.analytics?.richStats?.stats) {
-      throw new Error('Неожиданная структура ответа API');
-    }
-    
-    const recordCount = raw.data.analytics.richStats.stats.length;
-    console.log(`✅ Получено записей: ${recordCount}`);
-    
-    return {
-      success: true,
-      project: CURRENT_PROJECT,
-      recordCount: recordCount,
-      dateRange: dateRange
-    };
-    
+    return fn();
   } catch (e) {
-    console.error(`❌ Ошибка тестирования API для ${CURRENT_PROJECT}:`, e);
-    return {
-      success: false,
-      project: CURRENT_PROJECT,
-      error: e.toString()
-    };
+    return fallbackValue;
   }
 }
 
-function quickTestAllProjects() {
-  console.log('=== БЫСТРЫЙ ТЕСТ ВСЕХ ПРОЕКТОВ ===');
+function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+  let attempts = 0;
   
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  function attempt() {
+    try {
+      return fn();
+    } catch (e) {
+      attempts++;
+      if (attempts >= maxRetries) throw e;
+      Utilities.sleep(baseDelay * Math.pow(2, attempts - 1));
+      return attempt();
+    }
+  }
+  
+  return attempt();
+}
+
+function measureExecutionTime(fn, label = 'Function') {
+  const startTime = new Date().getTime();
+  const result = fn();
+  const endTime = new Date().getTime();
+  return result;
+}
+
+function batchOperation(items, batchSize, operation) {
   const results = [];
-  
-  projects.forEach(project => {
-    console.log(`\n--- Тестирование ${project} ---`);
-    const result = testApiConnection(project);
-    results.push(result);
-    
-    if (result.success) {
-      console.log(`✅ ${project}: ${result.recordCount} записей`);
-    } else {
-      console.log(`❌ ${project}: ${result.error}`);
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = operation(batch, i);
+    results.push(...batchResults);
+    if (i + batchSize < items.length) Utilities.sleep(100);
+  }
+  return results;
+}
+
+function getConfiguredProjects() {
+  const configured = [];
+  Object.keys(PROJECTS).forEach(projectName => {
+    const project = PROJECTS[projectName];
+    if (project.BEARER_TOKEN && project.API_CONFIG.FILTERS.USER.length > 0) {
+      configured.push(projectName);
     }
   });
+  return configured;
+}
+
+function validateProjectConfig(projectName) {
+  if (!PROJECTS[projectName]) {
+    return { valid: false, error: `Project ${projectName} does not exist` };
+  }
   
-  console.log('\n=== РЕЗУЛЬТАТЫ ТЕСТИРОВАНИЯ ===');
-  const successful = results.filter(r => r.success).length;
-  console.log(`Успешно: ${successful}/${projects.length} проектов`);
+  const project = PROJECTS[projectName];
   
-  return results;
+  if (!project.BEARER_TOKEN) {
+    return { valid: false, error: `Project ${projectName} missing BEARER_TOKEN` };
+  }
+  
+  if (!project.API_CONFIG.FILTERS.USER || project.API_CONFIG.FILTERS.USER.length === 0) {
+    return { valid: false, error: `Project ${projectName} missing USER filters` };
+  }
+  
+  if (!project.SHEET_NAME) {
+    return { valid: false, error: `Project ${projectName} missing SHEET_NAME` };
+  }
+  
+  return { valid: true };
+}
+
+function getProjectStatus(projectName) {
+  const validation = validateProjectConfig(projectName);
+  if (!validation.valid) {
+    return { configured: false, error: validation.error };
+  }
+  
+  const project = PROJECTS[projectName];
+  const status = {
+    configured: true,
+    sheetName: project.SHEET_NAME,
+    hasToken: !!project.BEARER_TOKEN,
+    userCount: project.API_CONFIG.FILTERS.USER.length,
+    campaignSearch: project.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH
+  };
+  
+  if (projectName === 'OVERALL') {
+    status.dataType = 'app-level aggregated';
+    status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 
+      project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS';
+  }
+  
+  return status;
+}
+
+function debugUtilities() {
+  console.log('=== UTILITIES DEBUG START ===');
+  let passed = 0;
+  let failed = 0;
+  
+  const test = (name, fn) => {
+    try {
+      const result = fn();
+      if (result) {
+        console.log(`✅ ${name}`);
+        passed++;
+      } else {
+        console.log(`❌ ${name}`);
+        failed++;
+      }
+    } catch (e) {
+      console.log(`❌ ${name}: ${e.toString()}`);
+      failed++;
+    }
+  };
+  
+  test('getMondayOfWeek', () => {
+    const monday = getMondayOfWeek(new Date('2024-01-15'));
+    return monday.getDay() === 1;
+  });
+  
+  test('getSundayOfWeek', () => {
+    const sunday = getSundayOfWeek(new Date('2024-01-15'));
+    return sunday.getDay() === 0;
+  });
+  
+  test('formatDateForAPI', () => {
+    const formatted = formatDateForAPI(new Date('2024-01-15'));
+    return formatted === '2024-01-15';
+  });
+  
+  test('getDateRange', () => {
+    const range = getDateRange(7);
+    return range.from && range.to && range.from < range.to;
+  });
+  
+  test('isValidDate', () => {
+    return isValidDate('2024-01-15') && !isValidDate('invalid') && !isValidDate('2024-13-45');
+  });
+  
+  test('sanitizeString', () => {
+    const clean = sanitizeString('Test@#$123 -_abc');
+    return clean === 'Test123 -_abc';
+  });
+  
+  test('truncateString', () => {
+    const truncated = truncateString('Very long string that needs truncation', 10);
+    return truncated === 'Very lo...' && truncateString('Short', 10) === 'Short';
+  });
+  
+  test('removeDuplicates', () => {
+    const unique = removeDuplicates([1, 2, 2, 3, 3, 3]);
+    return unique.length === 3 && unique[0] === 1 && unique[1] === 2 && unique[2] === 3;
+  });
+  
+  test('groupBy', () => {
+    const grouped = groupBy([{type: 'a', val: 1}, {type: 'b', val: 2}, {type: 'a', val: 3}], item => item.type);
+    return grouped.a?.length === 2 && grouped.b?.length === 1;
+  });
+  
+  test('sortByProperty', () => {
+    const sorted = sortByProperty([{val: 3}, {val: 1}, {val: 2}], 'val');
+    const desc = sortByProperty([{val: 1}, {val: 2}, {val: 3}], 'val', false);
+    return sorted[0].val === 1 && sorted[2].val === 3 && desc[0].val === 3;
+  });
+  
+  test('formatCurrency', () => {
+    const formatted = formatCurrency(1234.56);
+    return formatted === '$1,234.56';
+  });
+  
+  test('formatPercentage', () => {
+    const formatted = formatPercentage(0.156);
+    const formatted2 = formatPercentage(0.1234, 2);
+    return formatted === '15.6%' && formatted2 === '12.34%';
+  });
+  
+  test('roundToDecimals', () => {
+    const rounded = roundToDecimals(1.23456, 2);
+    const rounded3 = roundToDecimals(1.23456, 3);
+    return rounded === 1.23 && rounded3 === 1.235;
+  });
+  
+  test('isValidNumber', () => {
+    return isValidNumber(123) && isValidNumber(-45.67) && 
+           !isValidNumber(NaN) && !isValidNumber(Infinity) && !isValidNumber('123');
+  });
+  
+  test('safeExecute', () => {
+    const result1 = safeExecute(() => 'success');
+    const result2 = safeExecute(() => { throw new Error('test'); }, 'fallback');
+    return result1 === 'success' && result2 === 'fallback';
+  });
+  
+  test('retryWithBackoff', () => {
+    let attempts = 0;
+    const fn = () => {
+      attempts++;
+      if (attempts < 3) throw new Error('retry');
+      return 'success';
+    };
+    const result = retryWithBackoff(fn, 3, 10);
+    return result === 'success' && attempts === 3;
+  });
+  
+  test('measureExecutionTime', () => {
+    const result = measureExecutionTime(() => {
+      Utilities.sleep(100);
+      return 'done';
+    });
+    return result === 'done';
+  });
+  
+  test('batchOperation', () => {
+    const items = [1, 2, 3, 4, 5];
+    const results = batchOperation(items, 2, (batch) => batch.map(x => x * 2));
+    return results.length === 5 && results[0] === 2 && results[4] === 10;
+  });
+  
+  test('clearAllDataSilent', () => {
+    return typeof clearAllDataSilent === 'function';
+  });
+  
+  test('clearProjectDataSilent', () => {
+    return typeof clearProjectDataSilent === 'function';
+  });
+  
+  test('getOrCreateProjectSheet', () => {
+    return typeof getOrCreateProjectSheet === 'function';
+  });
+  
+  test('sortProjectSheets', () => {
+    return typeof sortProjectSheets === 'function';
+  });
+  
+  console.log('\n=== SUMMARY ===');
+  console.log(`Total: ${passed + failed}`);
+  console.log(`Passed: ${passed}`);
+  console.log(`Failed: ${failed}`);
+  console.log(`Success rate: ${Math.round(passed / (passed + failed) * 100)}%`);
+  console.log('=== UTILITIES DEBUG END ===');
+  
+  return { passed, failed, total: passed + failed };
 }

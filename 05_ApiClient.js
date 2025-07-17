@@ -1,3 +1,7 @@
+/**
+ * API Client - ОБНОВЛЕНО: унифицированные метрики + убрана проверка spend > 0
+ */
+
 var BUNDLE_ID_CACHE = {};
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
@@ -306,33 +310,16 @@ function processApiData(rawData, includeLastWeek = null) {
   const appData = {};
 
   const today = new Date();
+  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
+
   const dayOfWeek = today.getDay();
-  
-  // Правильная логика получения понедельника текущей недели
-  const currentWeekStart = new Date(today);
-  if (dayOfWeek === 0) {
-    // Воскресенье - берем понедельник этой недели (завтра)
-    currentWeekStart.setDate(today.getDate() + 1);
-  } else {
-    // Остальные дни - берем понедельник этой недели
-    currentWeekStart.setDate(today.getDate() - dayOfWeek + 1);
-  }
-  currentWeekStart.setHours(0, 0, 0, 0);
-  
-  // Понедельник прошлой недели
-  const lastWeekStart = new Date(currentWeekStart);
-  lastWeekStart.setDate(currentWeekStart.getDate() - 7);
-  
-  const currentWeekStartStr = formatDateForAPI(currentWeekStart);
-  const lastWeekStartStr = formatDateForAPI(lastWeekStart);
-  
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
   console.log(`Processing ${stats.length} records...`);
-  console.log(`Current week start: ${currentWeekStartStr}`);
-  console.log(`Last week start: ${lastWeekStartStr}`);
+  console.log(`Current week start: ${currentWeekStart}`);
+  console.log(`Last week start: ${lastWeekStart}`);
   console.log(`Include last week: ${shouldIncludeLastWeek}`);
-  console.log(`Today: ${formatDateForAPI(today)}, day of week: ${dayOfWeek}`);
 
   let appsDbCache = null;
   if (CURRENT_PROJECT === 'TRICKY') {
@@ -341,8 +328,6 @@ function processApiData(rawData, includeLastWeek = null) {
 
   const trickyWeeklyData = {};
   let processedCount = 0;
-  let skippedCurrentWeek = 0;
-  let skippedLastWeek = 0;
 
   stats.forEach((row, index) => {
     try {
@@ -350,14 +335,11 @@ function processApiData(rawData, includeLastWeek = null) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
 
-      // Исправленная логика фильтрации
-      if (weekKey === currentWeekStartStr) {
-        skippedCurrentWeek++;
+      if (weekKey >= currentWeekStart) {
         return;
       }
       
-      if (!shouldIncludeLastWeek && weekKey === lastWeekStartStr) {
-        skippedLastWeek++;
+      if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) {
         return;
       }
 
@@ -373,19 +355,20 @@ function processApiData(rawData, includeLastWeek = null) {
         metricsStartIndex = 3;
       }
       
+      // УНИФИЦИРОВАННАЯ ОБРАБОТКА МЕТРИК для всех проектов
       const metrics = {
-        cpi: parseFloat(row[metricsStartIndex].value) || 0,
-        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
-        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
-        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
-        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
-        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,
-        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,
-        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
-        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,
-        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,
-        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0
+        cpi: parseFloat(row[metricsStartIndex].value) || 0,         // 0: cpi
+        installs: parseInt(row[metricsStartIndex + 1].value) || 0,  // 1: installs
+        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,     // 2: ipm
+        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,   // 3: spend
+        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,    // 4: retention_rate D1
+        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,    // 5: roas D1
+        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,    // 6: retention_rate D7
+        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,  // 7: roas D7
+        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,  // 8: e_arpu_forecast D365
+        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,  // 9: e_roas_forecast D365
+        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0, // 10: e_profit_forecast D730
+        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0 // 11: e_roas_forecast D730
       };
 
       const sunday = getSundayOfWeek(new Date(date));
@@ -423,7 +406,6 @@ function processApiData(rawData, includeLastWeek = null) {
         };
         
         appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
-        processedCount++;
         return;
       }
 
@@ -503,7 +485,7 @@ function processApiData(rawData, includeLastWeek = null) {
 
       processedCount++;
       
-      if (processedCount % 20 === 0) {
+      if (processedCount % 100 === 0) {
         console.log(`Processed ${processedCount}/${stats.length} records...`);
       }
 
@@ -571,9 +553,6 @@ function processApiData(rawData, includeLastWeek = null) {
   }
 
   console.log(`Processing completed: ${processedCount} records processed`);
-  console.log(`Skipped current week: ${skippedCurrentWeek}`);
-  console.log(`Skipped last week: ${skippedLastWeek}`);
-
   return appData;
 }
 
