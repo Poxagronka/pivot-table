@@ -56,8 +56,8 @@ function createTrickyOptimizedPivotTable(appData) {
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(1)}%` : '';
+      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(1)}%` : '';
       const status = weekWoW.growthStatus || '';
       
       const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
@@ -141,8 +141,8 @@ function createStandardEnhancedPivotTable(appData) {
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(1)}%` : '';
+        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(1)}%` : '';
         const status = weekWoW.growthStatus || '';
         
         const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
@@ -168,8 +168,8 @@ function createStandardEnhancedPivotTable(appData) {
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(1)}%` : '';
+        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(1)}%` : '';
         const status = weekWoW.growthStatus || '';
         
         const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
@@ -247,8 +247,8 @@ function createOverallPivotTable(appData) {
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(1)}%` : '';
+      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(1)}%` : '';
       const status = weekWoW.growthStatus || '';
       
       formatData.push({ row: currentRow + 1, type: 'WEEK' });
@@ -480,8 +480,8 @@ function addTrickyOptimizedSourceAppRows(tableData, sourceApps, weekKey, wow, fo
     const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
     const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
     
-    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(1)}%` : '';
+    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(1)}%` : '';
     const status = sourceAppWoW.growthStatus || '';
     
     formatData.push({ row: currentRow + addedRows + 1, type: 'SOURCE_APP' });
@@ -515,8 +515,8 @@ function addTrickyOptimizedCampaignRows(tableData, campaigns, weekKey, wow, form
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
-    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(1)}%` : '';
+    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(1)}%` : '';
     const growthStatus = campaignWoW.growthStatus || '';
     
     formatData.push({ row: currentRow + addedRows + 1, type: 'CAMPAIGN' });
@@ -547,8 +547,8 @@ function addStandardSourceAppRows(tableData, sourceApps, weekKey, wow, formatDat
     const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
     const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
     
-    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(1)}%` : '';
+    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(1)}%` : '';
     const status = sourceAppWoW.growthStatus || '';
     
     formatData.push({ row: currentRow + addedRows + 1, type: 'SOURCE_APP' });
@@ -602,8 +602,8 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, c
     const key = `${campaign.campaignId}_${weekKey}`;
     const campaignWoW = wow.campaignWoW[key] || {};
     
-    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
+    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(1)}%` : '';
+    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(1)}%` : '';
     const growthStatus = campaignWoW.growthStatus || '';
     
     formatData.push({ row: currentRow + addedRows + 1, type: 'CAMPAIGN' });
@@ -1384,7 +1384,7 @@ function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, s
   return [
     'SOURCE_APP', sourceAppDisplayName, '', '',
     totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
-    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(1)}%`, `${totals.avgRrD7.toFixed(1)}%`,
+    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${(totals.avgRrD1 * 100).toFixed(1)}%`, `${(totals.avgRrD7 * 100).toFixed(1)}%`,
     totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
     totals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
@@ -1402,7 +1402,7 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
   return [
     'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
     weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
-    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(1)}%`, `${weekTotals.avgRrD7.toFixed(1)}%`,
+    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${(weekTotals.avgRrD1 * 100).toFixed(1)}%`, `${(weekTotals.avgRrD7 * 100).toFixed(1)}%`,
     weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, `${weekTotals.avgEROASD730.toFixed(0)}%`,
     weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
@@ -1463,7 +1463,7 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
   return [
     'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
     campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(1)}%`, `${campaign.rrD7.toFixed(1)}%`,
+    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${(campaign.rrD1 * 100).toFixed(1)}%`, `${(campaign.rrD7 * 100).toFixed(1)}%`,
     campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, `${campaign.eRoasForecastD730.toFixed(0)}%`,
     campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
   ];
