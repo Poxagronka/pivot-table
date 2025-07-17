@@ -1,3 +1,8 @@
+/**
+ * Utility Functions - ОБНОВЛЕНО: улучшена сортировка листов с Settings, To do и скрытыми листами
+ */
+
+// Date Utils
 function getMondayOfWeek(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -39,176 +44,235 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date);
 }
 
+// Sheet Utils
+function expandAllGroups(sheet) {
+  try {
+    const maxRows = sheet.getMaxRows();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).expandGroups();
+      } catch (e) {
+        break;
+      }
+    }
+  } catch (e) {
+    console.log('No groups to expand or error expanding groups:', e);
+  }
+}
+
+function clearAllGroups(sheet) {
+  try {
+    const maxRows = sheet.getMaxRows();
+    let hasGroups = true;
+    let attempts = 0;
+    
+    while (hasGroups && attempts < 10) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
+        attempts++;
+      } catch (e) {
+        hasGroups = false;
+      }
+    }
+  } catch (e) {
+    console.log('Error clearing groups:', e);
+  }
+}
+
+function recreateGrouping(sheet) {
+  expandAllGroups(sheet);
+  clearAllGroups(sheet);
+  const data = sheet.getDataRange().getValues();
+  createRowGrouping(sheet, data, null);
+}
+
 function clearAllDataSilent() {
-  const config = getCurrentConfig();
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+      const config = getCurrentConfig();
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
-      if (oldSheet?.getLastRow() > 1) {
+      if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
-          new CommentCache().syncCommentsFromSheet();
-        } catch (e) {}
+          const cache = new CommentCache();
+          cache.syncCommentsFromSheet();
+          console.log('Comments cached before clearing sheet');
+        } catch (e) {
+          console.error('Error caching comments:', e);
+        }
       }
       
       Utilities.sleep(1000);
       
-      const requests = [];
-      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      if (sheetId !== undefined) {
-        requests.push({
-          deleteSheet: { sheetId: sheetId }
-        });
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
       }
       
-      requests.push({
-        addSheet: {
-          properties: {
-            title: config.SHEET_NAME,
-            index: 0
-          }
-        }
-      });
+      newSheet.setName(config.SHEET_NAME);
       
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, config.SHEET_ID);
-      
+      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
       return;
     } catch (e) {
-      if (attempt === 2) throw e;
-      Utilities.sleep(3000 * Math.pow(2, attempt - 1));
+      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
   }
 }
 
 function clearProjectDataSilent(projectName) {
-  const config = getProjectConfig(projectName);
+  const maxRetries = 2;
+  const baseDelay = 3000;
   
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+      const config = getProjectConfig(projectName);
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
       
-      if (oldSheet?.getLastRow() > 1) {
+      if (!spreadsheet) {
+        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
+      }
+      
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
-          new CommentCache(projectName).syncCommentsFromSheet();
-        } catch (e) {}
+          const cache = new CommentCache(projectName);
+          cache.syncCommentsFromSheet();
+          console.log(`${projectName}: Comments cached before clearing sheet`);
+        } catch (e) {
+          console.error(`${projectName}: Error caching comments:`, e);
+        }
       }
       
       Utilities.sleep(1500);
       
-      const requests = [];
-      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      if (sheetId !== undefined) {
-        requests.push({
-          deleteSheet: { sheetId: sheetId }
-        });
+      Utilities.sleep(500);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
       }
       
-      requests.push({
-        addSheet: {
-          properties: {
-            title: config.SHEET_NAME,
-            index: 0
-          }
-        }
-      });
+      Utilities.sleep(500);
       
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, config.SHEET_ID);
+      newSheet.setName(config.SHEET_NAME);
       
+      console.log(`${projectName}: Sheet recreated successfully`);
       return;
     } catch (e) {
-      if (attempt === 2) throw e;
-      Utilities.sleep(3000 * Math.pow(2, attempt - 1) + 2000);
+      console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
     }
   }
 }
 
 function getOrCreateProjectSheet(projectName) {
   const config = getProjectConfig(projectName);
-  const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-  const sheet = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME);
-  
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   if (!sheet) {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        addSheet: {
-          properties: {
-            title: config.SHEET_NAME
-          }
-        }
-      }]
-    }, config.SHEET_ID);
+    sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   }
-  
-  return SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+  return sheet;
 }
 
+// ОБНОВЛЕНО: улучшенная сортировка листов с Settings, To do и скрытыми листами в алфавитном порядке
 function sortProjectSheets() {
   try {
+    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    const sheets = spreadsheet.getSheets();
+    
+    // ОБНОВЛЕНО: добавлены Settings и To do в конец списка
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
-    const spreadsheet = Sheets.Spreadsheets.get(MAIN_SHEET_ID);
     
-    const sheets = spreadsheet.sheets.map(s => ({
-      id: s.properties.sheetId,
-      title: s.properties.title,
-      hidden: s.properties.hidden || false,
-      index: s.properties.index
-    }));
-    
-    const projectSheets = [];
-    const visibleOtherSheets = [];
-    const hiddenSheets = [];
+    // Разделяем листы на категории
+    const projectSheets = [];      // Листы из projectOrder
+    const visibleOtherSheets = []; // Видимые листы не из projectOrder
+    const hiddenSheets = [];       // Скрытые листы
     
     sheets.forEach(sheet => {
-      const projectIndex = projectOrder.indexOf(sheet.title);
+      const sheetName = sheet.getName();
+      const projectIndex = projectOrder.indexOf(sheetName);
+      const isHidden = sheet.isSheetHidden();
+      
       if (projectIndex !== -1) {
-        projectSheets.push({ ...sheet, order: projectIndex });
-      } else if (sheet.hidden) {
-        hiddenSheets.push(sheet);
+        // Лист из основного списка
+        projectSheets.push({ sheet, index: projectIndex, name: sheetName });
+      } else if (isHidden) {
+        // Скрытый лист
+        hiddenSheets.push({ sheet, name: sheetName });
       } else {
-        visibleOtherSheets.push(sheet);
+        // Видимый лист, не входящий в основной список
+        visibleOtherSheets.push({ sheet, name: sheetName });
       }
     });
     
-    projectSheets.sort((a, b) => a.order - b.order);
-    visibleOtherSheets.sort((a, b) => a.title.localeCompare(b.title));
-    hiddenSheets.sort((a, b) => a.title.localeCompare(b.title));
+    // Сортируем каждую категорию
+    projectSheets.sort((a, b) => a.index - b.index);
+    visibleOtherSheets.sort((a, b) => a.name.localeCompare(b.name));
+    hiddenSheets.sort((a, b) => a.name.localeCompare(b.name));
     
-    const finalOrder = [...projectSheets, ...visibleOtherSheets, ...hiddenSheets];
-    const requests = [];
+    // Объединяем в финальный порядок: основные листы + видимые прочие + скрытые в алфавитном порядке
+    const finalOrder = [
+      ...projectSheets.map(item => item.sheet),
+      ...visibleOtherSheets.map(item => item.sheet),
+      ...hiddenSheets.map(item => item.sheet)
+    ];
+    
+    console.log('Sheet ordering:');
+    console.log('- Project sheets:', projectSheets.map(s => s.name));
+    console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
+    console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
+    
+    // Переставляем листы с паузами
+    let position = 1;
     
     finalOrder.forEach((sheet, index) => {
-      if (sheet.index !== index) {
-        requests.push({
-          updateSheetProperties: {
-            properties: {
-              sheetId: sheet.id,
-              index: index
-            },
-            fields: 'index'
-          }
-        });
+      try {
+        spreadsheet.setActiveSheet(sheet);
+        spreadsheet.moveActiveSheet(position);
+        position++;
+        
+        // Небольшая пауза между перемещениями
+        if (index < finalOrder.length - 1) {
+          Utilities.sleep(200);
+        }
+      } catch (e) {
+        console.error(`Error moving sheet ${sheet.getName()}:`, e);
       }
     });
     
-    if (requests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, MAIN_SHEET_ID);
-    }
+    console.log('Project sheets sorted successfully');
   } catch (e) {
+    console.error('Error sorting project sheets:', e);
     throw e;
   }
 }
 
+// String Utils
 function sanitizeString(str) {
   if (!str) return '';
   return str.toString().trim().replace(/[^\w\s-]/g, '').substring(0, 100);
@@ -220,6 +284,7 @@ function truncateString(str, maxLength = 50) {
   return str.substring(0, maxLength - 3) + '...';
 }
 
+// Array Utils
 function removeDuplicates(arr) {
   return [...new Set(arr)];
 }
@@ -243,6 +308,7 @@ function sortByProperty(arr, property, ascending = true) {
   });
 }
 
+// Number Utils
 function formatCurrency(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -264,10 +330,12 @@ function isValidNumber(value) {
   return typeof value === 'number' && !isNaN(value) && isFinite(value);
 }
 
+// Error Handling
 function safeExecute(fn, fallbackValue = null, context = 'Unknown') {
   try {
     return fn();
   } catch (e) {
+    console.error(`Error in ${context}:`, e);
     return fallbackValue;
   }
 }
@@ -280,8 +348,13 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
       return fn();
     } catch (e) {
       attempts++;
-      if (attempts >= maxRetries) throw e;
-      Utilities.sleep(baseDelay * Math.pow(2, attempts - 1));
+      if (attempts >= maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempts - 1);
+      console.log(`Attempt ${attempts} failed, retrying in ${delay}ms...`);
+      Utilities.sleep(delay);
       return attempt();
     }
   }
@@ -289,10 +362,12 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
   return attempt();
 }
 
+// Performance Utils
 function measureExecutionTime(fn, label = 'Function') {
   const startTime = new Date().getTime();
   const result = fn();
   const endTime = new Date().getTime();
+  console.log(`${label} execution time: ${endTime - startTime}ms`);
   return result;
 }
 
@@ -302,11 +377,15 @@ function batchOperation(items, batchSize, operation) {
     const batch = items.slice(i, i + batchSize);
     const batchResults = operation(batch, i);
     results.push(...batchResults);
-    if (i + batchSize < items.length) Utilities.sleep(100);
+    
+    if (i + batchSize < items.length) {
+      Utilities.sleep(100);
+    }
   }
   return results;
 }
 
+// Project Utils
 function getConfiguredProjects() {
   const configured = [];
   Object.keys(PROJECTS).forEach(projectName => {
@@ -362,154 +441,4 @@ function getProjectStatus(projectName) {
   }
   
   return status;
-}
-
-function debugUtilities() {
-  console.log('=== UTILITIES DEBUG START ===');
-  let passed = 0;
-  let failed = 0;
-  
-  const test = (name, fn) => {
-    try {
-      const result = fn();
-      if (result) {
-        console.log(`✅ ${name}`);
-        passed++;
-      } else {
-        console.log(`❌ ${name}`);
-        failed++;
-      }
-    } catch (e) {
-      console.log(`❌ ${name}: ${e.toString()}`);
-      failed++;
-    }
-  };
-  
-  test('getMondayOfWeek', () => {
-    const monday = getMondayOfWeek(new Date('2024-01-15'));
-    return monday.getDay() === 1;
-  });
-  
-  test('getSundayOfWeek', () => {
-    const sunday = getSundayOfWeek(new Date('2024-01-15'));
-    return sunday.getDay() === 0;
-  });
-  
-  test('formatDateForAPI', () => {
-    const formatted = formatDateForAPI(new Date('2024-01-15'));
-    return formatted === '2024-01-15';
-  });
-  
-  test('getDateRange', () => {
-    const range = getDateRange(7);
-    return range.from && range.to && range.from < range.to;
-  });
-  
-  test('isValidDate', () => {
-    return isValidDate('2024-01-15') && !isValidDate('invalid') && !isValidDate('2024-13-45');
-  });
-  
-  test('sanitizeString', () => {
-    const clean = sanitizeString('Test@#$123 -_abc');
-    return clean === 'Test123 -_abc';
-  });
-  
-  test('truncateString', () => {
-    const truncated = truncateString('Very long string that needs truncation', 10);
-    return truncated === 'Very lo...' && truncateString('Short', 10) === 'Short';
-  });
-  
-  test('removeDuplicates', () => {
-    const unique = removeDuplicates([1, 2, 2, 3, 3, 3]);
-    return unique.length === 3 && unique[0] === 1 && unique[1] === 2 && unique[2] === 3;
-  });
-  
-  test('groupBy', () => {
-    const grouped = groupBy([{type: 'a', val: 1}, {type: 'b', val: 2}, {type: 'a', val: 3}], item => item.type);
-    return grouped.a?.length === 2 && grouped.b?.length === 1;
-  });
-  
-  test('sortByProperty', () => {
-    const sorted = sortByProperty([{val: 3}, {val: 1}, {val: 2}], 'val');
-    const desc = sortByProperty([{val: 1}, {val: 2}, {val: 3}], 'val', false);
-    return sorted[0].val === 1 && sorted[2].val === 3 && desc[0].val === 3;
-  });
-  
-  test('formatCurrency', () => {
-    const formatted = formatCurrency(1234.56);
-    return formatted === '$1,234.56';
-  });
-  
-  test('formatPercentage', () => {
-    const formatted = formatPercentage(0.156);
-    const formatted2 = formatPercentage(0.1234, 2);
-    return formatted === '15.6%' && formatted2 === '12.34%';
-  });
-  
-  test('roundToDecimals', () => {
-    const rounded = roundToDecimals(1.23456, 2);
-    const rounded3 = roundToDecimals(1.23456, 3);
-    return rounded === 1.23 && rounded3 === 1.235;
-  });
-  
-  test('isValidNumber', () => {
-    return isValidNumber(123) && isValidNumber(-45.67) && 
-           !isValidNumber(NaN) && !isValidNumber(Infinity) && !isValidNumber('123');
-  });
-  
-  test('safeExecute', () => {
-    const result1 = safeExecute(() => 'success');
-    const result2 = safeExecute(() => { throw new Error('test'); }, 'fallback');
-    return result1 === 'success' && result2 === 'fallback';
-  });
-  
-  test('retryWithBackoff', () => {
-    let attempts = 0;
-    const fn = () => {
-      attempts++;
-      if (attempts < 3) throw new Error('retry');
-      return 'success';
-    };
-    const result = retryWithBackoff(fn, 3, 10);
-    return result === 'success' && attempts === 3;
-  });
-  
-  test('measureExecutionTime', () => {
-    const result = measureExecutionTime(() => {
-      Utilities.sleep(100);
-      return 'done';
-    });
-    return result === 'done';
-  });
-  
-  test('batchOperation', () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = batchOperation(items, 2, (batch) => batch.map(x => x * 2));
-    return results.length === 5 && results[0] === 2 && results[4] === 10;
-  });
-  
-  test('clearAllDataSilent', () => {
-    return typeof clearAllDataSilent === 'function';
-  });
-  
-  test('clearProjectDataSilent', () => {
-    return typeof clearProjectDataSilent === 'function';
-  });
-  
-  test('getOrCreateProjectSheet', () => {
-    return typeof getOrCreateProjectSheet === 'function';
-  });
-  
-  test('sortProjectSheets', () => {
-    return typeof sortProjectSheets === 'function';
-  });
-  
-  console.log('\n=== SUMMARY ===');
-  console.log(`Total: ${passed + failed}`);
-  console.log(`Passed: ${passed}`);
-  console.log(`Failed: ${failed}`);
-  console.log(`Success rate: ${Math.round(passed / (passed + failed) * 100)}%`);
-  console.log('=== UTILITIES DEBUG END ===');
-  
-  return { passed, failed, total: passed + failed };
 }
