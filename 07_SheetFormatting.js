@@ -93,8 +93,8 @@ function createEnhancedPivotTable(appData) {
   console.log(`Размер tableData: ${tableData.length} строк`);
   console.log(`Размер formatData: ${formatData.length} элементов форматирования`);
 
-  console.log('Этап 4: Запись таблицы через Sheets API...');
-  writeTableWithSheetsAPI(config, tableData, formatData, headers.length, appData);
+  console.log('Этап 4: Запись таблицы...');
+  writeTableSafely(config, tableData, formatData, headers.length, appData);
   
   console.log('=== ENHANCED PIVOT TABLE СОЗДАНА ===');
 }
@@ -158,391 +158,401 @@ function createOverallPivotTable(appData) {
   console.log(`Размер tableData: ${tableData.length} строк`);
   console.log(`Размер formatData: ${formatData.length} элементов форматирования`);
 
-  console.log('Этап 4: Запись таблицы через Sheets API...');
-  writeTableWithSheetsAPI(config, tableData, formatData, headers.length, appData);
+  console.log('Этап 4: Запись таблицы...');
+  writeTableSafely(config, tableData, formatData, headers.length, appData);
   
   console.log('=== OVERALL PIVOT TABLE СОЗДАНА ===');
 }
 
-function writeTableWithSheetsAPI(config, tableData, formatData, numCols, appData, knownSheetId = null) {
-  console.log('=== ЗАПИСЬ ТАБЛИЦЫ ЧЕРЕЗ SHEETS API ===');
+function writeTableSafely(config, tableData, formatData, numCols, appData) {
+  console.log('=== БЕЗОПАСНАЯ ЗАПИСЬ ТАБЛИЦЫ ===');
   const numRows = tableData.length;
   const sheetName = config.SHEET_NAME;
   
   console.log(`Записываем таблицу: ${numRows} строк x ${numCols} колонок`);
   console.log(`Лист: ${sheetName}`);
   
-  console.log('Этап 1: Получение Sheet ID...');
-  const sheetId = knownSheetId || getSheetIdOnce(config.SHEET_ID, sheetName);
-  console.log(`Sheet ID: ${sheetId}`);
-  
-  console.log('Этап 2: Запись данных батчами...');
-  writeDataInBatches(config.SHEET_ID, sheetId, tableData, numCols);
-  console.log('✅ Данные записаны');
-  
-  console.log('Этап 3: Применение форматирования...');
-  applyAllFormatting(config.SHEET_ID, sheetId, formatData, numRows, numCols);
-  console.log('✅ Форматирование применено');
-  
-  console.log('Этап 4: Создание группировки...');
-  applyGrouping(config.SHEET_ID, sheetId, formatData);
-  console.log('✅ Группировка создана');
-  
-  console.log('=== ЗАПИСЬ ТАБЛИЦЫ ЗАВЕРШЕНА ===');
-}
-
-function getSheetIdOnce(spreadsheetId, sheetName) {
-  console.log(`Получение Sheet ID для листа: ${sheetName}`);
   try {
-    Utilities.sleep(500);
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
-    if (sheet) {
-      console.log(`✅ Sheet ID найден: ${sheet.properties.sheetId}`);
-      return sheet.properties.sheetId;
-    } else {
-      console.log('❌ Sheet не найден, используем ID = 0');
-      return 0;
-    }
-  } catch (e) {
-    console.log('⚠️ Ошибка получения Sheet ID, повторная попытка через 1 сек...');
-    Utilities.sleep(1000);
+    console.log('Этап 1: Безопасное получение листа...');
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    
+    let sheet = null;
     try {
-      const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-      const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
-      if (sheet) {
-        console.log(`✅ Sheet ID найден при повторе: ${sheet.properties.sheetId}`);
-        return sheet.properties.sheetId;
-      } else {
-        console.log('❌ Sheet не найден при повторе, используем ID = 0');
-        return 0;
-      }
-    } catch (e2) {
-      console.error('❌ Критическая ошибка получения Sheet ID:', e2);
-      return 0;
-    }
-  }
-}
-
-function writeDataInBatches(spreadsheetId, sheetId, tableData, numCols) {
-  const batchSize = 100;
-  const totalRows = tableData.length;
-  
-  console.log(`Запись данных батчами: ${totalRows} строк, батч размер ${batchSize}`);
-  
-  for (let i = 0; i < totalRows; i += batchSize) {
-    const endRow = Math.min(i + batchSize, totalRows);
-    const batchData = tableData.slice(i, endRow);
-    
-    console.log(`  Записываем батч: строки ${i + 1}-${endRow}`);
-    
-    const request = {
-      updateCells: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: i,
-          endRowIndex: endRow,
-          startColumnIndex: 0,
-          endColumnIndex: numCols
-        },
-        rows: batchData.map(row => ({
-          values: row.map(cell => ({
-            userEnteredValue: { stringValue: cell?.toString() || '' }
-          }))
-        })),
-        fields: 'userEnteredValue'
-      }
-    };
-    
-    try {
-      Sheets.Spreadsheets.batchUpdate({ requests: [request] }, spreadsheetId);
-      console.log(`  ✅ Батч ${i + 1}-${endRow} записан успешно`);
+      sheet = spreadsheet.getSheetByName(sheetName);
+      console.log(`✅ Лист найден: ${sheetName}`);
     } catch (e) {
-      console.error(`  ❌ Ошибка записи батча ${i + 1}-${endRow}:`, e);
-      throw e;
+      console.log(`Лист не найден, создаем новый: ${sheetName}`);
     }
     
-    if (endRow < totalRows) {
-      Utilities.sleep(100);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(sheetName);
+      console.log(`✅ Лист создан: ${sheetName}`);
     }
-  }
-  
-  console.log('✅ Все данные записаны');
-}
-
-function applyAllFormatting(spreadsheetId, sheetId, formatData, numRows, numCols) {
-  console.log('Применение всего форматирования...');
-  const requests = [];
-  
-  console.log('  Добавляем форматирование заголовков...');
-  requests.push({
-    repeatCell: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 0,
-        endRowIndex: 1,
-        startColumnIndex: 0,
-        endColumnIndex: numCols
-      },
-      cell: {
-        userEnteredFormat: {
-          backgroundColor: { red: 0.26, green: 0.52, blue: 0.96 },
-          textFormat: {
-            foregroundColor: { red: 1, green: 1, blue: 1 },
-            bold: true,
-            fontSize: 10
-          },
-          horizontalAlignment: 'CENTER',
-          verticalAlignment: 'MIDDLE',
-          wrapStrategy: 'WRAP'
-        }
-      },
-      fields: 'userEnteredFormat'
-    }
-  });
-  
-  console.log('  Добавляем ширину колонок...');
-  const widths = [80, 300, 40, 40, 75, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 75, 85, 160, 250];
-  widths.forEach((width, index) => {
-    requests.push({
-      updateDimensionProperties: {
-        range: {
-          sheetId: sheetId,
-          dimension: 'COLUMNS',
-          startIndex: index,
-          endIndex: index + 1
-        },
-        properties: {
-          pixelSize: width
-        },
-        fields: 'pixelSize'
-      }
-    });
-  });
-  
-  console.log('  Добавляем форматирование строк...');
-  const appRows = formatData.filter(f => f.type === 'APP').map(f => f.row - 1);
-  const weekRows = formatData.filter(f => f.type === 'WEEK').map(f => f.row - 1);
-  const sourceAppRows = formatData.filter(f => f.type === 'SOURCE_APP').map(f => f.row - 1);
-  const campaignRows = formatData.filter(f => f.type === 'CAMPAIGN').map(f => f.row - 1);
-  
-  console.log(`    APP строк: ${appRows.length}`);
-  console.log(`    WEEK строк: ${weekRows.length}`);
-  console.log(`    SOURCE_APP строк: ${sourceAppRows.length}`);
-  console.log(`    CAMPAIGN строк: ${campaignRows.length}`);
-  
-  appRows.forEach(rowIndex => {
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: rowIndex,
-          endRowIndex: rowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: numCols
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: { red: 0.82, green: 0.91, blue: 0.996 },
-            textFormat: { bold: true, fontSize: 10 }
-          }
-        },
-        fields: 'userEnteredFormat'
-      }
-    });
-  });
-  
-  weekRows.forEach(rowIndex => {
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: rowIndex,
-          endRowIndex: rowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: numCols
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: { red: 0.91, green: 0.94, blue: 0.996 },
-            textFormat: { fontSize: 10 }
-          }
-        },
-        fields: 'userEnteredFormat'
-      }
-    });
-  });
-  
-  sourceAppRows.forEach(rowIndex => {
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: rowIndex,
-          endRowIndex: rowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: numCols
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: { red: 0.94, green: 0.97, blue: 1 },
-            textFormat: { fontSize: 9 }
-          }
-        },
-        fields: 'userEnteredFormat'
-      }
-    });
-  });
-  
-  campaignRows.forEach(rowIndex => {
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: rowIndex,
-          endRowIndex: rowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: numCols
-        },
-        cell: {
-          userEnteredFormat: {
-            backgroundColor: { red: 1, green: 1, blue: 1 },
-            textFormat: { fontSize: 9 }
-          }
-        },
-        fields: 'userEnteredFormat'
-      }
-    });
-  });
-  
-  console.log('  Добавляем условное форматирование...');
-  if (numRows > 1) {
-    requests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: [{
-            sheetId: sheetId,
-            startRowIndex: 1,
-            endRowIndex: numRows,
-            startColumnIndex: 5,
-            endColumnIndex: 6
-          }],
-          booleanRule: {
-            condition: {
-              type: 'TEXT_CONTAINS',
-              values: [{ userEnteredValue: '%' }]
-            },
-            format: {
-              backgroundColor: { red: 0.82, green: 0.95, blue: 0.92 }
-            }
-          }
-        },
-        index: 0
-      }
-    });
     
-    requests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: [{
-            sheetId: sheetId,
-            startRowIndex: 1,
-            endRowIndex: numRows,
-            startColumnIndex: 14,
-            endColumnIndex: 15
-          }],
-          booleanRule: {
-            condition: {
-              type: 'CUSTOM_FORMULA',
-              values: [{ userEnteredValue: '=AND(NOT(ISBLANK(O2)), VALUE(SUBSTITUTE(O2,"%","")) >= 150)' }]
-            },
-            format: {
-              backgroundColor: { red: 0.82, green: 0.95, blue: 0.92 }
-            }
-          }
-        },
-        index: 1
-      }
-    });
-  }
-  
-  console.log('  Добавляем настройки листа...');
-  requests.push({
-    updateSheetProperties: {
-      properties: {
-        sheetId: sheetId,
-        gridProperties: {
-          frozenRowCount: 1,
-          hideGridlines: false
-        }
-      },
-      fields: 'gridProperties.frozenRowCount,gridProperties.hideGridlines'
+    console.log('Этап 2: Очистка листа...');
+    try {
+      sheet.clear();
+      console.log('✅ Лист очищен');
+    } catch (e) {
+      console.log('⚠️ Не удалось очистить лист:', e);
     }
-  });
-  
-  requests.push({
-    updateDimensionProperties: {
-      range: {
-        sheetId: sheetId,
-        dimension: 'COLUMNS',
-        startIndex: 0,
-        endIndex: 1
-      },
-      properties: {
-        hiddenByUser: true
-      },
-      fields: 'hiddenByUser'
-    }
-  });
-  
-  console.log(`  Всего запросов форматирования: ${requests.length}`);
-  
-  try {
-    Sheets.Spreadsheets.batchUpdate({ requests: requests }, spreadsheetId);
-    console.log('✅ Форматирование применено успешно');
+    
+    console.log('Этап 3: Запись данных...');
+    const range = sheet.getRange(1, 1, numRows, numCols);
+    range.setValues(tableData);
+    console.log('✅ Данные записаны');
+    
+    console.log('Этап 4: Применение форматирования...');
+    applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData);
+    console.log('✅ Форматирование применено');
+    
+    console.log('Этап 5: Создание группировки...');
+    createRowGrouping(sheet, formatData, appData);
+    console.log('✅ Группировка создана');
+    
+    console.log('Этап 6: Финальные настройки...');
+    sheet.setFrozenRows(1);
+    sheet.hideColumns(1);
+    console.log('✅ Финальные настройки применены');
+    
   } catch (e) {
-    console.error('❌ Ошибка применения форматирования:', e);
+    console.error('❌ Ошибка при записи таблицы:', e);
     throw e;
   }
+  
+  console.log('=== БЕЗОПАСНАЯ ЗАПИСЬ ЗАВЕРШЕНА ===');
 }
 
-function applyGrouping(spreadsheetId, sheetId, formatData) {
-  console.log('Создание группировки строк...');
-  const requests = [];
+function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
+  console.log('Применение форматирования...');
   
-  const appRows = formatData.filter(f => f.type === 'APP').map(f => f.row - 1);
-  console.log(`Создаем группировку для ${appRows.length} приложений`);
+  console.log('  Заголовки...');
+  const headerRange = sheet.getRange(1, 1, 1, numCols);
+  headerRange
+    .setBackground(COLORS.HEADER.background)
+    .setFontColor(COLORS.HEADER.fontColor)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(10)
+    .setWrap(true);
+
+  console.log('  Ширина колонок...');
+  const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
+  columnWidths.forEach(col => {
+    try {
+      sheet.setColumnWidth(col.c, col.w);
+    } catch (e) {
+      console.log(`Ошибка установки ширины колонки ${col.c}:`, e);
+    }
+  });
+
+  if (numRows > 1) {
+    console.log('  Общее выравнивание...');
+    try {
+      const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
+      allDataRange.setVerticalAlignment('middle');
+      
+      const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
+      commentsRange.setWrap(true).setHorizontalAlignment('left');
+      
+      const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
+      growthStatusRange.setWrap(true).setHorizontalAlignment('left');
+    } catch (e) {
+      console.log('Ошибка общего выравнивания:', e);
+    }
+  }
+
+  console.log('  Форматирование строк по типам...');
+  const rowsByType = {
+    app: [],
+    week: [],
+    sourceApp: [],
+    campaign: []
+  };
   
-  appRows.forEach((appRowIndex, index) => {
-    const nextAppIndex = appRows[index + 1];
-    const endRow = nextAppIndex ? nextAppIndex : formatData[formatData.length - 1].row;
+  formatData.forEach(item => {
+    if (item.type === 'APP') rowsByType.app.push(item.row);
+    if (item.type === 'WEEK') rowsByType.week.push(item.row);
+    if (item.type === 'SOURCE_APP') rowsByType.sourceApp.push(item.row);
+    if (item.type === 'CAMPAIGN') rowsByType.campaign.push(item.row);
+  });
+
+  console.log(`    APP строк: ${rowsByType.app.length}`);
+  console.log(`    WEEK строк: ${rowsByType.week.length}`);
+  console.log(`    SOURCE_APP строк: ${rowsByType.sourceApp.length}`);
+  console.log(`    CAMPAIGN строк: ${rowsByType.campaign.length}`);
+
+  try {
+    rowsByType.app.forEach(r => {
+      sheet.getRange(r, 1, 1, numCols)
+           .setBackground(COLORS.APP_ROW.background)
+           .setFontColor(COLORS.APP_ROW.fontColor)
+           .setFontWeight('bold')
+           .setFontSize(10);
+    });
+
+    rowsByType.week.forEach(r => {
+      sheet.getRange(r, 1, 1, numCols)
+           .setBackground(COLORS.WEEK_ROW.background)
+           .setFontSize(10);
+    });
+
+    rowsByType.sourceApp.forEach(r => {
+      sheet.getRange(r, 1, 1, numCols)
+           .setBackground(COLORS.SOURCE_APP_ROW.background)
+           .setFontSize(9);
+    });
+
+    rowsByType.campaign.forEach(r => {
+      sheet.getRange(r, 1, 1, numCols)
+           .setBackground(COLORS.CAMPAIGN_ROW.background)
+           .setFontSize(9);
+    });
+  } catch (e) {
+    console.log('Ошибка форматирования строк:', e);
+  }
+
+  if (numRows > 1) {
+    console.log('  Числовые форматы...');
+    try {
+      sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
+      sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
+      sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
+      sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
+      sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
+      sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
+    } catch (e) {
+      console.log('Ошибка числовых форматов:', e);
+    }
+  }
+
+  console.log('  Условное форматирование...');
+  try {
+    applyConditionalFormatting(sheet, numRows, appData);
+  } catch (e) {
+    console.log('Ошибка условного форматирования:', e);
+  }
+  
+  console.log('✅ Форматирование завершено');
+}
+
+function applyConditionalFormatting(sheet, numRows, appData) {
+  if (numRows <= 1) return;
+  
+  const rules = [];
+  
+  console.log('    Форматирование WoW изменений...');
+  try {
+    const spendWoWRange = sheet.getRange(2, 6, numRows - 1, 1);
+    const profitWoWRange = sheet.getRange(2, 17, numRows - 1, 1);
     
-    if (endRow > appRowIndex + 1) {
-      console.log(`  Группа ${index + 1}: строки ${appRowIndex + 2}-${endRow}`);
-      requests.push({
-        addDimensionGroup: {
-          range: {
-            sheetId: sheetId,
-            dimension: 'ROWS',
-            startIndex: appRowIndex + 1,
-            endIndex: endRow
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(F2)), ISNUMBER(VALUE(SUBSTITUTE(F2,"%",""))), VALUE(SUBSTITUTE(F2,"%","")) > 0)')
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([spendWoWRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(F2)), ISNUMBER(VALUE(SUBSTITUTE(F2,"%",""))), VALUE(SUBSTITUTE(F2,"%","")) < 0)')
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([spendWoWRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(Q2)), ISNUMBER(VALUE(SUBSTITUTE(Q2,"%",""))), VALUE(SUBSTITUTE(Q2,"%","")) > 0)')
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([profitWoWRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(Q2)), ISNUMBER(VALUE(SUBSTITUTE(Q2,"%",""))), VALUE(SUBSTITUTE(Q2,"%","")) < 0)')
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([profitWoWRange])
+        .build()
+    );
+
+    console.log('    Форматирование eROAS D730...');
+    const eroasRange = sheet.getRange(2, 15, numRows - 1, 1);
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(O2)), ISNUMBER(VALUE(SUBSTITUTE(O2,"%",""))), VALUE(SUBSTITUTE(O2,"%","")) >= 250)')
+        .setBackground('#d4edda')
+        .setFontColor('#155724')
+        .setRanges([eroasRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(O2)), ISNUMBER(VALUE(SUBSTITUTE(O2,"%",""))), VALUE(SUBSTITUTE(O2,"%","")) >= 150, VALUE(SUBSTITUTE(O2,"%","")) < 250)')
+        .setBackground('#d1f2eb')
+        .setFontColor('#0c5460')
+        .setRanges([eroasRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(O2)), ISNUMBER(VALUE(SUBSTITUTE(O2,"%",""))), VALUE(SUBSTITUTE(O2,"%","")) >= 140, VALUE(SUBSTITUTE(O2,"%","")) < 150)')
+        .setBackground('#fff3cd')
+        .setFontColor('#856404')
+        .setRanges([eroasRange])
+        .build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(NOT(ISBLANK(O2)), ISNUMBER(VALUE(SUBSTITUTE(O2,"%",""))), VALUE(SUBSTITUTE(O2,"%","")) < 140)')
+        .setBackground('#f8d7da')
+        .setFontColor('#721c24')
+        .setRanges([eroasRange])
+        .build()
+    );
+
+    console.log('    Форматирование Growth Status...');
+    const growthRange = sheet.getRange(2, 18, numRows - 1, 1);
+    
+    const statusFormats = [
+      { text: '🟢 Healthy Growth', bg: '#d4edda', color: '#155724' },
+      { text: '🟢 Efficiency Improvement', bg: '#d1f2eb', color: '#0c5460' },
+      { text: '🔴 Inefficient Growth', bg: '#f8d7da', color: '#721c24' },
+      { text: '🟠 Declining Efficiency', bg: '#fff3cd', color: '#856404' },
+      { text: '🔵 Scaling Down', bg: '#cce7ff', color: '#004085' },
+      { text: '🟡 Moderate Growth', bg: '#fff3cd', color: '#856404' },
+      { text: '🟡 Moderate Decline', bg: '#fff3cd', color: '#856404' },
+      { text: '⚪ Stable', bg: '#f5f5f5', color: '#616161' }
+    ];
+    
+    statusFormats.forEach(format => {
+      rules.push(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenTextContains(format.text)
+          .setBackground(format.bg)
+          .setFontColor(format.color)
+          .setRanges([growthRange])
+          .build()
+      );
+    });
+    
+    console.log(`    Применяем ${rules.length} правил условного форматирования...`);
+    sheet.setConditionalFormatRules(rules);
+    console.log('    ✅ Условное форматирование применено');
+  } catch (e) {
+    console.log('Ошибка в условном форматировании:', e);
+  }
+}
+
+function createRowGrouping(sheet, formatData, appData) {
+  console.log('Создание группировки строк...');
+  
+  try {
+    let currentRow = 2;
+    const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
+    
+    console.log(`Создаем группы для ${appKeys.length} приложений`);
+    
+    appKeys.forEach((appKey, appIndex) => {
+      const app = appData[appKey];
+      const appStartRow = currentRow;
+      currentRow++;
+      
+      const weekKeys = Object.keys(app.weeks).sort();
+      let appContentRows = 0;
+      
+      weekKeys.forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        const weekStartRow = currentRow;
+        currentRow++;
+        let weekContentRows = 0;
+        
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
+            const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+            const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+            return spendB - spendA;
+          });
+          
+          sourceAppKeys.forEach(sourceAppKey => {
+            const sourceApp = week.sourceApps[sourceAppKey];
+            const sourceAppStartRow = currentRow;
+            currentRow++;
+            
+            const campaignCount = sourceApp.campaigns.length;
+            currentRow += campaignCount;
+            weekContentRows += 1 + campaignCount;
+            
+            if (campaignCount > 0) {
+              try {
+                const campaignRange = sheet.getRange(sourceAppStartRow + 1, 1, campaignCount, 1);
+                campaignRange.shiftRowGroupDepth(1);
+                campaignRange.collapseGroups();
+                console.log(`      Группа кампаний: строки ${sourceAppStartRow + 1}-${sourceAppStartRow + campaignCount}`);
+              } catch (e) {
+                console.log(`      Ошибка группировки кампаний: ${e}`);
+              }
+            }
+          });
+          
+        } else if (CURRENT_PROJECT !== 'OVERALL') {
+          const campaignCount = week.campaigns?.length || 0;
+          currentRow += campaignCount;
+          weekContentRows = campaignCount;
+          
+          if (campaignCount > 0) {
+            try {
+              const campaignRange = sheet.getRange(weekStartRow + 1, 1, campaignCount, 1);
+              campaignRange.shiftRowGroupDepth(1);
+              campaignRange.collapseGroups();
+              console.log(`    Группа кампаний недели: строки ${weekStartRow + 1}-${weekStartRow + campaignCount}`);
+            } catch (e) {
+              console.log(`    Ошибка группировки кампаний недели: ${e}`);
+            }
+          }
+        }
+        
+        appContentRows += 1 + weekContentRows;
+        
+        if (weekContentRows > 0) {
+          try {
+            const weekRange = sheet.getRange(weekStartRow + 1, 1, weekContentRows, 1);
+            weekRange.shiftRowGroupDepth(1);
+            weekRange.collapseGroups();
+            console.log(`    Группа недели: строки ${weekStartRow + 1}-${weekStartRow + weekContentRows}`);
+          } catch (e) {
+            console.log(`    Ошибка группировки недели: ${e}`);
           }
         }
       });
-    }
-  });
-  
-  if (requests.length > 0) {
-    console.log(`Применяем ${requests.length} групп...`);
-    try {
-      Sheets.Spreadsheets.batchUpdate({ requests: requests }, spreadsheetId);
-      console.log('✅ Группировка создана успешно');
-    } catch (e) {
-      console.error('❌ Ошибка создания группировки:', e);
-      throw e;
-    }
-  } else {
-    console.log('Нет групп для создания');
+      
+      if (appContentRows > 0) {
+        try {
+          const appRange = sheet.getRange(appStartRow + 1, 1, appContentRows, 1);
+          appRange.shiftRowGroupDepth(1);
+          appRange.collapseGroups();
+          console.log(`  Группа приложения ${appIndex + 1}: строки ${appStartRow + 1}-${appStartRow + appContentRows}`);
+        } catch (e) {
+          console.log(`  Ошибка группировки приложения: ${e}`);
+        }
+      }
+    });
+    
+    console.log('✅ Группировка завершена успешно');
+    
+  } catch (e) {
+    console.error('❌ Ошибка создания группировки:', e);
   }
 }
 
