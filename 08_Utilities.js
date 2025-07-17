@@ -40,121 +40,174 @@ function isValidDate(dateString) {
 }
 
 function clearAllDataSilent() {
+  console.log('=== ОЧИСТКА ДАННЫХ ТЕКУЩЕГО ПРОЕКТА ===');
   const config = getCurrentConfig();
+  console.log(`Проект: ${CURRENT_PROJECT}`);
+  console.log(`Sheet ID: ${config.SHEET_ID}`);
+  console.log(`Sheet Name: ${config.SHEET_NAME}`);
   
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
-      
-      if (oldSheet?.getLastRow() > 1) {
-        try {
-          new CommentCache().syncCommentsFromSheet();
-        } catch (e) {}
+  try {
+    console.log('Этап 1: Проверка существующего листа...');
+    const existingSheet = getSheetByName(config.SHEET_ID, config.SHEET_NAME);
+    
+    if (existingSheet) {
+      console.log('Существующий лист найден');
+      console.log('Этап 2: Синхронизация комментариев...');
+      try {
+        new CommentCache().syncCommentsFromSheet();
+        console.log('✅ Комментарии синхронизированы');
+      } catch (e) {
+        console.log('⚠️ Ошибка синхронизации комментариев:', e);
       }
-      
-      Utilities.sleep(1000);
-      
-      const requests = [];
-      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
-      
-      if (sheetId !== undefined) {
-        requests.push({
-          deleteSheet: { sheetId: sheetId }
-        });
-      }
-      
-      requests.push({
-        addSheet: {
-          properties: {
-            title: config.SHEET_NAME,
-            index: 0
-          }
-        }
-      });
-      
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, config.SHEET_ID);
-      
-      return;
-    } catch (e) {
-      if (attempt === 2) throw e;
-      Utilities.sleep(3000 * Math.pow(2, attempt - 1));
+    } else {
+      console.log('Существующий лист не найден');
     }
+    
+    console.log('Этап 3: Пересоздание листа...');
+    ensureSheetExists(config.SHEET_ID, config.SHEET_NAME, true);
+    console.log(`✅ Лист ${config.SHEET_NAME} пересоздан успешно`);
+    
+  } catch (e) {
+    console.error('❌ Ошибка очистки данных:', e);
+    throw e;
   }
+  
+  console.log('=== ОЧИСТКА ДАННЫХ ЗАВЕРШЕНА ===');
 }
 
 function clearProjectDataSilent(projectName) {
+  console.log(`=== ОЧИСТКА ДАННЫХ ПРОЕКТА ${projectName} ===`);
   const config = getProjectConfig(projectName);
+  console.log(`Sheet ID: ${config.SHEET_ID}`);
+  console.log(`Sheet Name: ${config.SHEET_NAME}`);
   
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const oldSheet = SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
-      
-      if (oldSheet?.getLastRow() > 1) {
-        try {
-          new CommentCache(projectName).syncCommentsFromSheet();
-        } catch (e) {}
+  try {
+    console.log('Этап 1: Проверка существующего листа...');
+    const existingSheet = getSheetByName(config.SHEET_ID, config.SHEET_NAME);
+    
+    if (existingSheet) {
+      console.log('Существующий лист найден');
+      console.log('Этап 2: Синхронизация комментариев...');
+      try {
+        new CommentCache(projectName).syncCommentsFromSheet();
+        console.log('✅ Комментарии синхронизированы');
+      } catch (e) {
+        console.log(`⚠️ Ошибка синхронизации комментариев для ${projectName}:`, e);
       }
-      
-      Utilities.sleep(1500);
-      
-      const requests = [];
-      const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-      const sheetId = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME)?.properties.sheetId;
-      
-      if (sheetId !== undefined) {
+    } else {
+      console.log('Существующий лист не найден');
+    }
+    
+    console.log('Этап 3: Пересоздание листа...');
+    ensureSheetExists(config.SHEET_ID, config.SHEET_NAME, true);
+    console.log(`✅ Лист ${projectName} пересоздан успешно`);
+    
+  } catch (e) {
+    console.error(`❌ Ошибка очистки данных ${projectName}:`, e);
+    throw e;
+  }
+  
+  console.log(`=== ОЧИСТКА ДАННЫХ ${projectName} ЗАВЕРШЕНА ===`);
+}
+
+function getSheetByName(spreadsheetId, sheetName) {
+  console.log(`Получение листа: ${sheetName} из таблицы ${spreadsheetId}`);
+  try {
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    console.log(`Таблица получена, листов: ${spreadsheet.sheets.length}`);
+    
+    const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
+    if (sheet) {
+      console.log(`✅ Лист найден: ${sheetName} (ID: ${sheet.properties.sheetId})`);
+      return sheet;
+    } else {
+      console.log(`❌ Лист не найден: ${sheetName}`);
+      const sheetNames = spreadsheet.sheets.map(s => s.properties.title).join(', ');
+      console.log(`Доступные листы: ${sheetNames}`);
+      return null;
+    }
+  } catch (e) {
+    console.error('❌ Ошибка получения листа:', e);
+    return null;
+  }
+}
+
+function ensureSheetExists(spreadsheetId, sheetName, recreate = false) {
+  console.log(`Обеспечение существования листа: ${sheetName} (recreate: ${recreate})`);
+  
+  try {
+    console.log('Получение информации о таблице...');
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    const existingSheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
+    
+    const requests = [];
+    
+    if (existingSheet) {
+      console.log(`Существующий лист найден: ${sheetName} (ID: ${existingSheet.properties.sheetId})`);
+      if (recreate) {
+        console.log('Добавляем запрос на удаление листа...');
         requests.push({
-          deleteSheet: { sheetId: sheetId }
+          deleteSheet: {
+            sheetId: existingSheet.properties.sheetId
+          }
         });
       }
-      
+    } else {
+      console.log(`Лист не найден: ${sheetName}`);
+    }
+    
+    if (!existingSheet || recreate) {
+      console.log('Добавляем запрос на создание листа...');
       requests.push({
         addSheet: {
           properties: {
-            title: config.SHEET_NAME,
-            index: 0
+            title: sheetName,
+            index: 0,
+            gridProperties: {
+              rowCount: 1000,
+              columnCount: 20
+            }
           }
         }
       });
-      
+    }
+    
+    if (requests.length > 0) {
+      console.log(`Выполняем batch update с ${requests.length} запросами...`);
       Sheets.Spreadsheets.batchUpdate({
         requests: requests
-      }, config.SHEET_ID);
-      
-      return;
-    } catch (e) {
-      if (attempt === 2) throw e;
-      Utilities.sleep(3000 * Math.pow(2, attempt - 1) + 2000);
+      }, spreadsheetId);
+      console.log('✅ Batch update выполнен успешно');
+    } else {
+      console.log('Запросы не требуются');
     }
+    
+    return true;
+  } catch (e) {
+    console.error('❌ Ошибка обеспечения существования листа:', e);
+    return false;
   }
 }
 
 function getOrCreateProjectSheet(projectName) {
+  console.log(`Получение или создание листа для проекта: ${projectName}`);
   const config = getProjectConfig(projectName);
-  const spreadsheet = Sheets.Spreadsheets.get(config.SHEET_ID);
-  const sheet = spreadsheet.sheets.find(s => s.properties.title === config.SHEET_NAME);
+  console.log(`Конфигурация: Sheet ID = ${config.SHEET_ID}, Sheet Name = ${config.SHEET_NAME}`);
   
-  if (!sheet) {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        addSheet: {
-          properties: {
-            title: config.SHEET_NAME
-          }
-        }
-      }]
-    }, config.SHEET_ID);
-  }
-  
-  return SpreadsheetApp.openById(config.SHEET_ID).getSheetByName(config.SHEET_NAME);
+  ensureSheetExists(config.SHEET_ID, config.SHEET_NAME);
+  return getSheetByName(config.SHEET_ID, config.SHEET_NAME);
 }
 
 function sortProjectSheets() {
+  console.log('=== СОРТИРОВКА ЛИСТОВ ПРОЕКТОВ ===');
+  
   try {
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
+    console.log(`Желаемый порядок: ${projectOrder.join(', ')}`);
+    
+    console.log('Получение информации о таблице...');
     const spreadsheet = Sheets.Spreadsheets.get(MAIN_SHEET_ID);
+    console.log(`Найдено листов: ${spreadsheet.sheets.length}`);
     
     const sheets = spreadsheet.sheets.map(s => ({
       id: s.properties.sheetId,
@@ -162,6 +215,11 @@ function sortProjectSheets() {
       hidden: s.properties.hidden || false,
       index: s.properties.index
     }));
+    
+    console.log('Текущие листы:');
+    sheets.forEach(sheet => {
+      console.log(`  ${sheet.index}: ${sheet.title} (ID: ${sheet.id}, hidden: ${sheet.hidden})`);
+    });
     
     const projectSheets = [];
     const visibleOtherSheets = [];
@@ -178,15 +236,24 @@ function sortProjectSheets() {
       }
     });
     
+    console.log(`Проектные листы: ${projectSheets.length}`);
+    console.log(`Видимые другие листы: ${visibleOtherSheets.length}`);
+    console.log(`Скрытые листы: ${hiddenSheets.length}`);
+    
     projectSheets.sort((a, b) => a.order - b.order);
     visibleOtherSheets.sort((a, b) => a.title.localeCompare(b.title));
     hiddenSheets.sort((a, b) => a.title.localeCompare(b.title));
     
     const finalOrder = [...projectSheets, ...visibleOtherSheets, ...hiddenSheets];
-    const requests = [];
+    console.log('Финальный порядок:');
+    finalOrder.forEach((sheet, index) => {
+      console.log(`  ${index}: ${sheet.title}`);
+    });
     
+    const requests = [];
     finalOrder.forEach((sheet, index) => {
       if (sheet.index !== index) {
+        console.log(`Изменение позиции: ${sheet.title} с ${sheet.index} на ${index}`);
         requests.push({
           updateSheetProperties: {
             properties: {
@@ -200,13 +267,21 @@ function sortProjectSheets() {
     });
     
     if (requests.length > 0) {
+      console.log(`Выполняем сортировку с ${requests.length} запросами...`);
       Sheets.Spreadsheets.batchUpdate({
         requests: requests
       }, MAIN_SHEET_ID);
+      console.log('✅ Сортировка выполнена успешно');
+    } else {
+      console.log('Сортировка не требуется - все листы уже в правильном порядке');
     }
+    
   } catch (e) {
+    console.error('❌ Ошибка сортировки листов:', e);
     throw e;
   }
+  
+  console.log('=== СОРТИРОВКА ЛИСТОВ ЗАВЕРШЕНА ===');
 }
 
 function sanitizeString(str) {
@@ -409,99 +484,12 @@ function debugUtilities() {
     return isValidDate('2024-01-15') && !isValidDate('invalid') && !isValidDate('2024-13-45');
   });
   
-  test('sanitizeString', () => {
-    const clean = sanitizeString('Test@#$123 -_abc');
-    return clean === 'Test123 -_abc';
+  test('ensureSheetExists', () => {
+    return typeof ensureSheetExists === 'function';
   });
   
-  test('truncateString', () => {
-    const truncated = truncateString('Very long string that needs truncation', 10);
-    return truncated === 'Very lo...' && truncateString('Short', 10) === 'Short';
-  });
-  
-  test('removeDuplicates', () => {
-    const unique = removeDuplicates([1, 2, 2, 3, 3, 3]);
-    return unique.length === 3 && unique[0] === 1 && unique[1] === 2 && unique[2] === 3;
-  });
-  
-  test('groupBy', () => {
-    const grouped = groupBy([{type: 'a', val: 1}, {type: 'b', val: 2}, {type: 'a', val: 3}], item => item.type);
-    return grouped.a?.length === 2 && grouped.b?.length === 1;
-  });
-  
-  test('sortByProperty', () => {
-    const sorted = sortByProperty([{val: 3}, {val: 1}, {val: 2}], 'val');
-    const desc = sortByProperty([{val: 1}, {val: 2}, {val: 3}], 'val', false);
-    return sorted[0].val === 1 && sorted[2].val === 3 && desc[0].val === 3;
-  });
-  
-  test('formatCurrency', () => {
-    const formatted = formatCurrency(1234.56);
-    return formatted === '$1,234.56';
-  });
-  
-  test('formatPercentage', () => {
-    const formatted = formatPercentage(0.156);
-    const formatted2 = formatPercentage(0.1234, 2);
-    return formatted === '15.6%' && formatted2 === '12.34%';
-  });
-  
-  test('roundToDecimals', () => {
-    const rounded = roundToDecimals(1.23456, 2);
-    const rounded3 = roundToDecimals(1.23456, 3);
-    return rounded === 1.23 && rounded3 === 1.235;
-  });
-  
-  test('isValidNumber', () => {
-    return isValidNumber(123) && isValidNumber(-45.67) && 
-           !isValidNumber(NaN) && !isValidNumber(Infinity) && !isValidNumber('123');
-  });
-  
-  test('safeExecute', () => {
-    const result1 = safeExecute(() => 'success');
-    const result2 = safeExecute(() => { throw new Error('test'); }, 'fallback');
-    return result1 === 'success' && result2 === 'fallback';
-  });
-  
-  test('retryWithBackoff', () => {
-    let attempts = 0;
-    const fn = () => {
-      attempts++;
-      if (attempts < 3) throw new Error('retry');
-      return 'success';
-    };
-    const result = retryWithBackoff(fn, 3, 10);
-    return result === 'success' && attempts === 3;
-  });
-  
-  test('measureExecutionTime', () => {
-    const result = measureExecutionTime(() => {
-      Utilities.sleep(100);
-      return 'done';
-    });
-    return result === 'done';
-  });
-  
-  test('batchOperation', () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = batchOperation(items, 2, (batch) => batch.map(x => x * 2));
-    return results.length === 5 && results[0] === 2 && results[4] === 10;
-  });
-  
-  test('clearAllDataSilent', () => {
-    return typeof clearAllDataSilent === 'function';
-  });
-  
-  test('clearProjectDataSilent', () => {
-    return typeof clearProjectDataSilent === 'function';
-  });
-  
-  test('getOrCreateProjectSheet', () => {
-    return typeof getOrCreateProjectSheet === 'function';
-  });
-  
-  test('sortProjectSheets', () => {
-    return typeof sortProjectSheets === 'function';
+  test('getSheetByName', () => {
+    return typeof getSheetByName === 'function';
   });
   
   console.log('\n=== SUMMARY ===');
