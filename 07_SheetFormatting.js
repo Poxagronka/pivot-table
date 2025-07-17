@@ -205,7 +205,7 @@ function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, s
   return [
     'SOURCE_APP', sourceAppDisplayName, '', '',
     totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
-    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(1)}%`, `${totals.avgRrD7.toFixed(1)}%`,
+    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
     totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
     totals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
@@ -223,7 +223,7 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
   return [
     'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
     weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
-    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(1)}%`, `${weekTotals.avgRrD7.toFixed(1)}%`,
+    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(0)}%`, `${weekTotals.avgRrD7.toFixed(0)}%`,
     weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, `${weekTotals.avgEROASD730.toFixed(0)}%`,
     weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
@@ -299,13 +299,13 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   }
 
   if (numRows > 1) {
-    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.00');
-    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.00');
-    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
-    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.000');
-    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.00');
-  }
+  sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0');        // Spend - до целого
+  sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.0');      // CPI - 1 знак после точки
+  sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.0');       // ROAS D-1 - 1 знак после точки
+  sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');      // IPM - без изменений
+  sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.0');     // eARPU 365d - 1 знак после точки
+  sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');       // eProfit 730d - до целого
+}
 
   applyConditionalFormatting(sheet, numRows, appData);
   sheet.hideColumns(1);
@@ -508,7 +508,7 @@ function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growt
   return [
     'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
     campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(1)}%`, `${campaign.rrD7.toFixed(1)}%`,
+    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(0)}%`, `${campaign.rrD7.toFixed(0)}%`,
     campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, `${campaign.eRoasForecastD730.toFixed(0)}%`,
     campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
   ];
