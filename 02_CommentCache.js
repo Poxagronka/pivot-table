@@ -90,7 +90,7 @@ class CommentCache {
       const level = data[i][0];
       const nameOrRange = data[i][1];
       const idOrEmpty = data[i][2];
-      const comment = data[i][19]; // ОБНОВЛЕНО: Comments теперь в колонке 19 (унифицированная структура)
+      const comment = data[i][18]; 
       
       if (level === 'APP') {
         currentApp = nameOrRange;
