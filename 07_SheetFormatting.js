@@ -69,7 +69,7 @@ function createEnhancedPivotTable(appData) {
       } else {
         console.log(`    Стандартный проект - обрабатываем кампании: ${week.campaigns?.length || 0}`);
         
-        const weekTotals = calculateWeekTotals(week.campaigns);
+        const weekTotals = calculateWeekTotals(week.campaigns || []);
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
@@ -82,7 +82,7 @@ function createEnhancedPivotTable(appData) {
         totalRows++;
         
         console.log(`    Добавляем кампании...`);
-        const campaignRowsAdded = addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData);
+        const campaignRowsAdded = addCampaignRows(tableData, week.campaigns || [], week, weekKey, wow, formatData);
         totalRows += campaignRowsAdded;
         console.log(`    Добавлено строк кампаний: ${campaignRowsAdded}`);
       }
@@ -139,7 +139,7 @@ function createOverallPivotTable(appData) {
       const week = app.weeks[weekKey];
       console.log(`  Неделя ${weekIndex + 1}/${weekKeys.length}: ${weekKey}`);
       
-      const weekTotals = calculateWeekTotals(week.campaigns);
+      const weekTotals = calculateWeekTotals(week.campaigns || []);
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
@@ -164,7 +164,7 @@ function createOverallPivotTable(appData) {
   console.log('=== OVERALL PIVOT TABLE СОЗДАНА ===');
 }
 
-function writeTableWithSheetsAPI(config, tableData, formatData, numCols, appData) {
+function writeTableWithSheetsAPI(config, tableData, formatData, numCols, appData, knownSheetId = null) {
   console.log('=== ЗАПИСЬ ТАБЛИЦЫ ЧЕРЕЗ SHEETS API ===');
   const numRows = tableData.length;
   const sheetName = config.SHEET_NAME;
@@ -173,121 +173,109 @@ function writeTableWithSheetsAPI(config, tableData, formatData, numCols, appData
   console.log(`Лист: ${sheetName}`);
   
   console.log('Этап 1: Получение Sheet ID...');
-  const sheetId = getSheetId(config.SHEET_ID, sheetName);
+  const sheetId = knownSheetId || getSheetIdOnce(config.SHEET_ID, sheetName);
   console.log(`Sheet ID: ${sheetId}`);
   
-  console.log('Этап 2: Подготовка запросов...');
-  const requests = [];
+  console.log('Этап 2: Запись данных батчами...');
+  writeDataInBatches(config.SHEET_ID, sheetId, tableData, numCols);
+  console.log('✅ Данные записаны');
   
-  console.log('  2.1: Создание запроса для записи данных...');
-  requests.push({
-    updateCells: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 0,
-        endRowIndex: numRows,
-        startColumnIndex: 0,
-        endColumnIndex: numCols
-      },
-      rows: tableData.map(row => ({
-        values: row.map(cell => ({
-          userEnteredValue: { stringValue: cell?.toString() || '' }
-        }))
-      })),
-      fields: 'userEnteredValue'
-    }
-  });
-  console.log(`  Запрос записи данных создан для ${numRows}x${numCols} ячеек`);
+  console.log('Этап 3: Применение форматирования...');
+  applyAllFormatting(config.SHEET_ID, sheetId, formatData, numRows, numCols);
+  console.log('✅ Форматирование применено');
   
-  console.log('  2.2: Создание запросов форматирования заголовков...');
-  const headerRequests = createHeaderFormatRequests(sheetName, numCols);
-  requests.push(...headerRequests);
-  console.log(`  Добавлено запросов заголовков: ${headerRequests.length}`);
-  
-  console.log('  2.3: Создание запросов ширины колонок...');
-  const widthRequests = createColumnWidthRequests(sheetName);
-  requests.push(...widthRequests);
-  console.log(`  Добавлено запросов ширины: ${widthRequests.length}`);
-  
-  console.log('  2.4: Создание запросов форматирования строк...');
-  const rowRequests = createRowFormatRequests(sheetName, formatData, numCols);
-  requests.push(...rowRequests);
-  console.log(`  Добавлено запросов форматирования строк: ${rowRequests.length}`);
-  
-  console.log('  2.5: Создание условного форматирования...');
-  const conditionalRequests = createConditionalFormatRequests(sheetName, numRows, numCols, appData);
-  requests.push(...conditionalRequests);
-  console.log(`  Добавлено условных форматирований: ${conditionalRequests.length}`);
-  
-  console.log('  2.6: Добавление заморозки строк и скрытия колонок...');
-  requests.push({
-    updateSheetProperties: {
-      properties: {
-        sheetId: sheetId,
-        gridProperties: {
-          frozenRowCount: 1,
-          hideGridlines: false
-        }
-      },
-      fields: 'gridProperties.frozenRowCount,gridProperties.hideGridlines'
-    }
-  });
-  
-  requests.push({
-    updateDimensionProperties: {
-      range: {
-        sheetId: sheetId,
-        dimension: 'COLUMNS',
-        startIndex: 0,
-        endIndex: 1
-      },
-      properties: {
-        hiddenByUser: true
-      },
-      fields: 'hiddenByUser'
-    }
-  });
-  console.log('  Добавлены запросы заморозки и скрытия');
-  
-  console.log(`Этап 3: Всего подготовлено запросов: ${requests.length}`);
-  
-  console.log('Этап 4: Выполнение batch update...');
-  try {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: requests
-    }, config.SHEET_ID);
-    console.log('✅ Batch update выполнен успешно');
-  } catch (e) {
-    console.error('❌ Ошибка batch update:', e);
-    throw e;
-  }
+  console.log('Этап 4: Создание группировки...');
+  applyGrouping(config.SHEET_ID, sheetId, formatData);
+  console.log('✅ Группировка создана');
   
   console.log('=== ЗАПИСЬ ТАБЛИЦЫ ЗАВЕРШЕНА ===');
 }
 
-function getSheetId(spreadsheetId, sheetName) {
+function getSheetIdOnce(spreadsheetId, sheetName) {
   console.log(`Получение Sheet ID для листа: ${sheetName}`);
   try {
+    Utilities.sleep(500);
     const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
     const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
     if (sheet) {
-      console.log(`Sheet ID найден: ${sheet.properties.sheetId}`);
+      console.log(`✅ Sheet ID найден: ${sheet.properties.sheetId}`);
       return sheet.properties.sheetId;
     } else {
-      console.log('Sheet не найден, используем ID = 0');
+      console.log('❌ Sheet не найден, используем ID = 0');
       return 0;
     }
   } catch (e) {
-    console.error('Ошибка получения Sheet ID:', e);
-    return 0;
+    console.log('⚠️ Ошибка получения Sheet ID, повторная попытка через 1 сек...');
+    Utilities.sleep(1000);
+    try {
+      const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+      const sheet = spreadsheet.sheets.find(s => s.properties.title === sheetName);
+      if (sheet) {
+        console.log(`✅ Sheet ID найден при повторе: ${sheet.properties.sheetId}`);
+        return sheet.properties.sheetId;
+      } else {
+        console.log('❌ Sheet не найден при повторе, используем ID = 0');
+        return 0;
+      }
+    } catch (e2) {
+      console.error('❌ Критическая ошибка получения Sheet ID:', e2);
+      return 0;
+    }
   }
 }
 
-function createHeaderFormatRequests(sheetName, numCols) {
-  console.log(`Создание форматирования заголовков для ${numCols} колонок`);
-  const sheetId = getSheetId(MAIN_SHEET_ID, sheetName);
+function writeDataInBatches(spreadsheetId, sheetId, tableData, numCols) {
+  const batchSize = 100;
+  const totalRows = tableData.length;
   
-  return [{
+  console.log(`Запись данных батчами: ${totalRows} строк, батч размер ${batchSize}`);
+  
+  for (let i = 0; i < totalRows; i += batchSize) {
+    const endRow = Math.min(i + batchSize, totalRows);
+    const batchData = tableData.slice(i, endRow);
+    
+    console.log(`  Записываем батч: строки ${i + 1}-${endRow}`);
+    
+    const request = {
+      updateCells: {
+        range: {
+          sheetId: sheetId,
+          startRowIndex: i,
+          endRowIndex: endRow,
+          startColumnIndex: 0,
+          endColumnIndex: numCols
+        },
+        rows: batchData.map(row => ({
+          values: row.map(cell => ({
+            userEnteredValue: { stringValue: cell?.toString() || '' }
+          }))
+        })),
+        fields: 'userEnteredValue'
+      }
+    };
+    
+    try {
+      Sheets.Spreadsheets.batchUpdate({ requests: [request] }, spreadsheetId);
+      console.log(`  ✅ Батч ${i + 1}-${endRow} записан успешно`);
+    } catch (e) {
+      console.error(`  ❌ Ошибка записи батча ${i + 1}-${endRow}:`, e);
+      throw e;
+    }
+    
+    if (endRow < totalRows) {
+      Utilities.sleep(100);
+    }
+  }
+  
+  console.log('✅ Все данные записаны');
+}
+
+function applyAllFormatting(spreadsheetId, sheetId, formatData, numRows, numCols) {
+  console.log('Применение всего форматирования...');
+  const requests = [];
+  
+  console.log('  Добавляем форматирование заголовков...');
+  requests.push({
     repeatCell: {
       range: {
         sheetId: sheetId,
@@ -311,47 +299,37 @@ function createHeaderFormatRequests(sheetName, numCols) {
       },
       fields: 'userEnteredFormat'
     }
-  }];
-}
-
-function createColumnWidthRequests(sheetName) {
-  console.log('Создание запросов ширины колонок');
-  const sheetId = getSheetId(MAIN_SHEET_ID, sheetName);
+  });
+  
+  console.log('  Добавляем ширину колонок...');
   const widths = [80, 300, 40, 40, 75, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 75, 85, 160, 250];
+  widths.forEach((width, index) => {
+    requests.push({
+      updateDimensionProperties: {
+        range: {
+          sheetId: sheetId,
+          dimension: 'COLUMNS',
+          startIndex: index,
+          endIndex: index + 1
+        },
+        properties: {
+          pixelSize: width
+        },
+        fields: 'pixelSize'
+      }
+    });
+  });
   
-  const requests = widths.map((width, index) => ({
-    updateDimensionProperties: {
-      range: {
-        sheetId: sheetId,
-        dimension: 'COLUMNS',
-        startIndex: index,
-        endIndex: index + 1
-      },
-      properties: {
-        pixelSize: width
-      },
-      fields: 'pixelSize'
-    }
-  }));
-  
-  console.log(`Создано запросов ширины: ${requests.length}`);
-  return requests;
-}
-
-function createRowFormatRequests(sheetName, formatData, numCols) {
-  console.log(`Создание форматирования строк для ${formatData.length} элементов`);
-  const sheetId = getSheetId(MAIN_SHEET_ID, sheetName);
-  const requests = [];
-  
+  console.log('  Добавляем форматирование строк...');
   const appRows = formatData.filter(f => f.type === 'APP').map(f => f.row - 1);
   const weekRows = formatData.filter(f => f.type === 'WEEK').map(f => f.row - 1);
   const sourceAppRows = formatData.filter(f => f.type === 'SOURCE_APP').map(f => f.row - 1);
   const campaignRows = formatData.filter(f => f.type === 'CAMPAIGN').map(f => f.row - 1);
   
-  console.log(`  APP строк: ${appRows.length}`);
-  console.log(`  WEEK строк: ${weekRows.length}`);
-  console.log(`  SOURCE_APP строк: ${sourceAppRows.length}`);
-  console.log(`  CAMPAIGN строк: ${campaignRows.length}`);
+  console.log(`    APP строк: ${appRows.length}`);
+  console.log(`    WEEK строк: ${weekRows.length}`);
+  console.log(`    SOURCE_APP строк: ${sourceAppRows.length}`);
+  console.log(`    CAMPAIGN строк: ${campaignRows.length}`);
   
   appRows.forEach(rowIndex => {
     requests.push({
@@ -437,17 +415,8 @@ function createRowFormatRequests(sheetName, formatData, numCols) {
     });
   });
   
-  console.log(`Создано запросов форматирования строк: ${requests.length}`);
-  return requests;
-}
-
-function createConditionalFormatRequests(sheetName, numRows, numCols, appData) {
-  console.log(`Создание условного форматирования для ${numRows} строк`);
-  const sheetId = getSheetId(MAIN_SHEET_ID, sheetName);
-  const requests = [];
-  
+  console.log('  Добавляем условное форматирование...');
   if (numRows > 1) {
-    console.log('  Добавляем условное форматирование для процентов spend');
     requests.push({
       addConditionalFormatRule: {
         rule: {
@@ -461,7 +430,7 @@ function createConditionalFormatRequests(sheetName, numRows, numCols, appData) {
           booleanRule: {
             condition: {
               type: 'TEXT_CONTAINS',
-              values: [{ stringValue: '%' }]
+              values: [{ userEnteredValue: '%' }]
             },
             format: {
               backgroundColor: { red: 0.82, green: 0.95, blue: 0.92 }
@@ -472,7 +441,6 @@ function createConditionalFormatRequests(sheetName, numRows, numCols, appData) {
       }
     });
     
-    console.log('  Добавляем условное форматирование для eROAS');
     requests.push({
       addConditionalFormatRule: {
         rule: {
@@ -486,7 +454,7 @@ function createConditionalFormatRequests(sheetName, numRows, numCols, appData) {
           booleanRule: {
             condition: {
               type: 'CUSTOM_FORMULA',
-              values: [{ stringValue: '=AND(NOT(ISBLANK(O2)), VALUE(SUBSTITUTE(O2,"%","")) >= 150)' }]
+              values: [{ userEnteredValue: '=AND(NOT(ISBLANK(O2)), VALUE(SUBSTITUTE(O2,"%","")) >= 150)' }]
             },
             format: {
               backgroundColor: { red: 0.82, green: 0.95, blue: 0.92 }
@@ -498,8 +466,84 @@ function createConditionalFormatRequests(sheetName, numRows, numCols, appData) {
     });
   }
   
-  console.log(`Создано условных форматирований: ${requests.length}`);
-  return requests;
+  console.log('  Добавляем настройки листа...');
+  requests.push({
+    updateSheetProperties: {
+      properties: {
+        sheetId: sheetId,
+        gridProperties: {
+          frozenRowCount: 1,
+          hideGridlines: false
+        }
+      },
+      fields: 'gridProperties.frozenRowCount,gridProperties.hideGridlines'
+    }
+  });
+  
+  requests.push({
+    updateDimensionProperties: {
+      range: {
+        sheetId: sheetId,
+        dimension: 'COLUMNS',
+        startIndex: 0,
+        endIndex: 1
+      },
+      properties: {
+        hiddenByUser: true
+      },
+      fields: 'hiddenByUser'
+    }
+  });
+  
+  console.log(`  Всего запросов форматирования: ${requests.length}`);
+  
+  try {
+    Sheets.Spreadsheets.batchUpdate({ requests: requests }, spreadsheetId);
+    console.log('✅ Форматирование применено успешно');
+  } catch (e) {
+    console.error('❌ Ошибка применения форматирования:', e);
+    throw e;
+  }
+}
+
+function applyGrouping(spreadsheetId, sheetId, formatData) {
+  console.log('Создание группировки строк...');
+  const requests = [];
+  
+  const appRows = formatData.filter(f => f.type === 'APP').map(f => f.row - 1);
+  console.log(`Создаем группировку для ${appRows.length} приложений`);
+  
+  appRows.forEach((appRowIndex, index) => {
+    const nextAppIndex = appRows[index + 1];
+    const endRow = nextAppIndex ? nextAppIndex : formatData[formatData.length - 1].row;
+    
+    if (endRow > appRowIndex + 1) {
+      console.log(`  Группа ${index + 1}: строки ${appRowIndex + 2}-${endRow}`);
+      requests.push({
+        addDimensionGroup: {
+          range: {
+            sheetId: sheetId,
+            dimension: 'ROWS',
+            startIndex: appRowIndex + 1,
+            endIndex: endRow
+          }
+        }
+      });
+    }
+  });
+  
+  if (requests.length > 0) {
+    console.log(`Применяем ${requests.length} групп...`);
+    try {
+      Sheets.Spreadsheets.batchUpdate({ requests: requests }, spreadsheetId);
+      console.log('✅ Группировка создана успешно');
+    } catch (e) {
+      console.error('❌ Ошибка создания группировки:', e);
+      throw e;
+    }
+  } else {
+    console.log('Нет групп для создания');
+  }
 }
 
 function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
@@ -537,7 +581,6 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
         const appInfo = cache[sourceApp.sourceAppId];
         if (appInfo && appInfo.linkApp) {
           sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
-          formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
           console.log(`        Добавлена гиперссылка для ${sourceApp.sourceAppName}`);
         }
       } catch (e) {
@@ -632,6 +675,13 @@ function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
 }
 
 function calculateWeekTotals(campaigns) {
+  if (!campaigns || campaigns.length === 0) {
+    return {
+      totalSpend: 0, totalInstalls: 0, avgCpi: 0, avgRoas: 0, avgIpm: 0, 
+      avgRrD1: 0, avgRrD7: 0, avgArpu: 0, avgERoas: 0, avgEROASD730: 0, totalProfit: 0
+    };
+  }
+  
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
   const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
   const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
