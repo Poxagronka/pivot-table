@@ -72,6 +72,7 @@ function createEnhancedPivotTable(appData) {
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2); // Заморозить первые 2 столбца (Level скрыт, Week Range / Source App видимый)
 }
 
 function createOverallPivotTable(appData) {
@@ -120,6 +121,7 @@ function createOverallPivotTable(appData) {
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createOverallRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2); // Заморозить первые 2 столбца (Level скрыт, Week Range / Source App видимый)
 }
 
 function createOverallRowGrouping(sheet, tableData, appData) {
