@@ -306,7 +306,7 @@ function writeTableWithTrickyOptimization(config, tableData, formatData, hyperli
     console.log(`✅ TRICKY данные записаны: ${numRows} строк`);
     
     console.log('ЭТАП 3: TRICKY оптимизированное форматирование...');
-    applyTrickyOptimizedFormatting(config.SHEET_ID, sheetId, numRows, numCols, formatData, hyperlinkData, appData);
+    applyTrickyOptimizedFormatting(config.SHEET_ID, sheetId, sheetName, numRows, numCols, formatData, hyperlinkData, appData);
     console.log('✅ TRICKY форматирование применено');
     
     console.log('ЭТАП 4: TRICKY группировка...');
@@ -400,7 +400,7 @@ function writeTableWithCompleteFlow(config, tableData, formatData, groupingData,
     console.log(`✅ Данные записаны: ${numRows} строк`);
     
     console.log('ЭТАП 4: Применение форматирования...');
-    applyCompleteFormatting(config.SHEET_ID, sheetId, numRows, numCols, formatData, appData);
+    applyCompleteFormatting(config.SHEET_ID, sheetId, sheetName, numRows, numCols, formatData, appData);
     console.log('✅ Форматирование применено');
     
     console.log('ЭТАП 5: Создание группировки...');
@@ -616,7 +616,7 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, c
   return addedRows;
 }
 
-function applyTrickyOptimizedFormatting(spreadsheetId, sheetId, numRows, numCols, formatData, hyperlinkData, appData) {
+function applyTrickyOptimizedFormatting(spreadsheetId, sheetId, sheetName, numRows, numCols, formatData, hyperlinkData, appData) {
   console.log('Применение TRICKY оптимизированного форматирования...');
   const requests = [];
   
@@ -787,12 +787,12 @@ function applyTrickyOptimizedFormatting(spreadsheetId, sheetId, numRows, numCols
   }
   
   console.log('  TRICKY детальное условное форматирование...');
-  applyAdvancedConditionalFormatting(spreadsheetId, sheetId, numRows, appData);
+  applyAdvancedConditionalFormatting(spreadsheetId, sheetId, sheetName, numRows, appData);
   
   console.log('✅ TRICKY оптимизированное форматирование завершено');
 }
 
-function applyCompleteFormatting(spreadsheetId, sheetId, numRows, numCols, formatData, appData) {
+function applyCompleteFormatting(spreadsheetId, sheetId, sheetName, numRows, numCols, formatData, appData) {
   console.log('Применение полного форматирования...');
   const requests = [];
   
@@ -963,12 +963,12 @@ function applyCompleteFormatting(spreadsheetId, sheetId, numRows, numCols, forma
   }
   
   console.log('  Детальное условное форматирование...');
-  applyAdvancedConditionalFormatting(spreadsheetId, sheetId, numRows, appData);
+  applyAdvancedConditionalFormatting(spreadsheetId, sheetId, sheetName, numRows, appData);
   
   console.log('✅ Полное форматирование завершено');
 }
 
-function applyAdvancedConditionalFormatting(spreadsheetId, sheetId, numRows, appData) {
+function applyAdvancedConditionalFormatting(spreadsheetId, sheetId, sheetName, numRows, appData) {
   console.log('Применение детального условного форматирования...');
   
   try {
@@ -1084,114 +1084,118 @@ function applyAdvancedConditionalFormatting(spreadsheetId, sheetId, numRows, app
     });
     
     console.log('  Индивидуальные eROAS правила...');
-    const sheetValues = Sheets.Spreadsheets.Values.get(spreadsheetId, `${sheetId}!A:O`).values;
-    
-    if (sheetValues && sheetValues.length > 1) {
-      let ruleIndex = 4;
+    try {
+      const sheetValues = Sheets.Spreadsheets.Values.get(spreadsheetId, `${sheetName}!A:O`).values;
       
-      for (let i = 1; i < Math.min(sheetValues.length, numRows); i++) {
-        const level = sheetValues[i][0];
-        let appName = '';
-        let targetEROAS = 150;
+      if (sheetValues && sheetValues.length > 1) {
+        let ruleIndex = 4;
         
-        if (level === 'APP') {
-          appName = sheetValues[i][1];
-          targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-        } else {
-          for (let j = i - 1; j >= 1; j--) {
-            if (sheetValues[j][0] === 'APP') {
-              appName = sheetValues[j][1];
-              targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-              break;
+        for (let i = 1; i < Math.min(sheetValues.length, numRows); i++) {
+          const level = sheetValues[i][0];
+          let appName = '';
+          let targetEROAS = 150;
+          
+          if (level === 'APP') {
+            appName = sheetValues[i][1];
+            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+          } else {
+            for (let j = i - 1; j >= 1; j--) {
+              if (sheetValues[j][0] === 'APP') {
+                appName = sheetValues[j][1];
+                targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+                break;
+              }
             }
           }
+          
+          const cellFormula = `O${i + 1}`;
+          
+          conditionalRequests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{
+                  sheetId: sheetId,
+                  startRowIndex: i,
+                  endRowIndex: i + 1,
+                  startColumnIndex: 14,
+                  endColumnIndex: 15
+                }],
+                booleanRule: {
+                  condition: {
+                    type: 'CUSTOM_FORMULA',
+                    values: [{
+                      userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) >= ${targetEROAS})`
+                    }]
+                  },
+                  format: {
+                    backgroundColor: { red: 0.83, green: 0.93, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.08, green: 0.34, blue: 0.14 } }
+                  }
+                }
+              },
+              index: ruleIndex++
+            }
+          });
+          
+          conditionalRequests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{
+                  sheetId: sheetId,
+                  startRowIndex: i,
+                  endRowIndex: i + 1,
+                  startColumnIndex: 14,
+                  endColumnIndex: 15
+                }],
+                booleanRule: {
+                  condition: {
+                    type: 'CUSTOM_FORMULA',
+                    values: [{
+                      userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) >= 120, VALUE(SUBSTITUTE(${cellFormula},"%","")) < ${targetEROAS})`
+                    }]
+                  },
+                  format: {
+                    backgroundColor: { red: 1, green: 0.95, blue: 0.8 },
+                    textFormat: { foregroundColor: { red: 0.52, green: 0.39, blue: 0.02 } }
+                  }
+                }
+              },
+              index: ruleIndex++
+            }
+          });
+          
+          conditionalRequests.push({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{
+                  sheetId: sheetId,
+                  startRowIndex: i,
+                  endRowIndex: i + 1,
+                  startColumnIndex: 14,
+                  endColumnIndex: 15
+                }],
+                booleanRule: {
+                  condition: {
+                    type: 'CUSTOM_FORMULA',
+                    values: [{
+                      userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) < 120)`
+                    }]
+                  },
+                  format: {
+                    backgroundColor: { red: 0.97, green: 0.84, blue: 0.85 },
+                    textFormat: { foregroundColor: { red: 0.45, green: 0.11, blue: 0.14 } }
+                  }
+                }
+              },
+              index: ruleIndex++
+            }
+          });
+          
+          if (ruleIndex >= 100) break;
         }
-        
-        const cellFormula = `O${i + 1}`;
-        
-        conditionalRequests.push({
-          addConditionalFormatRule: {
-            rule: {
-              ranges: [{
-                sheetId: sheetId,
-                startRowIndex: i,
-                endRowIndex: i + 1,
-                startColumnIndex: 14,
-                endColumnIndex: 15
-              }],
-              booleanRule: {
-                condition: {
-                  type: 'CUSTOM_FORMULA',
-                  values: [{
-                    userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) >= ${targetEROAS})`
-                  }]
-                },
-                format: {
-                  backgroundColor: { red: 0.83, green: 0.93, blue: 0.85 },
-                  textFormat: { foregroundColor: { red: 0.08, green: 0.34, blue: 0.14 } }
-                }
-              }
-            },
-            index: ruleIndex++
-          }
-        });
-        
-        conditionalRequests.push({
-          addConditionalFormatRule: {
-            rule: {
-              ranges: [{
-                sheetId: sheetId,
-                startRowIndex: i,
-                endRowIndex: i + 1,
-                startColumnIndex: 14,
-                endColumnIndex: 15
-              }],
-              booleanRule: {
-                condition: {
-                  type: 'CUSTOM_FORMULA',
-                  values: [{
-                    userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) >= 120, VALUE(SUBSTITUTE(${cellFormula},"%","")) < ${targetEROAS})`
-                  }]
-                },
-                format: {
-                  backgroundColor: { red: 1, green: 0.95, blue: 0.8 },
-                  textFormat: { foregroundColor: { red: 0.52, green: 0.39, blue: 0.02 } }
-                }
-              }
-            },
-            index: ruleIndex++
-          }
-        });
-        
-        conditionalRequests.push({
-          addConditionalFormatRule: {
-            rule: {
-              ranges: [{
-                sheetId: sheetId,
-                startRowIndex: i,
-                endRowIndex: i + 1,
-                startColumnIndex: 14,
-                endColumnIndex: 15
-              }],
-              booleanRule: {
-                condition: {
-                  type: 'CUSTOM_FORMULA',
-                  values: [{
-                    userEnteredValue: `=AND(NOT(ISBLANK(${cellFormula})), VALUE(SUBSTITUTE(${cellFormula},"%","")) < 120)`
-                  }]
-                },
-                format: {
-                  backgroundColor: { red: 0.97, green: 0.84, blue: 0.85 },
-                  textFormat: { foregroundColor: { red: 0.45, green: 0.11, blue: 0.14 } }
-                }
-              }
-            },
-            index: ruleIndex++
-          }
-        });
-        
-        if (ruleIndex >= 100) break;
       }
+    } catch (e) {
+      console.log('⚠️ Ошибка получения данных для eROAS правил:', e.toString());
     }
     
     console.log('  Growth Status цвета...');
