@@ -12,17 +12,20 @@ function onOpen() {
       .addItem('🔄 Update All to Current', 'updateAllProjectsToCurrent')
       .addItem('🎯 Update Selected Projects', 'updateSelectedProjectsToCurrent')
       .addSeparator()
-      .addItem('⚙️ Open Settings Sheet', 'openSettingsSheet')
-      .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
-      .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
-      .addItem('📊 System Status', 'showQuickStatus')
+      .addSubMenu(ui.createMenu('⚙️ Settings')
+        .addItem('📄 Open Settings Sheet', 'openSettingsSheet')
+        .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
+        .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
+        .addItem('📊 System Status', 'showQuickStatus')
+        .addSeparator()
+        .addItem('🧹 Clear Column Cache', 'clearColumnCacheDialog')
+        .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
+        .addItem('🗑️ Clear Data...', 'clearDataWizard')
+        .addSeparator()
+        .addItem('🔍 Quick API Check', 'quickAPICheckAll')
+        .addItem('📱 Apps Database (TRICKY)', 'appsDbWizard')
+        .addItem('🐛 Debug Single Project', 'debugSingleProject'))
       .addSeparator()
-      .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
-      .addItem('🔍 Quick API Check', 'quickAPICheckAll')
-      .addItem('🗑️ Clear Data...', 'clearDataWizard')
-      .addItem('📱 Apps Database (TRICKY)', 'appsDbWizard')
-      .addSeparator()
-      .addItem('🐛 Debug Single Project', 'debugSingleProject')
       .addItem('🐙 GitHub Repository', 'openGitHubRepo')
       .addToUi();
 }
@@ -682,6 +685,18 @@ function clearAppsDbCache() {
     }
   } catch (e) {
     ui.alert('Error', 'Error clearing cache: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function clearColumnCacheDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.alert('🧹 Clear Column Cache', 
+    'Clear cached column positions for all projects?\n\nThis will force re-detection of column positions on next use.', 
+    ui.ButtonSet.YES_NO);
+  
+  if (result === ui.Button.YES) {
+    clearAllCommentColumnCaches();
+    ui.alert('✅ Success', 'Column cache cleared for all projects.', ui.ButtonSet.OK);
   }
 }
 

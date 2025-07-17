@@ -183,16 +183,27 @@ function saveAllCommentsToCache() {
 }
 
 function saveProjectCommentsManual(projectName) {
-  var config = getProjectConfig(projectName);
-  var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-  var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  console.log(`Saving comments for ${projectName}...`);
   
-  if (!sheet || sheet.getLastRow() < 2) {
-    throw new Error(`No data found in ${projectName} sheet`);
+  try {
+    var config = getProjectConfig(projectName);
+    var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      throw new Error(`No data found in ${projectName} sheet`);
+    }
+    
+    var cache = new CommentCache(projectName);
+    cache.syncCommentsFromSheet();
+    
+    console.log(`✅ ${projectName} comments saved successfully`);
+    
+  } catch (e) {
+    console.error(`❌ Error saving ${projectName} comments:`, e);
+    console.log('Error details:', e.toString());
+    throw e;
   }
-  
-  var cache = new CommentCache(projectName);
-  cache.syncCommentsFromSheet();
 }
 
 function showAutomationStatus() {

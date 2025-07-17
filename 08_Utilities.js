@@ -442,3 +442,13 @@ function getProjectStatus(projectName) {
   
   return status;
 }
+
+function clearAllCommentColumnCaches() {
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  projects.forEach(proj => {
+    try {
+      const cache = new CommentCache(proj);
+      cache.clearColumnCache();
+    } catch (e) {}
+  });
+}
