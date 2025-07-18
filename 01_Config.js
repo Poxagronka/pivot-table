@@ -408,7 +408,7 @@ var TABLE_CONFIG = {
     'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 }, { c: 2, w: 250 }, { c: 3, w: 40 }, { c: 4, w: 40 },
+    { c: 1, w: 80 }, { c: 2, w: 230 }, { c: 3, w: 40 }, { c: 4, w: 40 },
     { c: 5, w: 75 }, { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 50 },
     { c: 9, w: 195 }, { c: 10, w: 37 }, { c: 11, w: 42 }, { c: 12, w: 42 },
     { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 55 }, { c: 16, w: 75 }, 
