@@ -114,7 +114,7 @@ function debugConfiguration(debugSheet, projectName) {
     // ОБНОВЛЕНО: унифицированные метрики
     logDebug(debugSheet, 'УНИФИЦИРОВАННЫЕ МЕТРИКИ:', 'INFO');
     logDebug(debugSheet, '✅ CPI, Installs, IPM, Spend', 'SUCCESS');
-    logDebug(debugSheet, '✅ RR D-1, ROAS D-1, RR D-7, ROAS D-7', 'SUCCESS');
+    logDebug(debugSheet, '✅ RR D-1, ROAS D-1, ROAS D-3, RR D-7, ROAS D-7, ROAS D-30', 'SUCCESS');
     logDebug(debugSheet, '✅ eARPU D365, eROAS D365, eROAS D730, eProfit D730', 'SUCCESS');
     logDebug(debugSheet, '✅ Фильтрация: spend > 0 на уровне API (havingFilters)', 'SUCCESS');
     
@@ -313,13 +313,13 @@ function debugDataStructure(debugSheet, apiResponse) {
       // ОБНОВЛЕНО: проверка унифицированной структуры
       logDebug(debugSheet, 'Проверка УНИФИЦИРОВАННОЙ структуры данных:', 'SECTION');
       if (CURRENT_PROJECT === 'OVERALL') {
-        if (firstRecord.length >= 14) { // date + app + 12 metrics
+        if (firstRecord.length >= 16) { // date + app + 14 metrics
           const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
           const hasApp = firstRecord[1] && firstRecord[1].__typename === 'AppInfo';
           
           if (hasDate && hasApp) {
             logDebug(debugSheet, '✅ OVERALL: Корректная структура [date, app, 12 metrics] - без кампаний', 'SUCCESS');
-            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 14)`, firstRecord.length === 14 ? 'SUCCESS' : 'WARNING');
+            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 16)`, firstRecord.length === 16 ? 'SUCCESS' : 'WARNING');
           } else {
             logDebug(debugSheet, '❌ OVERALL: Неожиданная структура данных!', 'ERROR');
             logDebug(debugSheet, `- [0] date: ${firstRecord[0]?.__typename || 'отсутствует'}`, 'INFO');
@@ -329,14 +329,14 @@ function debugDataStructure(debugSheet, apiResponse) {
           logDebug(debugSheet, '❌ OVERALL: Недостаточно элементов в записи!', 'ERROR');
         }
       } else {
-        if (firstRecord.length >= 15) { // date + campaign + app + 12 metrics
+        if (firstRecord.length >= 17) { // date + campaign + app + 14 metrics
           const hasDate = firstRecord[0] && firstRecord[0].__typename === 'StatsValue';
           const hasCampaign = firstRecord[1] && firstRecord[1].__typename === 'UaCampaign';
           const hasApp = firstRecord[2] && firstRecord[2].__typename === 'AppInfo';
           
           if (hasDate && hasCampaign && hasApp) {
             logDebug(debugSheet, '✅ Корректная структура [date, campaign, app, 12 metrics]', 'SUCCESS');
-            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 15)`, firstRecord.length === 15 ? 'SUCCESS' : 'WARNING');
+            logDebug(debugSheet, `✅ Всего элементов: ${firstRecord.length} (ожидается: 17)`, firstRecord.length === 17 ? 'SUCCESS' : 'WARNING');
             
             if (CURRENT_PROJECT === 'TRICKY') {
               logDebug(debugSheet, '✅ TRICKY: Будет группироваться локально через Apps Database', 'SUCCESS');
@@ -425,8 +425,8 @@ function debugDataProcessing(debugSheet, apiResponse) {
         }
         
         // ОБНОВЛЕНО: проверяем унифицированные метрики
-        if (row.length < metricsStartIndex + 12) {
-          logDebug(debugSheet, `Запись ${index}: недостаточно метрик (${row.length - metricsStartIndex}/12)`, 'WARNING');
+        if (row.length < metricsStartIndex + 14) {
+          logDebug(debugSheet, `Запись ${index}: недостаточно метрик (${row.length - metricsStartIndex}/14)`, 'WARNING');
           errorCount++;
           return;
         }

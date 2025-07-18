@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: унифицированные метрики + исправленная ширина столбцов
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30
  */
 
 function createEnhancedPivotTable(appData) {
@@ -202,28 +202,35 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
 }
 
 function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
+  // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
+  const combinedRoas = `${totals.avgRoasD1.toFixed(0)}% → ${totals.avgRoasD3.toFixed(0)}% → ${totals.avgRoasD7.toFixed(0)}% → ${totals.avgRoasD30.toFixed(0)}%`;
+  
   return [
     'SOURCE_APP', sourceAppDisplayName, '', '',
     totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
-    totals.avgRoas.toFixed(2), totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
+    combinedRoas, totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
     totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
     totals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
 }
 
+// ОБНОВЛЕНО: новые заголовки с объединенным ROAS столбцом
 function getUnifiedHeaders() {
   return [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
     'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ];
 }
 
 function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
+  // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
+  const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
+  
   return [
     'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
     weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
-    weekTotals.avgRoas.toFixed(2), weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(0)}%`, `${weekTotals.avgRrD7.toFixed(0)}%`,
+    combinedRoas, weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(0)}%`, `${weekTotals.avgRrD7.toFixed(0)}%`,
     weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, `${weekTotals.avgEROASD730.toFixed(0)}%`,
     weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
@@ -248,6 +255,10 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   if (numRows > 1) {
     const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
     allDataRange.setVerticalAlignment('middle');
+    
+    // ОБНОВЛЕНО: включить wrap для ROAS столбца (столбец 9)
+    const roasRange = sheet.getRange(2, 9, numRows - 1, 1);
+    roasRange.setWrap(true).setHorizontalAlignment('center');
     
     const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
     commentsRange.setWrap(true).setHorizontalAlignment('left');
@@ -299,13 +310,13 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   }
 
   if (numRows > 1) {
-  sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0');        // Spend - до целого
-  sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.0');      // CPI - 1 знак после точки
-  sheet.getRange(2, 9, numRows - 1, 1).setNumberFormat('0.0');       // ROAS D-1 - 1 знак после точки
-  sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');      // IPM - без изменений
-  sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.0');     // eARPU 365d - 1 знак после точки
-  sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');       // eProfit 730d - до целого
-}
+    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0');        // Spend - до целого
+    sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.0');      // CPI - 1 знак после точки
+    // ROAS столбец (9) остается текстовым для правильного отображения стрелочек
+    sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');      // IPM - без изменений
+    sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.0');     // eARPU 365d - 1 знак после точки
+    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');       // eProfit 730d - до целого
+  }
 
   applyConditionalFormatting(sheet, numRows, appData);
   sheet.hideColumns(1);
@@ -433,11 +444,18 @@ function applyConditionalFormatting(sheet, numRows, appData) {
   sheet.setConditionalFormatRules(rules);
 }
 
+// ОБНОВЛЕНО: расчет всех ROAS метрик
 function calculateWeekTotals(campaigns) {
   const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
   const totalInstalls = campaigns.reduce((s, c) => s + c.installs, 0);
   const avgCpi = totalInstalls ? totalSpend / totalInstalls : 0;
-  const avgRoas = campaigns.length ? campaigns.reduce((s, c) => s + c.roas, 0) / campaigns.length : 0;
+  
+  // ОБНОВЛЕНО: расчет всех ROAS метрик
+  const avgRoasD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD1, 0) / campaigns.length : 0;
+  const avgRoasD3 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD3, 0) / campaigns.length : 0;
+  const avgRoasD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD7, 0) / campaigns.length : 0;
+  const avgRoasD30 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD30, 0) / campaigns.length : 0;
+  
   const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
   const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
   const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
@@ -472,7 +490,7 @@ function calculateWeekTotals(campaigns) {
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
   return {
-    totalSpend, totalInstalls, avgCpi, avgRoas, avgIpm, avgRrD1, avgRrD7,
+    totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD30, avgIpm, avgRrD1, avgRrD7,
     avgArpu, avgERoas, avgEROASD730, totalProfit
   };
 }
@@ -505,10 +523,13 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
 }
 
 function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
+  // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
+  const combinedRoas = `${campaign.roasD1.toFixed(0)}% → ${campaign.roasD3.toFixed(0)}% → ${campaign.roasD7.toFixed(0)}% → ${campaign.roasD30.toFixed(0)}%`;
+  
   return [
     'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
     campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
-    campaign.roas.toFixed(2), campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(0)}%`, `${campaign.rrD7.toFixed(0)}%`,
+    combinedRoas, campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(0)}%`, `${campaign.rrD7.toFixed(0)}%`,
     campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, `${campaign.eRoasForecastD730.toFixed(0)}%`,
     campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
   ];

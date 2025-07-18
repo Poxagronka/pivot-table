@@ -1,5 +1,5 @@
 /**
- * API Client - ОБНОВЛЕНО: унифицированные метрики + убрана проверка spend > 0
+ * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30
  */
 
 var BUNDLE_ID_CACHE = {};
@@ -355,20 +355,22 @@ function processApiData(rawData, includeLastWeek = null) {
         metricsStartIndex = 3;
       }
       
-      // УНИФИЦИРОВАННАЯ ОБРАБОТКА МЕТРИК для всех проектов
+      // ОБНОВЛЕНО: новая структура метрик с ROAS D-1, D-3, D-7, D-30
       const metrics = {
         cpi: parseFloat(row[metricsStartIndex].value) || 0,         // 0: cpi
         installs: parseInt(row[metricsStartIndex + 1].value) || 0,  // 1: installs
         ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,     // 2: ipm
         spend: parseFloat(row[metricsStartIndex + 3].value) || 0,   // 3: spend
         rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,    // 4: retention_rate D1
-        roas: parseFloat(row[metricsStartIndex + 5].value) || 0,    // 5: roas D1
-        rrD7: parseFloat(row[metricsStartIndex + 6].value) || 0,    // 6: retention_rate D7
-        roasD7: parseFloat(row[metricsStartIndex + 7].value) || 0,  // 7: roas D7
-        eArpuForecast: parseFloat(row[metricsStartIndex + 8].value) || 0,  // 8: e_arpu_forecast D365
-        eRoasForecast: parseFloat(row[metricsStartIndex + 9].value) || 0,  // 9: e_roas_forecast D365
-        eProfitForecast: parseFloat(row[metricsStartIndex + 10].value) || 0, // 10: e_profit_forecast D730
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 11].value) || 0 // 11: e_roas_forecast D730
+        roasD1: parseFloat(row[metricsStartIndex + 5].value) || 0,  // 5: roas D1
+        roasD3: parseFloat(row[metricsStartIndex + 6].value) || 0,  // 6: roas D3
+        rrD7: parseFloat(row[metricsStartIndex + 7].value) || 0,    // 7: retention_rate D7
+        roasD7: parseFloat(row[metricsStartIndex + 8].value) || 0,  // 8: roas D7
+        roasD30: parseFloat(row[metricsStartIndex + 9].value) || 0, // 9: roas D30
+        eArpuForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,  // 10: e_arpu_forecast D365
+        eRoasForecast: parseFloat(row[metricsStartIndex + 11].value) || 0,  // 11: e_roas_forecast D365
+        eProfitForecast: parseFloat(row[metricsStartIndex + 12].value) || 0, // 12: e_profit_forecast D730
+        eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0 // 13: e_roas_forecast D730
       };
 
       const sunday = getSundayOfWeek(new Date(date));

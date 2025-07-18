@@ -1,5 +1,5 @@
 /**
- * Configuration file - ОБНОВЛЕНО: исправлена логика таргетов eROAS
+ * Configuration file - ОБНОВЛЕНО: добавлены ROAS D-3 и D-30 метрики
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -130,6 +130,7 @@ function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 
+// ОБНОВЛЕНО: добавлены ROAS D-3 и D-30
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 
   { id: "installs", day: null }, 
@@ -137,8 +138,10 @@ var UNIFIED_MEASURES = [
   { id: "spend", day: null }, 
   { id: "retention_rate", day: 1 }, 
   { id: "roas", day: 1 }, 
+  { id: "roas", day: 3 }, 
   { id: "retention_rate", day: 7 },
   { id: "roas", day: 7 }, 
+  { id: "roas", day: 30 }, 
   { id: "e_arpu_forecast", day: 365 },
   { id: "e_roas_forecast", day: 365 }, 
   { id: "e_profit_forecast", day: 730 },
@@ -397,18 +400,19 @@ function setCurrentProject(projectName) {
   CURRENT_PROJECT = projectName;
 }
 
+// ОБНОВЛЕНО: новая ширина для объединенного столбца ROAS
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D-1', 'IPM',
+    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
     'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
   COLUMN_WIDTHS: [
     { c: 1, w: 80 }, { c: 2, w: 250 }, { c: 3, w: 40 }, { c: 4, w: 40 },
     { c: 5, w: 75 }, { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 50 },
-    { c: 9, w: 50 }, { c: 10, w: 50 }, { c: 11, w: 50 }, { c: 12, w: 50 },
+    { c: 9, w: 195 }, { c: 10, w: 37 }, { c: 11, w: 42 }, { c: 12, w: 42 },
     { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 55 }, { c: 16, w: 75 }, 
-    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 250 }
+    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 500 }
   ]
 };
 

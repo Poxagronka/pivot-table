@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ОБНОВЛЕНО: WoW аналитика на основе eROAS D730
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками
  */
 
 function calculateWoWMetrics(appData) {
@@ -51,7 +51,10 @@ function calculateWoWMetrics(appData) {
                   eProfitForecast: c.eProfitForecast,
                   installs: c.installs,
                   cpi: c.cpi,
-                  roas: c.roas,
+                  roasD1: c.roasD1 || 0,
+                  roasD3: c.roasD3 || 0,
+                  roasD7: c.roasD7 || 0,
+                  roasD30: c.roasD30 || 0,
                   ipm: c.ipm || 0,
                   eArpuForecast: c.eArpuForecast || 0,
                   rrD1: c.rrD1 || 0,
@@ -77,7 +80,10 @@ function calculateWoWMetrics(appData) {
                 eProfitForecast: c.eProfitForecast,
                 installs: c.installs,
                 cpi: c.cpi,
-                roas: c.roas,
+                roasD1: c.roasD1 || 0,
+                roasD3: c.roasD3 || 0,
+                roasD7: c.roasD7 || 0,
+                roasD30: c.roasD30 || 0,
                 ipm: c.ipm || 0,
                 eArpuForecast: c.eArpuForecast || 0,
                 rrD1: c.rrD1 || 0,
