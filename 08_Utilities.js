@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: улучшена сортировка листов с Settings, To do и скрытыми листами
+ * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов
  */
 
 // Date Utils
@@ -134,8 +134,8 @@ function clearAllDataSilent() {
 }
 
 function clearProjectDataSilent(projectName) {
-  const maxRetries = 2;
-  const baseDelay = 3000;
+  const maxRetries = 3; // Увеличено количество попыток
+  const baseDelay = 5000; // Увеличена базовая задержка
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -148,28 +148,59 @@ function clearProjectDataSilent(projectName) {
       
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
+      // Сохранение комментариев с обработкой таймаутов
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
           const cache = new CommentCache(projectName);
           cache.syncCommentsFromSheet();
           console.log(`${projectName}: Comments cached before clearing sheet`);
         } catch (e) {
-          console.error(`${projectName}: Error caching comments:`, e);
+          if (e.toString().includes('timed out')) {
+            console.log(`${projectName}: Timeout while caching comments, continuing anyway`);
+          } else {
+            console.error(`${projectName}: Error caching comments:`, e);
+          }
         }
       }
       
-      Utilities.sleep(1500);
+      // Увеличенная пауза перед операциями с листами
+      Utilities.sleep(2000);
+      SpreadsheetApp.flush();
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      Utilities.sleep(500);
+      // Пауза после создания нового листа
+      Utilities.sleep(1000);
+      SpreadsheetApp.flush();
       
       if (oldSheet) {
-        spreadsheet.deleteSheet(oldSheet);
+        // Попытка удалить старый лист с обработкой ошибок
+        try {
+          spreadsheet.deleteSheet(oldSheet);
+        } catch (deleteError) {
+          console.error(`${projectName}: Error deleting old sheet, will try to continue:`, deleteError);
+          // Если не удалось удалить, попробуем переименовать новый лист в уникальное имя
+          const uniqueName = config.SHEET_NAME + '_' + Date.now();
+          newSheet.setName(uniqueName);
+          Utilities.sleep(1000);
+          // Потом попробуем еще раз удалить старый
+          try {
+            spreadsheet.deleteSheet(oldSheet);
+            // И переименовать обратно
+            newSheet.setName(config.SHEET_NAME);
+          } catch (e) {
+            console.error(`${projectName}: Failed to handle sheet deletion:`, e);
+            throw e;
+          }
+          console.log(`${projectName}: Sheet recreated with workaround`);
+          return;
+        }
       }
       
-      Utilities.sleep(500);
+      // Пауза перед переименованием
+      Utilities.sleep(1000);
+      SpreadsheetApp.flush();
       
       newSheet.setName(config.SHEET_NAME);
       
@@ -178,13 +209,22 @@ function clearProjectDataSilent(projectName) {
     } catch (e) {
       console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
       
-      if (attempt === maxRetries) {
+      // Специальная обработка таймаутов
+      if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
+        const timeoutDelay = baseDelay * Math.pow(2, attempt);
+        console.log(`Timeout detected. Waiting ${timeoutDelay}ms before retry...`);
+        Utilities.sleep(timeoutDelay);
+        
+        // Очистка и сброс соединения
+        SpreadsheetApp.flush();
+        Utilities.sleep(2000);
+      } else if (attempt === maxRetries) {
         throw e;
+      } else {
+        const delay = baseDelay * Math.pow(1.5, attempt - 1);
+        console.log(`Waiting ${delay}ms before retry...`);
+        Utilities.sleep(delay);
       }
-      
-      const delay = baseDelay * Math.pow(2, attempt - 1) + 2000;
-      console.log(`Waiting ${delay}ms before retry...`);
-      Utilities.sleep(delay);
     }
   }
 }

@@ -1,10 +1,11 @@
 /**
- * Settings Sheet Management - ОБНОВЛЕНО: исправленная логика таргетов
+ * Settings Sheet Management - ОБНОВЛЕНО: улучшенное кеширование и обработка таймаутов
  */
 
 var SETTINGS_SHEET_NAME = 'Settings';
 var SETTINGS_CACHE = null;
 var SETTINGS_CACHE_TIME = null;
+var SETTINGS_CACHE_DURATION = 300000; // 5 минут кеша вместо 30 секунд
 
 function getOrCreateSettingsSheet() {
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -253,74 +254,115 @@ function createSettingsLayout(sheet) {
 function loadSettingsFromSheet() {
   const now = new Date().getTime();
   
-  if (SETTINGS_CACHE && SETTINGS_CACHE_TIME && (now - SETTINGS_CACHE_TIME) < 30000) {
+  // Увеличиваем время кеширования до 5 минут
+  if (SETTINGS_CACHE && SETTINGS_CACHE_TIME && (now - SETTINGS_CACHE_TIME) < SETTINGS_CACHE_DURATION) {
     return SETTINGS_CACHE;
   }
   
-  const sheet = getOrCreateSettingsSheet();
-  const data = sheet.getDataRange().getValues();
+  // Попытка загрузить настройки с обработкой таймаутов
+  let retries = 3;
+  let lastError = null;
   
-  const settings = {
+  while (retries > 0) {
+    try {
+      const sheet = getOrCreateSettingsSheet();
+      const data = sheet.getDataRange().getValues();
+      
+      const settings = {
+        bearerToken: '',
+        targetEROAS: { tricky: 250, business: 140, ceg: 150 },
+        automation: { autoCache: false, autoUpdate: false },
+        growthThresholds: {}
+      };
+      
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const label = row[0] ? row[0].toString().trim() : '';
+        const value = row[1] ? row[1].toString().trim() : '';
+        
+        if (label === 'Bearer Token:' && value && value !== '[ENTER_YOUR_TOKEN_HERE]') {
+          settings.bearerToken = value;
+        }
+        
+        if (label === 'Auto Cache Enabled:') {
+          settings.automation.autoCache = value.toUpperCase() === 'TRUE';
+        }
+        
+        if (label === 'Auto Update Enabled:') {
+          settings.automation.autoUpdate = value.toUpperCase() === 'TRUE';
+        }
+        
+        // Target eROAS D730 по новой логике
+        if (label === 'TRICKY Project:' && i >= 7 && i <= 11) {
+          const numValue = parseInt(value);
+          settings.targetEROAS.tricky = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 250;
+        }
+        
+        if (label === 'Business Apps:' && i >= 7 && i <= 11) {
+          const numValue = parseInt(value);
+          settings.targetEROAS.business = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 140;
+        }
+        
+        if (label === 'Other Apps:' && i >= 7 && i <= 11) {
+          const numValue = parseInt(value);
+          settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
+        }
+        
+        // Advanced Growth Thresholds по проектам
+        const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+        projects.forEach(proj => {
+          if (label === proj && i >= 13 && i <= 22) {
+            const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
+            const efficiencyValue = row[2] ? row[2].toString() : 'spendDrop:-5,profitGain:8';
+            const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
+            const scalingValue = row[4] ? row[4].toString() : 'spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10';
+            const otherValue = row[5] ? row[5].toString() : 'modSpend:3,modProfit:2,stable:2';
+            
+            settings.growthThresholds[proj] = parseAdvancedGrowthThresholds(
+              healthyValue, efficiencyValue, inefficientValue, scalingValue, otherValue
+            );
+          }
+        });
+      }
+      
+      SETTINGS_CACHE = settings;
+      SETTINGS_CACHE_TIME = now;
+      
+      return settings;
+      
+    } catch (e) {
+      lastError = e;
+      retries--;
+      
+      if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
+        console.log('Timeout loading settings, retries left:', retries);
+        if (retries > 0) {
+          Utilities.sleep(3000 * (4 - retries)); // Экспоненциальная задержка
+          SpreadsheetApp.flush();
+        }
+      } else {
+        // Для других ошибок сразу выходим
+        throw e;
+      }
+    }
+  }
+  
+  // Если все попытки исчерпаны, возвращаем дефолтные настройки
+  console.error('Failed to load settings after all retries:', lastError);
+  
+  // Возвращаем последний успешный кеш или дефолтные значения
+  if (SETTINGS_CACHE) {
+    console.log('Returning cached settings despite timeout');
+    return SETTINGS_CACHE;
+  }
+  
+  // Дефолтные настройки
+  return {
     bearerToken: '',
     targetEROAS: { tricky: 250, business: 140, ceg: 150 },
     automation: { autoCache: false, autoUpdate: false },
-    growthThresholds: {}
+    growthThresholds: getDefaultGrowthThresholdsForAllProjects()
   };
-  
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    const label = row[0] ? row[0].toString().trim() : '';
-    const value = row[1] ? row[1].toString().trim() : '';
-    
-    if (label === 'Bearer Token:' && value && value !== '[ENTER_YOUR_TOKEN_HERE]') {
-      settings.bearerToken = value;
-    }
-    
-    if (label === 'Auto Cache Enabled:') {
-      settings.automation.autoCache = value.toUpperCase() === 'TRUE';
-    }
-    
-    if (label === 'Auto Update Enabled:') {
-      settings.automation.autoUpdate = value.toUpperCase() === 'TRUE';
-    }
-    
-    // Target eROAS D730 по новой логике
-    if (label === 'TRICKY Project:' && i >= 7 && i <= 11) {
-      const numValue = parseInt(value);
-      settings.targetEROAS.tricky = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 250;
-    }
-    
-    if (label === 'Business Apps:' && i >= 7 && i <= 11) {
-      const numValue = parseInt(value);
-      settings.targetEROAS.business = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 140;
-    }
-    
-    if (label === 'Other Apps:' && i >= 7 && i <= 11) {
-      const numValue = parseInt(value);
-      settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
-    }
-    
-    // Advanced Growth Thresholds по проектам
-    const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
-    projects.forEach(proj => {
-      if (label === proj && i >= 13 && i <= 22) {
-        const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
-        const efficiencyValue = row[2] ? row[2].toString() : 'spendDrop:-5,profitGain:8';
-        const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
-        const scalingValue = row[4] ? row[4].toString() : 'spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10';
-        const otherValue = row[5] ? row[5].toString() : 'modSpend:3,modProfit:2,stable:2';
-        
-        settings.growthThresholds[proj] = parseAdvancedGrowthThresholds(
-          healthyValue, efficiencyValue, inefficientValue, scalingValue, otherValue
-        );
-      }
-    });
-  }
-  
-  SETTINGS_CACHE = settings;
-  SETTINGS_CACHE_TIME = now;
-  
-  return settings;
 }
 
 function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr, scalingStr, otherStr) {
@@ -487,5 +529,28 @@ function forceUpdateSettingsSheet() {
     clearSettingsCache();
     
     ui.alert('✅ Updated', 'Лист Settings обновлен с правильной логикой!\n\n🎯 Таргеты исправлены:\n• TRICKY проект: 250%\n• Business приложения: 140%\n• Остальные: 150%\n\nТеперь Applovin будет использовать правильные таргеты!', ui.ButtonSet.OK);
+  }
+}
+
+// Вспомогательная функция для получения дефолтных порогов для всех проектов
+function getDefaultGrowthThresholdsForAllProjects() {
+  const defaultThresholds = getDefaultGrowthThresholds();
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  const result = {};
+  
+  projects.forEach(proj => {
+    result[proj] = defaultThresholds;
+  });
+  
+  return result;
+}
+
+// Функция для предварительной загрузки настроек
+function preloadSettings() {
+  try {
+    loadSettingsFromSheet();
+    console.log('Settings preloaded successfully');
+  } catch (e) {
+    console.error('Error preloading settings:', e);
   }
 }

@@ -384,14 +384,18 @@ function getProjectApiConfig(projectName) {
   return PROJECTS[projectName].API_CONFIG;
 }
 
+
 function setCurrentProject(projectName) {
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
   
-  if (CURRENT_PROJECT === 'TRICKY' || projectName === 'TRICKY') {
+  // Очищаем кеш TRICKY только при переключении НА TRICKY
+  // Это нужно для загрузки свежих данных Apps Database
+  if (projectName === 'TRICKY' && CURRENT_PROJECT !== 'TRICKY') {
     try {
       clearTrickyCaches();
+      console.log('TRICKY caches cleared (switching TO TRICKY)');
     } catch (e) {
       console.log('Cache clear function not available');
     }
