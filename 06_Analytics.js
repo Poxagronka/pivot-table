@@ -242,6 +242,9 @@ function calculateIncentTrafficWoWMetrics(networkData) {
       new Date(a.weekStart) - new Date(b.weekStart)
     );
     
+    // Создаем историю приложений для отслеживания между неделями
+    const appHistory = {};
+    
     weeks.forEach((week, i) => {
       const weekKey = `${networkKey}_${week.weekStart}`;
       const allCampaigns = [];
@@ -278,10 +281,45 @@ function calculateIncentTrafficWoWMetrics(networkData) {
       }
       
       // WoW для приложений внутри недели
-      Object.values(week.apps).forEach(app => {
-        const appKey = `${networkKey}_${week.weekStart}_${app.appId}`;
-        // Здесь можно добавить логику сравнения с предыдущей неделей для того же приложения
-        appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: '' };
+      Object.keys(week.apps).forEach(appId => {
+        const appData = week.apps[appId];
+        const appKey = `${networkKey}_${week.weekStart}_${appId}`;
+        const appSpend = appData.campaigns.reduce((s, c) => s + c.spend, 0);
+        const appProfit = appData.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        
+        // Проверяем историю этого приложения
+        if (appHistory[appId] && appHistory[appId].length > 0) {
+          // Берем последнюю неделю где было это приложение
+          const prevAppData = appHistory[appId][appHistory[appId].length - 1];
+          const prevAppSpend = prevAppData.spend;
+          const prevAppProfit = prevAppData.profit;
+          
+          const spendPct = prevAppSpend ? ((appSpend - prevAppSpend) / Math.abs(prevAppSpend)) * 100 : 0;
+          const profitPct = prevAppProfit ? ((appProfit - prevAppProfit) / Math.abs(prevAppProfit)) * 100 : 0;
+          
+          appWoW[appKey] = {
+            spendChangePercent: spendPct,
+            eProfitChangePercent: profitPct,
+            growthStatus: calculateGrowthStatus(
+              { spend: prevAppSpend, profit: prevAppProfit },
+              { spend: appSpend, profit: appProfit },
+              spendPct, profitPct, 'profit'
+            )
+          };
+        } else {
+          // Первое появление приложения
+          appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+        }
+        
+        // Добавляем в историю
+        if (!appHistory[appId]) {
+          appHistory[appId] = [];
+        }
+        appHistory[appId].push({
+          weekStart: week.weekStart,
+          spend: appSpend,
+          profit: appProfit
+        });
       });
     });
   });

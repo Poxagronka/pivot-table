@@ -39,7 +39,7 @@ function updateSelectedProjectsToCurrent() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var selected = showMultiChoice('Select Projects to Update:', projects);
   
   if (!selected || selected.length === 0) {
@@ -154,7 +154,7 @@ function updateAllProjectsToCurrent() {
     return;
   }
   
-  var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var estimatedMinutes = Math.ceil(projects.length * 1.5);
   
   var result = ui.alert('🔄 Update All Projects', 
@@ -271,7 +271,7 @@ function updateSingleProjectQuick() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var choice = showChoice('Select Project to Update (Quick Mode):', projects);
   
   if (!choice) return;
@@ -390,7 +390,7 @@ function quickAPICheckAll() {
     return;
   }
   
-  var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var results = '🔍 API CHECK RESULTS\n\n';
   
   projects.forEach(function(proj) {
@@ -491,7 +491,7 @@ function clearAllProjectsData() {
   if (ui.alert('Confirm Clear All', 'Clear data from ALL projects? Comments preserved.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
-    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
     var successCount = 0;
     
     projects.forEach(function(proj) {

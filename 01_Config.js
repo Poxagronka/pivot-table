@@ -133,6 +133,7 @@ function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 function getIncentTrafficGrowthThresholds() { return getGrowthThresholds('INCENT_TRAFFIC'); }
 
+
 // ОБНОВЛЕНО: добавлены ROAS D-3 и D-30
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 

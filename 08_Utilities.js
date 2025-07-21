@@ -246,7 +246,7 @@ function sortProjectSheets() {
     const sheets = spreadsheet.getSheets();
     
     // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в порядок проектов
-    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall', 'Settings', 'To do'];
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall', 'Settings', 'To do'];
     
     // Разделяем листы на категории
     const projectSheets = [];      // Листы из projectOrder
