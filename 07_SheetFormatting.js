@@ -82,6 +82,14 @@ function createOverallPivotTable(appData) {
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   else sheet.clear();
 
+  // Проверка на пустые данные
+  if (!appData || Object.keys(appData).length === 0) {
+    console.log('OVERALL: No data to display');
+    const headers = getUnifiedHeaders();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return;
+  }
+
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
   const tableData = [headers];
@@ -144,7 +152,7 @@ function createOverallPivotTable(appData) {
           const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
           const status = networkWoW.growthStatus || '';
           
-          formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
+          formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
           
           // Создаем строку для сетки
           const networkRow = createNetworkRow(network.networkName, networkTotals, spendWoW, profitWoW, status);
@@ -347,14 +355,8 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     if (item.type === 'APP') appRows.push(item.row);
     if (item.type === 'WEEK') weekRows.push(item.row);
     if (item.type === 'SOURCE_APP') sourceAppRows.push(item.row);
-    if (item.type === 'CAMPAIGN') {
-      // Проверяем, является ли это сеткой для OVERALL
-      if (tableData[item.row - 1] && tableData[item.row - 1][0] === 'NETWORK') {
-        networkRows.push(item.row);
-      } else {
-        campaignRows.push(item.row);
-      }
-    }
+    if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
+    if (item.type === 'NETWORK') networkRows.push(item.row);
     if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
   });
 
