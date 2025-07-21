@@ -220,7 +220,7 @@ function showAutomationStatus() {
   
   msg += '💾 AUTO CACHE:\n';
   if (cacheEnabled && cacheTrigger) {
-    msg += '✅ Enabled - Runs daily at 2:00 AM\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
+    msg += '✅ Enabled - Runs every hour\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
   } else if (cacheEnabled && !cacheTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
   } else {
@@ -249,10 +249,11 @@ function enableAutoCache() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
+    // ИЗМЕНЕНО: кеширование каждый час вместо раз в день
+    ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
     saveSettingToSheet('automation.autoCache', true);
     
-    console.log('Auto cache enabled and saved to Settings sheet');
+    console.log('Auto cache enabled and saved to Settings sheet (hourly)');
   } catch (e) {
     console.error('Failed to enable auto cache:', e);
     throw e;
@@ -315,8 +316,9 @@ function syncTriggersWithSettings() {
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      console.log('Created auto cache trigger');
+      // ИЗМЕНЕНО: кеширование каждый час
+      ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
+      console.log('Created auto cache trigger (hourly)');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
       console.log('Deleted auto cache trigger');

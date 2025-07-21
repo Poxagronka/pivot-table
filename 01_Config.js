@@ -335,6 +335,7 @@ var PROJECTS = {
       },
       GROUP_BY: [
         { dimension: "DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_NETWORK_HID" },
         { dimension: "APP" }
       ],
       MEASURES: UNIFIED_MEASURES

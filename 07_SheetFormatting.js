@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30 + поддержка сеток для OVERALL
  */
 
 function createEnhancedPivotTable(appData) {
@@ -101,7 +101,18 @@ function createOverallPivotTable(appData) {
     weekKeys.forEach(weekKey => {
       const week = app.weeks[weekKey];
       
-      const weekTotals = calculateWeekTotals(week.campaigns);
+      // Собираем все кампании из всех сеток для расчета итогов недели
+      const allCampaigns = [];
+      if (week.networks) {
+        Object.values(week.networks).forEach(network => {
+          allCampaigns.push(...network.campaigns);
+        });
+      } else if (week.campaigns) {
+        // Обратная совместимость со старой структурой
+        allCampaigns.push(...week.campaigns);
+      }
+      
+      const weekTotals = calculateWeekTotals(allCampaigns);
       const appWeekKey = `${app.appName}_${weekKey}`;
       const weekWoW = wow.appWeekWoW[appWeekKey] || {};
       
@@ -112,6 +123,34 @@ function createOverallPivotTable(appData) {
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
       const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
       tableData.push(weekRow);
+      
+      // Добавляем строки сеток внутри недели
+      if (week.networks) {
+        const networkKeys = Object.keys(week.networks).sort((a, b) => {
+          const totalSpendA = week.networks[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          const totalSpendB = week.networks[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          return totalSpendB - totalSpendA;
+        });
+        
+        networkKeys.forEach(networkKey => {
+          const network = week.networks[networkKey];
+          const networkTotals = calculateWeekTotals(network.campaigns);
+          
+          // Получаем WoW для сетки
+          const networkWoWKey = `${networkKey}_${weekKey}`;
+          const networkWoW = wow.campaignWoW[networkWoWKey] || {};
+          
+          const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
+          const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
+          const status = networkWoW.growthStatus || '';
+          
+          formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
+          
+          // Создаем строку для сетки
+          const networkRow = createNetworkRow(network.networkName, networkTotals, spendWoW, profitWoW, status);
+          tableData.push(networkRow);
+        });
+      }
     });
   });
 
@@ -121,7 +160,7 @@ function createOverallPivotTable(appData) {
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, appData);
   createOverallRowGrouping(sheet, tableData, appData);
   sheet.setFrozenRows(1);
-  sheet.setFrozenColumns(2); // Заморозить первые 2 столбца (Level скрыт, Week Range / Source App видимый)
+  sheet.setFrozenColumns(2);
 }
 
 function createOverallRowGrouping(sheet, tableData, appData) {
@@ -139,20 +178,43 @@ function createOverallRowGrouping(sheet, tableData, appData) {
       rowPointer++;
 
       const sortedWeeks = Object.keys(app.weeks).sort();
-      const weekCount = sortedWeeks.length;
-      rowPointer += weekCount;
+      
+      sortedWeeks.forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        const weekStartRow = rowPointer;
+        rowPointer++;
+        
+        // Считаем количество сеток в неделе
+        let networkCount = 0;
+        if (week.networks) {
+          networkCount = Object.keys(week.networks).length;
+        }
+        rowPointer += networkCount;
+        
+        // Группируем сетки под неделей
+        if (networkCount > 0) {
+          try {
+            sheet.getRange(weekStartRow + 1, 1, networkCount, numCols).shiftRowGroupDepth(1);
+            sheet.getRange(weekStartRow + 1, 1, networkCount, 1).collapseGroups();
+          } catch (e) {
+            console.log('Error grouping networks under week:', e);
+          }
+        }
+      });
 
-      if (weekCount > 0) {
+      // Группируем все недели под приложением
+      const appContentRows = rowPointer - appStartRow - 1;
+      if (appContentRows > 0) {
         try {
-          sheet.getRange(appStartRow + 1, 1, weekCount, numCols).shiftRowGroupDepth(1);
-          sheet.getRange(appStartRow + 1, 1, weekCount, 1).collapseGroups();
+          sheet.getRange(appStartRow + 1, 1, appContentRows, numCols).shiftRowGroupDepth(1);
+          sheet.getRange(appStartRow + 1, 1, appContentRows, 1).collapseGroups();
         } catch (e) {
           console.log('Error grouping weeks under app:', e);
         }
       }
     });
     
-    console.log('Overall row grouping completed successfully');
+    console.log('Overall row grouping with networks completed successfully');
     
   } catch (e) {
     console.error('Error in createOverallRowGrouping:', e);
@@ -214,6 +276,19 @@ function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, s
   ];
 }
 
+function createNetworkRow(networkName, totals, spendWoW, profitWoW, status) {
+  // Аналогично campaign row, но для сетки
+  const combinedRoas = `${totals.avgRoasD1.toFixed(0)}% → ${totals.avgRoasD3.toFixed(0)}% → ${totals.avgRoasD7.toFixed(0)}% → ${totals.avgRoasD30.toFixed(0)}%`;
+  
+  return [
+    'NETWORK', networkName, '', '',
+    totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
+    combinedRoas, totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
+    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
+    totals.totalProfit.toFixed(2), profitWoW, status, ''
+  ];
+}
+
 // ОБНОВЛЕНО: новые заголовки с объединенным ROAS столбцом
 function getUnifiedHeaders() {
   return [
@@ -267,12 +342,19 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     growthStatusRange.setWrap(true).setHorizontalAlignment('left');
   }
 
-  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [];
+  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [], networkRows = [];
   formatData.forEach(item => {
     if (item.type === 'APP') appRows.push(item.row);
     if (item.type === 'WEEK') weekRows.push(item.row);
     if (item.type === 'SOURCE_APP') sourceAppRows.push(item.row);
-    if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
+    if (item.type === 'CAMPAIGN') {
+      // Проверяем, является ли это сеткой для OVERALL
+      if (tableData[item.row - 1] && tableData[item.row - 1][0] === 'NETWORK') {
+        networkRows.push(item.row);
+      } else {
+        campaignRows.push(item.row);
+      }
+    }
     if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
   });
 
@@ -297,6 +379,12 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   );
 
   campaignRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.CAMPAIGN_ROW.background)
+         .setFontSize(9)
+  );
+  
+  networkRows.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.CAMPAIGN_ROW.background)
          .setFontSize(9)

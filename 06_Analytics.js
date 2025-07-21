@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками и поддержкой сетей для OVERALL
  */
 
 function calculateWoWMetrics(appData) {
@@ -12,6 +12,7 @@ function calculateWoWMetrics(appData) {
     const campaignData = {};
     const appWeekData = {};
     const sourceAppData = {};
+    const networkData = {}; // Добавляем для OVERALL
 
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
@@ -63,6 +64,30 @@ function calculateWoWMetrics(appData) {
               }
             });
           });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          // Обработка сеток для OVERALL
+          Object.values(week.networks).forEach(network => {
+            allCampaigns.push(...network.campaigns);
+            
+            const networkKey = network.networkId;
+            const networkSpend = network.campaigns.reduce((s, c) => s + c.spend, 0);
+            const networkProfit = network.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+            
+            if (!networkData[networkKey]) {
+              networkData[networkKey] = {};
+            }
+            
+            networkData[networkKey][week.weekStart] = {
+              weekStart: week.weekStart,
+              spend: networkSpend,
+              profit: networkProfit,
+              networkId: network.networkId,
+              networkName: network.networkName
+            };
+          });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.campaigns) {
+          // Обратная совместимость со старой структурой
+          allCampaigns = week.campaigns || [];
         } else if (CURRENT_PROJECT === 'OVERALL') {
           allCampaigns = week.campaigns || [];
         } else {
@@ -100,7 +125,36 @@ function calculateWoWMetrics(appData) {
     });
 
     const campaignWoW = {};
-    if (CURRENT_PROJECT !== 'OVERALL') {
+    
+    // Обработка WoW для сеток в OVERALL
+    if (CURRENT_PROJECT === 'OVERALL') {
+      const networks = {};
+      Object.values(networkData).forEach(d => {
+        Object.values(d).forEach(weekData => {
+          if (!networks[weekData.networkId]) networks[weekData.networkId] = [];
+          networks[weekData.networkId].push(weekData);
+        });
+      });
+
+      Object.keys(networks).forEach(networkId => {
+        networks[networkId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        networks[networkId].forEach((curr, i) => {
+          const key = `${networkId}_${curr.weekStart}`;
+          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = networks[networkId][i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+            campaignWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+            };
+          }
+        });
+      });
+    } else if (CURRENT_PROJECT !== 'OVERALL') {
       const campaigns = {};
       Object.values(campaignData).forEach(d => {
         if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];

@@ -116,7 +116,7 @@ function createSettingsLayout(sheet) {
   
   sheet.getRange('A4').setValue('Auto Cache Enabled:').setFontWeight('bold');
   sheet.getRange('B4').setValue('FALSE');
-  sheet.getRange('C4:H4').merge().setValue('Daily at 2:00 AM - saves comments automatically').setFontStyle('italic');
+  sheet.getRange('C4:H4').merge().setValue('Every hour - saves comments automatically').setFontStyle('italic');
   sheet.getRange('A4:A4').setBackground('#fff3e0');
   sheet.getRange('B4:B4').setBackground('#f8f9fa');
   sheet.getRange('C4:H4').setBackground('#f8f9fa');

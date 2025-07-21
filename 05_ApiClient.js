@@ -1,5 +1,5 @@
 /**
- * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30
+ * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30 + поддержка сеток для OVERALL
  */
 
 var BUNDLE_ID_CACHE = {};
@@ -343,15 +343,17 @@ function processApiData(rawData, includeLastWeek = null) {
         return;
       }
 
-      let campaign, app, metricsStartIndex;
+      let campaign, app, network, metricsStartIndex;
       
       if (CURRENT_PROJECT === 'OVERALL') {
         campaign = null;
-        app = row[1];
-        metricsStartIndex = 2;
+        network = row[1];  // Attribution Network HID
+        app = row[2];
+        metricsStartIndex = 3;
       } else {
         campaign = row[1];
         app = row[2];
+        network = null;
         metricsStartIndex = 3;
       }
       
@@ -391,23 +393,35 @@ function processApiData(rawData, includeLastWeek = null) {
           appData[appKey].weeks[weekKey] = {
             weekStart: formatDateForAPI(monday),
             weekEnd: formatDateForAPI(sunday),
+            networks: {} // Добавляем группировку по сеткам
+          };
+        }
+        
+        // Получаем информацию о сетке
+        const networkId = network?.id || 'unknown';
+        const networkName = network?.value || 'Unknown Network';
+        
+        if (!appData[appKey].weeks[weekKey].networks[networkId]) {
+          appData[appKey].weeks[weekKey].networks[networkId] = {
+            networkId: networkId,
+            networkName: networkName,
             campaigns: []
           };
         }
         
-        const virtualCampaignData = {
+        const networkCampaignData = {
           date: date,
-          campaignId: `app_${app.id}_${weekKey}`,
-          campaignName: app.name,
+          campaignId: `network_${networkId}_${app.id}_${weekKey}`,
+          campaignName: networkName,
           ...metrics,
           status: 'Active',
-          type: 'Overall',
+          type: 'Network',
           geo: 'ALL',
-          sourceApp: app.name,
+          sourceApp: networkName,
           isAutomated: false
         };
         
-        appData[appKey].weeks[weekKey].campaigns.push(virtualCampaignData);
+        appData[appKey].weeks[weekKey].networks[networkId].campaigns.push(networkCampaignData);
         return;
       }
 

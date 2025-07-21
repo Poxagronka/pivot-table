@@ -370,7 +370,7 @@ function showQuickStatus() {
   }
   
   message += '📅 AUTOMATION SCHEDULE:\n';
-  message += '• Auto Cache: Daily at 2:00 AM\n';
+  message += '• Auto Cache: Every hour\n';
   message += '• Auto Update: Daily at 5:00 AM\n';
   message += '• Previous week data: Included starting from Tuesday\n\n';
   
