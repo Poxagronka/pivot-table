@@ -1,5 +1,5 @@
 /**
- * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками и поддержкой сетей для OVERALL
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками и поддержкой сеток для OVERALL + INCENT_TRAFFIC
  */
 
 function calculateWoWMetrics(appData) {
@@ -230,6 +230,65 @@ function calculateWoWMetrics(appData) {
   }
 }
 
+function calculateIncentTrafficWoWMetrics(networkData) {
+  const weekWoW = {};
+  const appWoW = {};
+  const networkWoW = {};
+  
+  // Обработка WoW для сеток
+  Object.keys(networkData).forEach(networkKey => {
+    const network = networkData[networkKey];
+    const weeks = Object.values(network.weeks).sort((a, b) => 
+      new Date(a.weekStart) - new Date(b.weekStart)
+    );
+    
+    weeks.forEach((week, i) => {
+      const weekKey = `${networkKey}_${week.weekStart}`;
+      const allCampaigns = [];
+      Object.values(week.apps).forEach(app => {
+        allCampaigns.push(...app.campaigns);
+      });
+      
+      const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+      const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+      
+      if (i === 0) {
+        weekWoW[weekKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+      } else {
+        const prevWeek = weeks[i - 1];
+        const prevCampaigns = [];
+        Object.values(prevWeek.apps).forEach(app => {
+          prevCampaigns.push(...app.campaigns);
+        });
+        const prevSpend = prevCampaigns.reduce((s, c) => s + c.spend, 0);
+        const prevProfit = prevCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        
+        const spendPct = prevSpend ? ((spend - prevSpend) / Math.abs(prevSpend)) * 100 : 0;
+        const profitPct = prevProfit ? ((profit - prevProfit) / Math.abs(prevProfit)) * 100 : 0;
+        
+        weekWoW[weekKey] = {
+          spendChangePercent: spendPct,
+          eProfitChangePercent: profitPct,
+          growthStatus: calculateGrowthStatus(
+            { spend: prevSpend, profit: prevProfit },
+            { spend: spend, profit: profit },
+            spendPct, profitPct, 'profit'
+          )
+        };
+      }
+      
+      // WoW для приложений внутри недели
+      Object.values(week.apps).forEach(app => {
+        const appKey = `${networkKey}_${week.weekStart}_${app.appId}`;
+        // Здесь можно добавить логику сравнения с предыдущей неделей для того же приложения
+        appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: '' };
+      });
+    });
+  });
+  
+  return { weekWoW, appWoW, networkWoW };
+}
+
 function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
   const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
@@ -344,6 +403,8 @@ function generateReport(days) {
     
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
@@ -378,6 +439,8 @@ function generateReportForDateRange(startDate, endDate) {
     
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
@@ -457,6 +520,8 @@ function updateProjectData(projectName) {
   try {
     if (projectName === 'OVERALL') {
       createOverallPivotTable(processed);
+    } else if (projectName === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
@@ -525,6 +590,8 @@ function updateAllDataToCurrent() {
     
     if (CURRENT_PROJECT === 'OVERALL') {
       createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }

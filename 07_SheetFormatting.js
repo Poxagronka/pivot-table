@@ -171,6 +171,164 @@ function createOverallPivotTable(appData) {
   sheet.setFrozenColumns(2);
 }
 
+function createIncentTrafficPivotTable(networkData) {
+  const config = getCurrentConfig();
+  const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
+  else sheet.clear();
+
+  const wow = calculateIncentTrafficWoWMetrics(networkData);
+  const headers = getUnifiedHeaders();
+  const tableData = [headers];
+  const formatData = [];
+
+  // Сортировка сеток по имени
+  const networkKeys = Object.keys(networkData).sort((a, b) => 
+    networkData[a].networkName.localeCompare(networkData[b].networkName)
+  );
+  
+  networkKeys.forEach(networkKey => {
+    const network = networkData[networkKey];
+    
+    // Строка сетки
+    formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
+    const emptyRow = new Array(headers.length).fill('');
+    emptyRow[0] = 'NETWORK';  // Это уже правильно
+    emptyRow[1] = network.networkName;
+    tableData.push(emptyRow);
+    
+    const weekKeys = Object.keys(network.weeks).sort();
+    weekKeys.forEach(weekKey => {
+      const week = network.weeks[weekKey];
+      
+      // Собираем все кампании недели для totals
+      const allCampaigns = [];
+      Object.values(week.apps).forEach(app => {
+        allCampaigns.push(...app.campaigns);
+      });
+      
+      const weekTotals = calculateWeekTotals(allCampaigns);
+      const weekWoWKey = `${networkKey}_${weekKey}`;
+      const weekWoW = wow.weekWoW[weekWoWKey] || {};
+      
+      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const status = weekWoW.growthStatus || '';
+      
+      formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+      tableData.push(weekRow);
+      
+      // Добавляем приложения
+      const appKeys = Object.keys(week.apps).sort((a, b) => {
+        const totalSpendA = week.apps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+        const totalSpendB = week.apps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+        return totalSpendB - totalSpendA; // Сортировка по убыванию spend
+      });
+      
+      appKeys.forEach(appKey => {
+        const app = week.apps[appKey];
+        const appTotals = calculateWeekTotals(app.campaigns);
+        
+        const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
+        const appWoW = wow.appWoW[appWoWKey] || {};
+        
+        const spendWoW = appWoW.spendChangePercent !== undefined ? `${appWoW.spendChangePercent.toFixed(0)}%` : '';
+        const profitWoW = appWoW.eProfitChangePercent !== undefined ? `${appWoW.eProfitChangePercent.toFixed(0)}%` : '';
+        const status = appWoW.growthStatus || '';
+        
+        formatData.push({ row: tableData.length + 1, type: 'APP' });
+
+          const appRow = new Array(headers.length).fill('');
+          appRow[0] = 'APP';  // Level
+          appRow[1] = app.appName;  // Week Range / Source App
+          appRow[2] = '';  // ID
+          appRow[3] = '';  // GEO
+          appRow[4] = appTotals.totalSpend.toFixed(2);
+          appRow[5] = spendWoW;
+          appRow[6] = appTotals.totalInstalls;
+          appRow[7] = appTotals.avgCpi.toFixed(3);
+          appRow[8] = `${appTotals.avgRoasD1.toFixed(0)}% → ${appTotals.avgRoasD3.toFixed(0)}% → ${appTotals.avgRoasD7.toFixed(0)}% → ${appTotals.avgRoasD30.toFixed(0)}%`;
+          appRow[9] = appTotals.avgIpm.toFixed(1);
+          appRow[10] = `${appTotals.avgRrD1.toFixed(0)}%`;
+          appRow[11] = `${appTotals.avgRrD7.toFixed(0)}%`;
+          appRow[12] = appTotals.avgArpu.toFixed(3);
+          appRow[13] = `${appTotals.avgERoas.toFixed(0)}%`;
+          appRow[14] = `${appTotals.avgEROASD730.toFixed(0)}%`;
+          appRow[15] = appTotals.totalProfit.toFixed(2);
+          appRow[16] = profitWoW;
+          appRow[17] = status;
+          appRow[18] = '';
+
+          tableData.push(appRow);
+      });
+    });
+  });
+
+  const range = sheet.getRange(1, 1, tableData.length, headers.length);
+  range.setValues(tableData);
+  
+  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, networkData);
+  createIncentTrafficRowGrouping(sheet, tableData, networkData);
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2);
+}
+
+function createIncentTrafficRowGrouping(sheet, tableData, networkData) {
+  const numCols = getUnifiedHeaders().length;
+
+  try {
+    let rowPointer = 2;
+    const sortedNetworks = Object.keys(networkData).sort((a, b) => 
+      networkData[a].networkName.localeCompare(networkData[b].networkName)
+    );
+
+    sortedNetworks.forEach(networkKey => {
+      const network = networkData[networkKey];
+      const networkStartRow = rowPointer;
+      rowPointer++; // Network row
+
+      const sortedWeeks = Object.keys(network.weeks).sort();
+      
+      sortedWeeks.forEach(weekKey => {
+        const week = network.weeks[weekKey];
+        const weekStartRow = rowPointer;
+        rowPointer++; // Week row
+        
+        const appCount = Object.keys(week.apps).length;
+        rowPointer += appCount;
+        
+        // Группируем приложения под неделей
+        if (appCount > 0) {
+          try {
+            sheet.getRange(weekStartRow + 1, 1, appCount, numCols).shiftRowGroupDepth(1);
+            sheet.getRange(weekStartRow + 1, 1, appCount, 1).collapseGroups();
+          } catch (e) {
+            console.log('Error grouping apps under week:', e);
+          }
+        }
+      });
+
+      // Группируем все недели под сеткой
+      const networkContentRows = rowPointer - networkStartRow - 1;
+      if (networkContentRows > 0) {
+        try {
+          sheet.getRange(networkStartRow + 1, 1, networkContentRows, numCols).shiftRowGroupDepth(1);
+          sheet.getRange(networkStartRow + 1, 1, networkContentRows, 1).collapseGroups();
+        } catch (e) {
+          console.log('Error grouping weeks under network:', e);
+        }
+      }
+    });
+    
+    console.log('Incent Traffic row grouping completed successfully');
+    
+  } catch (e) {
+    console.error('Error in createIncentTrafficRowGrouping:', e);
+  }
+}
+
 function createOverallRowGrouping(sheet, tableData, appData) {
   const numCols = getUnifiedHeaders().length;
 
@@ -381,16 +539,19 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   );
 
   campaignRows.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.CAMPAIGN_ROW.background)
-         .setFontSize(9)
-  );
-  
-  networkRows.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.CAMPAIGN_ROW.background)
-         .setFontSize(9)
-  );
+  sheet.getRange(r, 1, 1, numCols)
+       .setBackground(COLORS.CAMPAIGN_ROW.background)
+       .setFontSize(9)
+);
+
+// ДОБАВИТЬ СЮДА:
+networkRows.forEach(r =>
+  sheet.getRange(r, 1, 1, numCols)
+       .setBackground(COLORS.APP_ROW.background)
+       .setFontColor(COLORS.APP_ROW.fontColor)
+       .setFontWeight('bold')
+       .setFontSize(10)
+);
 
   if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
     hyperlinkRows.forEach(r => {
@@ -586,7 +747,7 @@ function calculateWeekTotals(campaigns) {
 }
 
 function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
-  if (CURRENT_PROJECT === 'OVERALL') {
+  if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return;
   }
   
@@ -684,7 +845,7 @@ function createRowGrouping(sheet, tableData, appData) {
             }
           }
           
-        } else if (CURRENT_PROJECT !== 'OVERALL') {
+        } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
           const campaignCount = week.campaigns ? week.campaigns.length : 0;
           rowPointer += campaignCount;
           weekContentRows = campaignCount;
@@ -725,6 +886,8 @@ function createProjectPivotTable(projectName, appData) {
   try {
     if (projectName === 'OVERALL') {
       createOverallPivotTable(appData);
+    } else if (projectName === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(appData);
     } else {
       createEnhancedPivotTable(appData);
     }

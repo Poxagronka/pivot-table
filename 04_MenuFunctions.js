@@ -2,7 +2,7 @@
  * Menu Functions - ОБНОВЛЕНО: медленный режим по умолчанию для множественных обновлений
  */
 
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall'];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();

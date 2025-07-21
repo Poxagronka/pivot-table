@@ -1,5 +1,5 @@
 /**
- * Settings Sheet Management - ОБНОВЛЕНО: улучшенное кеширование и обработка таймаутов
+ * Settings Sheet Management - ОБНОВЛЕНО: улучшенное кеширование и обработка таймаутов + INCENT_TRAFFIC
  */
 
 var SETTINGS_SHEET_NAME = 'Settings';
@@ -171,7 +171,8 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A13:H13').setBackground('#f3e5f5');
   sheet.setRowHeight(13, 25);
   
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в список проектов
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
   projects.forEach((proj, i) => {
     const row = 14 + i;
     sheet.getRange(`A${row}`).setValue(proj).setFontWeight('bold');
@@ -188,52 +189,52 @@ function createSettingsLayout(sheet) {
     sheet.getRange(`A${row}:H${row}`).setBorder(true, true, true, true, false, false, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
   });
   
-  sheet.setRowHeight(22, 20);
+  sheet.setRowHeight(23, 20);
   
   // Detailed Instructions
-  sheet.getRange('A23:H23').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(23, 30);
+  sheet.getRange('A24:H24').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(24, 30);
   
   // Target eROAS Instructions
-  sheet.getRange('A24').setValue('🎯 Target eROAS Logic:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A25:H27').merge();
-  sheet.getRange('A25').setValue(
+  sheet.getRange('A25').setValue('🎯 Target eROAS Logic:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A26:H28').merge();
+  sheet.getRange('A26').setValue(
     '• TRICKY проект: всегда 250% (весь лист)\n' +
     '• Business приложения: 140% (со словом "Business" в любом проекте)\n' +
     '• Все остальные: 150% (по умолчанию)'
   );
-  sheet.getRange('A25:H27').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A26:H28').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   // Growth Thresholds Instructions
-  sheet.getRange('A29').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A30:H33').merge();
-  sheet.getRange('A30').setValue(
+  sheet.getRange('A30').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A31:H34').merge();
+  sheet.getRange('A31').setValue(
     '🟢 HEALTHY: spend:X,profit:Y - оба условия выполняются\n' +
     '🟢 EFFICIENCY: spendDrop:X,profitGain:Y - тратим меньше, зарабатываем больше\n' +
     '🔴 INEFFICIENT: profitDrop:X - критическое падение прибыли\n' +
     '🔵 SCALING DOWN: spendDrop:X - значительное сокращение спенда'
   );
-  sheet.getRange('A30:H33').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A31:H34').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
-  sheet.setRowHeight(35, 20);
+  sheet.setRowHeight(36, 20);
   
   // API Settings в конце
-  sheet.getRange('A36:H36').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(36, 30);
+  sheet.getRange('A37:H37').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(37, 30);
   
-  sheet.getRange('A37').setValue('Bearer Token:').setFontWeight('bold');
-  sheet.getRange('B37:H37').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
-  sheet.getRange('A37:A37').setBackground('#e8f0fe');
-  sheet.getRange('B37:H37').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
-  sheet.setRowHeight(37, 25);
+  sheet.getRange('A38').setValue('Bearer Token:').setFontWeight('bold');
+  sheet.getRange('B38:H38').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
+  sheet.getRange('A38:A38').setBackground('#e8f0fe');
+  sheet.getRange('B38:H38').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
+  sheet.setRowHeight(38, 25);
   
-  sheet.getRange('A39:H41').merge();
-  sheet.getRange('A39').setValue(
+  sheet.getRange('A40:H42').merge();
+  sheet.getRange('A40').setValue(
     '• Bearer Token: Получите из app.appodeal.com → Settings → API\n' +
     '• Токен должен начинаться с "eyJ" и быть длиной 300+ символов\n' +
     '• Один токен работает для всех проектов'
   );
-  sheet.getRange('A39:H41').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A40:H42').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   // Настройка ширины колонок
   sheet.setColumnWidth(1, 140);  // Project
@@ -308,10 +309,10 @@ function loadSettingsFromSheet() {
           settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
         }
         
-        // Advanced Growth Thresholds по проектам
-        const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+        // ОБНОВЛЕНО: Advanced Growth Thresholds по проектам (включая INCENT_TRAFFIC)
+        const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
         projects.forEach(proj => {
-          if (label === proj && i >= 13 && i <= 22) {
+          if (label === proj && i >= 13 && i <= 23) {
             const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
             const efficiencyValue = row[2] ? row[2].toString() : 'spendDrop:-5,profitGain:8';
             const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
@@ -532,10 +533,10 @@ function forceUpdateSettingsSheet() {
   }
 }
 
-// Вспомогательная функция для получения дефолтных порогов для всех проектов
+// ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для получения дефолтных порогов
 function getDefaultGrowthThresholdsForAllProjects() {
   const defaultThresholds = getDefaultGrowthThresholds();
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
   const result = {};
   
   projects.forEach(proj => {

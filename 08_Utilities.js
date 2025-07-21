@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов
+ * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов + INCENT_TRAFFIC
  */
 
 // Date Utils
@@ -245,8 +245,8 @@ function sortProjectSheets() {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
-    // ОБНОВЛЕНО: добавлены Settings и To do в конец списка
-    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Overall', 'Settings', 'To do'];
+    // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в порядок проектов
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall', 'Settings', 'To do'];
     
     // Разделяем листы на категории
     const projectSheets = [];      // Листы из projectOrder
@@ -478,13 +478,18 @@ function getProjectStatus(projectName) {
     status.dataType = 'app-level aggregated';
     status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 
       project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS';
+  } else if (projectName === 'INCENT_TRAFFIC') {
+    status.dataType = 'network-grouped traffic data';
+    status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 
+      project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS';
   }
   
   return status;
 }
 
 function clearAllCommentColumnCaches() {
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+  // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для очистки кешей
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
   projects.forEach(proj => {
     try {
       const cache = new CommentCache(proj);

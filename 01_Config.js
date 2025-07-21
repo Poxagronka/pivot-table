@@ -120,6 +120,8 @@ function getApplovinTargetEROAS(appName) { return getTargetEROAS('APPLOVIN', app
 function getMintegralTargetEROAS(appName) { return getTargetEROAS('MINTEGRAL', appName); }
 function getIncentTargetEROAS(appName) { return getTargetEROAS('INCENT', appName); }
 function getOverallTargetEROAS(appName) { return getTargetEROAS('OVERALL', appName); }
+function getIncentTrafficTargetEROAS(appName) { return getTargetEROAS('INCENT_TRAFFIC', appName); }
+
 
 function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
 function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
@@ -129,6 +131,7 @@ function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN');
 function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
+function getIncentTrafficGrowthThresholds() { return getGrowthThresholds('INCENT_TRAFFIC'); }
 
 // ОБНОВЛЕНО: добавлены ROAS D-3 и D-30
 var UNIFIED_MEASURES = [
@@ -318,6 +321,31 @@ var PROJECTS = {
     }
   },
 
+  INCENT_TRAFFIC: {
+  SHEET_NAME: 'Incent_traffic',
+  API_URL: 'https://app.appodeal.com/graphql',
+  TARGET_EROAS: getIncentTrafficTargetEROAS,
+  GROWTH_THRESHOLDS: getIncentTrafficGrowthThresholds,
+  BEARER_TOKEN: getBearerTokenStrict,
+  COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
+  API_CONFIG: {
+    OPERATION_NAME: "RichStats",
+    FILTERS: {
+      USER: ["79950","127168","157350","150140"],
+      ATTRIBUTION_PARTNER: ["Stack"],
+      ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
+      ATTRIBUTION_CAMPAIGN_SEARCH: null,
+      ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]  // новое поле для исключения
+    },
+    GROUP_BY: [
+      { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+      { dimension: "ATTRIBUTION_NETWORK_HID" },
+      { dimension: "APP" }
+    ],
+    MEASURES: UNIFIED_MEASURES
+  }
+},
+
   OVERALL: {
     SHEET_NAME: 'Overall',
     API_URL: 'https://app.appodeal.com/graphql',
@@ -425,6 +453,7 @@ var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
+  NETWORK_ROW: { background: '#d1e7fe', fontColor: 'black' },  // ДОБАВИТЬ
   SOURCE_APP_ROW: { background: '#f0f8ff' },
   CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },

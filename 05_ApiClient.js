@@ -1,5 +1,5 @@
 /**
- * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30 + поддержка сеток для OVERALL
+ * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30 + поддержка сеток для OVERALL + отладка INCENT_TRAFFIC
  */
 
 var BUNDLE_ID_CACHE = {};
@@ -40,7 +40,7 @@ function fetchCampaignData(dateRange) {
     }
   }
   
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -130,7 +130,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     }
   }
   
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -316,7 +316,7 @@ function processApiData(rawData, includeLastWeek = null) {
   const dayOfWeek = today.getDay();
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
-  console.log(`Processing ${stats.length} records...`);
+  console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
   console.log(`Current week start: ${currentWeekStart}`);
   console.log(`Last week start: ${lastWeekStart}`);
   console.log(`Include last week: ${shouldIncludeLastWeek}`);
@@ -335,9 +335,9 @@ function processApiData(rawData, includeLastWeek = null) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
       
-      // Детальное логирование для OVERALL
-      if (CURRENT_PROJECT === 'OVERALL' && index < 10) {
-        console.log(`OVERALL record ${index}:`);
+      // Детальное логирование для INCENT_TRAFFIC
+      if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
+        console.log(`INCENT_TRAFFIC record ${index}:`);
         console.log(`  - date: ${date}`);
         console.log(`  - weekKey: ${weekKey}`);
         console.log(`  - currentWeekStart: ${currentWeekStart}`);
@@ -356,15 +356,21 @@ function processApiData(rawData, includeLastWeek = null) {
 
       let campaign, app, network, metricsStartIndex;
       
-      if (CURRENT_PROJECT === 'OVERALL') {
+      // ОТЛАДКА: проверка условия для INCENT_TRAFFIC
+      if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
+        console.log(`INCENT_TRAFFIC processing row ${index}, checking condition:`, CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC');
+      }
+      
+      if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
         campaign = null;
         network = row[1];  // Attribution Network HID
         app = row[2];
         metricsStartIndex = 3;
         
-        // Логирование для отладки OVERALL
-        if (index < 5) {
-          console.log(`OVERALL row ${index} structure:`, {
+        // Отладка для INCENT_TRAFFIC
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
+          console.log('Processing as OVERALL/INCENT_TRAFFIC format');
+          console.log(`INCENT_TRAFFIC row ${index} structure:`, {
             network: network ? `${network.__typename} (${network.id || network.value})` : 'null',
             app: app ? `${app.__typename} (${app.name})` : 'null',
             metricsCount: row.length - metricsStartIndex
@@ -375,6 +381,11 @@ function processApiData(rawData, includeLastWeek = null) {
         app = row[2];
         network = null;
         metricsStartIndex = 3;
+        
+        // Отладка для INCENT_TRAFFIC - должно НЕ попадать сюда
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
+          console.log('WARNING: INCENT_TRAFFIC processing as regular format!');
+        }
       }
       
       // ОБНОВЛЕНО: новая структура метрик с ROAS D-1, D-3, D-7, D-30
@@ -398,7 +409,7 @@ function processApiData(rawData, includeLastWeek = null) {
       const sunday = getSundayOfWeek(new Date(date));
       const appKey = app.id;
       
-      if (CURRENT_PROJECT === 'OVERALL') {
+      if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
         if (!appData[appKey]) {
           appData[appKey] = {
             appId: app.id,
@@ -588,6 +599,74 @@ function processApiData(rawData, includeLastWeek = null) {
     console.log('TRICKY optimized grouping completed');
   }
 
+  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ INCENT_TRAFFIC - перегруппировка сетка → неделя → приложение
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    console.log('=== INCENT_TRAFFIC Regrouping Debug ===');
+    console.log('appData before regrouping:', {
+      appCount: Object.keys(appData).length,
+      apps: Object.keys(appData).map(key => appData[key].appName)
+    });
+    
+    // Проверим структуру данных
+    Object.values(appData).forEach(app => {
+      console.log(`App: ${app.appName}`);
+      Object.values(app.weeks).forEach(week => {
+        console.log(`  Week: ${week.weekStart}`);
+        if (week.networks) {
+          console.log(`    Networks:`, Object.keys(week.networks));
+        } else {
+          console.log(`    NO NETWORKS! campaigns:`, week.campaigns?.length || 0);
+        }
+      });
+    });
+    
+    const networkData = {};
+    
+    // Перегруппируем данные: сетка → неделя → приложение
+    Object.values(appData).forEach(app => {
+      Object.values(app.weeks).forEach(week => {
+        if (week.networks) {
+          Object.values(week.networks).forEach(network => {
+            const networkKey = network.networkId;
+            
+            if (!networkData[networkKey]) {
+              networkData[networkKey] = {
+                networkId: network.networkId,
+                networkName: network.networkName,
+                weeks: {}
+              };
+            }
+            
+            if (!networkData[networkKey].weeks[week.weekStart]) {
+              networkData[networkKey].weeks[week.weekStart] = {
+                weekStart: week.weekStart,
+                weekEnd: week.weekEnd,
+                apps: {}
+              };
+            }
+            
+            networkData[networkKey].weeks[week.weekStart].apps[app.appId] = {
+              appId: app.appId,
+              appName: app.appName,
+              platform: app.platform,
+              bundleId: app.bundleId,
+              campaigns: network.campaigns
+            };
+          });
+        } else {
+          console.log('WARNING: No networks in week data for INCENT_TRAFFIC!');
+        }
+      });
+    });
+    
+    console.log('networkData after regrouping:', {
+      networkCount: Object.keys(networkData).length,
+      networks: Object.keys(networkData)
+    });
+    
+    return networkData;
+  }
+
   console.log(`Processing completed: ${processedCount} records processed`);
   return appData;
 }
@@ -621,7 +700,7 @@ function extractGeoFromCampaign(campaignName) {
     return 'OTHER';
   }
   
-  if (CURRENT_PROJECT === 'OVERALL') {
+  if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return 'ALL';
   }
   
@@ -659,7 +738,7 @@ function extractGeoFromCampaign(campaignName) {
 
 function extractSourceApp(campaignName) {
   try {
-    if (CURRENT_PROJECT === 'OVERALL') {
+    if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       return campaignName;
     }
     

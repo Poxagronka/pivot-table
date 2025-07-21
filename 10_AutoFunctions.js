@@ -1,5 +1,5 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы + учитывает день недели для предыдущей недели
+ * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы + учитывает день недели для предыдущей недели + INCENT_TRAFFIC
  */
 
 function autoCacheAllProjects() {
@@ -11,7 +11,8 @@ function autoCacheAllProjects() {
   }
   
   try {
-    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'].forEach(function(proj) {
+    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для автокеширования
+    ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'].forEach(function(proj) {
       try {
         console.log(`Caching ${proj}...`);
         cacheProjectComments(proj);
@@ -34,7 +35,8 @@ function autoUpdateAllProjects() {
   }
   
   try {
-    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для автообновления
+    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
     var successCount = 0;
     
     projects.forEach(function(proj) {
@@ -145,6 +147,8 @@ function updateProjectData(projectName) {
   try {
     if (projectName === 'OVERALL') {
       createOverallPivotTable(processed);
+    } else if (projectName === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
     } else {
       createEnhancedPivotTable(processed);
     }
@@ -160,7 +164,8 @@ function updateProjectData(projectName) {
 function saveAllCommentsToCache() {
   var ui = SpreadsheetApp.getUi();
   try {
-    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'OVERALL'];
+    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для сохранения комментариев
+    var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
     var successCount = 0;
     
     projects.forEach(function(proj) {
@@ -220,7 +225,7 @@ function showAutomationStatus() {
   
   msg += '💾 AUTO CACHE:\n';
   if (cacheEnabled && cacheTrigger) {
-    msg += '✅ Enabled - Runs every hour\n• Caches comments from all projects\n• Collapses all row groups after caching\n';
+    msg += '✅ Enabled - Runs every hour\n• Caches comments from all projects (including INCENT_TRAFFIC)\n• Collapses all row groups after caching\n';
   } else if (cacheEnabled && !cacheTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
   } else {
@@ -229,7 +234,7 @@ function showAutomationStatus() {
   
   msg += '\n🔄 AUTO UPDATE:\n';
   if (updateEnabled && updateTrigger) {
-    msg += '✅ Enabled - Runs daily at 5:00 AM\n• Updates all project data\n• Includes previous week data starting from Tuesday\n• Preserves all comments\n• Sorts project sheets after update\n';
+    msg += '✅ Enabled - Runs daily at 5:00 AM\n• Updates all project data (including INCENT_TRAFFIC)\n• Includes previous week data starting from Tuesday\n• Preserves all comments\n• Sorts project sheets after update\n';
   } else if (updateEnabled && !updateTrigger) {
     msg += '⚠️ Enabled but trigger missing\n• Please use Settings sheet to fix\n';
   } else {
