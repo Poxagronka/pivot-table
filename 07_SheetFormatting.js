@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30 + поддержка сеток для OVERALL + кеширование первоначальных eROAS 730d
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30 + поддержка сеток для OVERALL + кеширование первоначальных eROAS 730d + rich text форматирование
  */
 
 function createEnhancedPivotTable(appData) {
@@ -560,6 +560,9 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     
     const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
     growthStatusRange.setWrap(true).setHorizontalAlignment('left');
+
+    const eroasRange = sheet.getRange(2, 15, numRows - 1, 1);
+    eroasRange.setHorizontalAlignment('right');
   }
 
   const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [], networkRows = [];
@@ -642,12 +645,59 @@ networkRows.forEach(r => {
     sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');       // eProfit 730d - до целого
   }
 
+  // Применяем условное форматирование
   applyConditionalFormatting(sheet, numRows, appData);
+
+  // НОВОЕ: Применяем rich text форматирование для eROAS 730d столбца
+  applyEROASRichTextFormatting(sheet, numRows);
 
   
   sheet.hideColumns(1);
   sheet.hideColumns(13, 1); // eARPU 365d
   sheet.hideColumns(14, 1); // eROAS 365d 
+}
+
+/**
+ * НОВАЯ ФУНКЦИЯ: Применяет rich text форматирование к столбцу eROAS 730d
+ * Делает часть до стрелки и саму стрелку серыми
+ */
+function applyEROASRichTextFormatting(sheet, numRows) {
+  if (numRows <= 1) return;
+  
+  const eroasColumn = 15; // eROAS 730d столбец
+  const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
+  const values = range.getValues();
+  
+  const richTextValues = values.map(row => {
+    const cellValue = row[0];
+    if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
+      // Если нет стрелки, возвращаем как есть
+      return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
+    }
+    
+    const arrowIndex = cellValue.indexOf('→');
+    if (arrowIndex === -1) {
+      return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
+    }
+    
+    // Разделяем на часть до стрелки (включая стрелку) и часть после
+    const beforeArrow = cellValue.substring(0, arrowIndex + 1); // включаем стрелку
+    const afterArrow = cellValue.substring(arrowIndex + 1);
+    
+    // Создаем rich text value
+    const richTextBuilder = SpreadsheetApp.newRichTextValue()
+      .setText(cellValue)
+      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
+        .setForegroundColor('#808080')  // Серый цвет
+        .build())
+      .setTextStyle(beforeArrow.length, cellValue.length, SpreadsheetApp.newTextStyle()
+        .setForegroundColor('#000000')  // Черный цвет
+        .build());
+    
+    return richTextBuilder.build();
+  });
+  
+  range.setRichTextValues(richTextValues.map(rtv => [rtv]));
 }
 
 function applyConditionalFormatting(sheet, numRows, appData) {
@@ -693,10 +743,15 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       }
       
       const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
+      const columnLetter = String.fromCharCode(64 + eroasColumn);
+      const cellAddress = `${columnLetter}${i + 1}`;
+      
+      // ИСПРАВЛЕНО: Формула для извлечения значения после стрелки
+      const extractValueFormula = `IF(ISERROR(SEARCH("→",${cellAddress})), VALUE(SUBSTITUTE(${cellAddress},"%","")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(${cellAddress},"→",REPT(" ",100)),100)),"%","")))`;
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) >= ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= ${targetEROAS})`)
           .setBackground(COLORS.POSITIVE.background)
           .setFontColor(COLORS.POSITIVE.fontColor)
           .setRanges([cellRange]).build()
@@ -704,7 +759,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) >= 120, VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) < ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= 120, ${extractValueFormula} < ${targetEROAS})`)
           .setBackground(COLORS.WARNING.background)
           .setFontColor(COLORS.WARNING.fontColor)
           .setRanges([cellRange]).build()
@@ -712,7 +767,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) < 120)`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} < 120)`)
           .setBackground(COLORS.NEGATIVE.background)
           .setFontColor(COLORS.NEGATIVE.fontColor)
           .setRanges([cellRange]).build()

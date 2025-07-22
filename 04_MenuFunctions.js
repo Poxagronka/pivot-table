@@ -1,5 +1,5 @@
 /**
- * Menu Functions - ОБНОВЛЕНО: медленный режим по умолчанию для множественных обновлений
+ * Menu Functions - ОБНОВЛЕНО: упрощенное меню с выбором недель и проектов
  */
 
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
@@ -413,6 +413,7 @@ function quickAPICheckAll() {
   ui.alert('API Check Complete', results, ui.ButtonSet.OK);
 }
 
+// ОБНОВЛЕНО: упрощенный мастер создания отчетов
 function smartReportWizard() {
   var ui = SpreadsheetApp.getUi();
   
@@ -426,52 +427,100 @@ function smartReportWizard() {
     }
   }
   
-  var scope = showChoice('📈 Generate Report - Step 1/3', ['All Projects Together', 'Single Project', 'Custom Selection']);
+  // Шаг 1: Выбор проектов
+  var scope = showChoice('📈 Generate Report - Step 1/2: Select Projects', ['All Projects', 'Single Project', 'Multiple Projects']);
   if (!scope) return;
   
-  var period = showChoice('📅 Select Period - Step 2/3', ['Last 30 days', 'Last 60 days', 'Last 90 days', 'Custom days', 'Date range']);
-  if (!period) return;
+  // Шаг 2: Выбор количества недель
+  var weeks = promptWeeks('📅 Generate Report - Step 2/2: Select Weeks', 'Enter number of weeks (1-52):');
+  if (!weeks) return;
   
-  var days = [30, 60, 90];
-  
+  // Генерация отчетов
   if (scope === 1) {
-    if (period <= 3) {
-      quickGenerateAllForDays(days[period-1]);
-    } else if (period === 4) {
-      var customDays = promptNumber('Enter days:', [120, 360]);
-      if (customDays) quickGenerateAllForDays(customDays);
-    } else {
-      var dates = promptDateRange();
-      if (dates) runAllProjectsDateRange(dates.start, dates.end);
-    }
+    // Все проекты
+    generateAllProjects(weeks);
   } else if (scope === 2) {
-    var project = showChoice('Select Project - Step 3/3', MENU_PROJECTS);
+    // Один проект
+    var project = showChoice('Select Project:', MENU_PROJECTS);
     if (!project) return;
     var projectName = MENU_PROJECTS[project-1].toUpperCase();
-    
-    if (period <= 3) {
-      generateProjectReport(projectName, days[period-1]);
-    } else if (period === 4) {
-      var customDays = promptNumber('Enter days:', [120, 360]);
-      if (customDays) generateProjectReport(projectName, customDays);
-    } else {
-      var dates = promptDateRange();
-      if (dates) generateProjectReportForDateRange(projectName, dates.start, dates.end);
-    }
+    generateSingleProject(projectName, weeks);
   } else {
+    // Несколько проектов
     var selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
     if (!selected || selected.length === 0) return;
-    
-    if (period <= 3) {
-      runSelectedProjects(selected, days[period-1]);
-    } else if (period === 4) {
-      var customDays = promptNumber('Enter days:', [120, 360]);
-      if (customDays) runSelectedProjects(selected, customDays);
-    } else {
-      var dates = promptDateRange();
-      if (dates) runSelectedProjectsDateRange(selected, dates.start, dates.end);
-    }
+    generateMultipleProjects(selected, weeks);
   }
+}
+
+function generateAllProjects(weeks) {
+  var ui = SpreadsheetApp.getUi();
+  var success = 0;
+  var total = MENU_PROJECTS.length;
+  
+  try {
+    ui.alert('Processing...', `Generating reports for all ${total} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
+    
+    for (var i = 0; i < MENU_PROJECTS.length; i++) {
+      var proj = MENU_PROJECTS[i];
+      try { 
+        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
+        generateProjectReportByWeeks(proj.toUpperCase(), weeks); 
+        success++; 
+      } catch(e) { 
+        console.error(`Error generating ${proj}:`, e); 
+      }
+    }
+    
+    sortProjectSheets();
+    ui.alert('✅ Complete', `Generated ${success}/${total} reports successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+  } catch(e) {
+    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function generateSingleProject(projectName, weeks) {
+  var ui = SpreadsheetApp.getUi();
+  
+  try {
+    ui.alert('Processing...', `Generating ${projectName} report (${weeks} weeks)...`, ui.ButtonSet.OK);
+    generateProjectReportByWeeks(projectName, weeks);
+    sortProjectSheets();
+    ui.alert('✅ Complete', `${projectName} report generated successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+  } catch(e) {
+    ui.alert('❌ Error', `Error generating ${projectName} report:\n\n${e.toString()}`, ui.ButtonSet.OK);
+  }
+}
+
+function generateMultipleProjects(projects, weeks) {
+  var ui = SpreadsheetApp.getUi();
+  var success = 0;
+  
+  try {
+    ui.alert('Processing...', `Generating reports for ${projects.length} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
+    
+    for (var i = 0; i < projects.length; i++) {
+      var proj = projects[i];
+      try {
+        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
+        generateProjectReportByWeeks(proj.toUpperCase(), weeks);
+        success++;
+      } catch(e) {
+        console.error(`Error generating ${proj}:`, e);
+      }
+    }
+    
+    sortProjectSheets();
+    ui.alert('✅ Complete', `Generated ${success}/${projects.length} reports successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+  } catch(e) {
+    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function generateProjectReportByWeeks(projectName, weeks) {
+  var days = weeks * 7; // Конвертируем недели в дни
+  setCurrentProject(projectName);
+  generateReport(days);
 }
 
 function clearDataWizard() {
@@ -554,7 +603,6 @@ function syncTriggersWithSettings() {
     console.log('Triggers synchronized with Settings sheet');
   } catch (e) {
     console.error('Error syncing triggers with settings:', e);
-    throw e;
   }
 }
 
@@ -649,79 +697,16 @@ function showMultiChoice(title, options) {
   return validSelections;
 }
 
-function promptNumber(prompt, suggestions) {
-  suggestions = suggestions || [];
+function promptWeeks(title, prompt) {
   var ui = SpreadsheetApp.getUi();
-  var hint = suggestions.length > 0 ? ' (e.g., ' + suggestions.join(', ') + ')' : '';
-  var result = ui.prompt('Input Required', prompt + hint, ui.ButtonSet.OK_CANCEL);
+  var result = ui.prompt(title, prompt + '\n\nCommon options: 4, 8, 12, 16, 20, 24', ui.ButtonSet.OK_CANCEL);
   if (result.getSelectedButton() !== ui.Button.OK) return null;
-  var num = parseInt(result.getResponseText());
-  return isNaN(num) ? null : num;
-}
-
-function promptDateRange() {
-  var ui = SpreadsheetApp.getUi();
-  var start = ui.prompt('Start Date', 'Enter date (YYYY-MM-DD):', ui.ButtonSet.OK_CANCEL);
-  if (start.getSelectedButton() !== ui.Button.OK) return null;
-  var end = ui.prompt('End Date', 'Enter date (YYYY-MM-DD):', ui.ButtonSet.OK_CANCEL);
-  if (end.getSelectedButton() !== ui.Button.OK) return null;
-  if (!isValidDate(start.getResponseText()) || !isValidDate(end.getResponseText())) {
-    ui.alert('❌ Invalid date format');
+  var weeks = parseInt(result.getResponseText());
+  if (isNaN(weeks) || weeks < 1 || weeks > 52) {
+    ui.alert('❌ Invalid Input', 'Please enter a number between 1 and 52 weeks.', ui.ButtonSet.OK);
     return null;
   }
-  return { start: start.getResponseText(), end: end.getResponseText() };
-}
-
-function isValidDate(dateString) { 
-  var regex = /^\d{4}-\d{2}-\d{2}$/; 
-  if (!regex.test(dateString)) return false; 
-  var date = new Date(dateString); 
-  return date instanceof Date && !isNaN(date); 
-}
-
-function quickGenerateAllForDays(days) {
-  var ui = SpreadsheetApp.getUi();
-  var success = 0;
-  
-  try {
-    for (var i = 0; i < MENU_PROJECTS.length; i++) {
-      var p = MENU_PROJECTS[i];
-      try { 
-        generateProjectReport(p.toUpperCase(), days); 
-        success++; 
-      } catch(e) { 
-        console.error(e); 
-      }
-    }
-    sortProjectSheets();
-    ui.alert('✅ Complete', 'Generated ' + success + '/' + MENU_PROJECTS.length + ' reports', ui.ButtonSet.OK);
-  } catch(e) {
-    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
-  }
-}
-
-function runSelectedProjects(projects, days) {
-  for (var i = 0; i < projects.length; i++) {
-    generateProjectReport(projects[i].toUpperCase(), days);
-  }
-  sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function runAllProjectsDateRange(start, end) {
-  for (var i = 0; i < MENU_PROJECTS.length; i++) {
-    generateProjectReportForDateRange(MENU_PROJECTS[i].toUpperCase(), start, end);
-  }
-  sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'All reports generated', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function runSelectedProjectsDateRange(projects, start, end) {
-  for (var i = 0; i < projects.length; i++) {
-    generateProjectReportForDateRange(projects[i].toUpperCase(), start, end);
-  }
-  sortProjectSheets();
-  SpreadsheetApp.getUi().alert('✅ Complete', 'Generated ' + projects.length + ' reports', SpreadsheetApp.getUi().ButtonSet.OK);
+  return weeks;
 }
 
 function generateProjectReport(projectName, days) { setCurrentProject(projectName); generateReport(days); }
