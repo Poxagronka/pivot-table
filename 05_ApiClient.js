@@ -686,11 +686,24 @@ function processProjectApiData(projectName, rawData, includeLastWeek = null) {
 function extractGeoFromCampaign(campaignName) {
   if (!campaignName) return 'OTHER';
   
-  if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
-    const geoMap = {
-      '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
-      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR'
-    };
+ if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
+  const geoMap = {
+    '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
+    '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR',
+    '| FRA |': 'FRA', '| ITA |': 'ITA', '| ESP |': 'ESP', '| RUS |': 'RUS', '| CHN |': 'CHN',
+    '| IND |': 'IND', '| TUR |': 'TUR', '| POL |': 'POL', '| NLD |': 'NLD', '| SWE |': 'SWE',
+    '| NOR |': 'NOR', '| DNK |': 'DNK', '| FIN |': 'FIN', '| CHE |': 'CHE', '| AUT |': 'AUT',
+    '| BEL |': 'BEL', '| PRT |': 'PRT', '| GRC |': 'GRC', '| CZE |': 'CZE', '| HUN |': 'HUN',
+    '| ROU |': 'ROU', '| BGR |': 'BGR', '| HRV |': 'HRV', '| SVK |': 'SVK', '| SVN |': 'SVN',
+    '| LTU |': 'LTU', '| LVA |': 'LVA', '| EST |': 'EST', '| UKR |': 'UKR', '| BLR |': 'BLR',
+    '| ISR |': 'ISR', '| SAU |': 'SAU', '| ARE |': 'ARE', '| QAT |': 'QAT', '| KWT |': 'KWT',
+    '| EGY |': 'EGY', '| ZAF |': 'ZAF', '| NGA |': 'NGA', '| KEN |': 'KEN', '| MAR |': 'MAR',
+    '| THA |': 'THA', '| VNM |': 'VNM', '| IDN |': 'IDN', '| MYS |': 'MYS', '| SGP |': 'SGP',
+    '| PHL |': 'PHL', '| TWN |': 'TWN', '| HKG |': 'HKG', '| ARG |': 'ARG', '| CHL |': 'CHL',
+    '| COL |': 'COL', '| PER |': 'PER', '| VEN |': 'VEN', '| URY |': 'URY', '| ECU |': 'ECU',
+    '| BOL |': 'BOL', '| PRY |': 'PRY', '| CRI |': 'CRI', '| GTM |': 'GTM', '| DOM |': 'DOM',
+    '| PAN |': 'PAN', '| NZL |': 'NZL'
+  };
 
     for (const [pattern, geo] of Object.entries(geoMap)) {
       if (campaignName.includes(pattern)) {
