@@ -67,7 +67,7 @@ class InitialEROASCache {
       
       data.forEach(row => {
         const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded] = row;
-        if (initialEROAS !== '') {
+        if (initialEROAS !== '' && initialEROAS > 0) {
           const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
           cache[key] = parseFloat(initialEROAS);
         }
@@ -87,7 +87,7 @@ class InitialEROASCache {
    * Сохраняет первоначальное значение eROAS
    */
   saveInitialValue(level, appName, weekRange, currentEROAS, identifier = '', sourceApp = '') {
-    if (currentEROAS === null || currentEROAS === undefined || currentEROAS === '') return;
+    if (currentEROAS === null || currentEROAS === undefined || currentEROAS === '' || currentEROAS === 0) return;
     
     const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
     const cache = this.loadAllInitialValues();
@@ -158,7 +158,7 @@ class InitialEROASCache {
             const weekTotals = calculateWeekTotals(allCampaigns);
             
             const weekKey = this.createKey('WEEK', network.networkName, weekRange, '', '');
-            if (!this.memoryCache[weekKey]) {
+            if (!this.memoryCache[weekKey] && weekTotals.avgEROASD730 > 0) {
               newValues.push(['WEEK', network.networkName, weekRange, '', '', weekTotals.avgEROASD730, new Date()]);
             }
             
@@ -166,7 +166,7 @@ class InitialEROASCache {
             Object.values(week.apps).forEach(app => {
               const appTotals = calculateWeekTotals(app.campaigns);
               const appKey = this.createKey('APP', network.networkName, weekRange, app.appId, app.appName);
-              if (!this.memoryCache[appKey]) {
+              if (!this.memoryCache[appKey] && appTotals.avgEROASD730 > 0) {
                 newValues.push(['APP', network.networkName, weekRange, app.appId, app.appName, appTotals.avgEROASD730, new Date()]);
               }
             });
@@ -190,7 +190,7 @@ class InitialEROASCache {
               
               // Week level
               const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-              if (!this.memoryCache[weekKey]) {
+              if (!this.memoryCache[weekKey] && weekTotals.avgEROASD730 > 0) {
                 newValues.push(['WEEK', app.appName, weekRange, '', '', weekTotals.avgEROASD730, new Date()]);
               }
               
@@ -198,14 +198,14 @@ class InitialEROASCache {
               Object.values(week.sourceApps).forEach(sourceApp => {
                 const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
                 const sourceAppKey = this.createKey('SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName);
-                if (!this.memoryCache[sourceAppKey]) {
+                if (!this.memoryCache[sourceAppKey] && sourceAppTotals.avgEROASD730 > 0) {
                   newValues.push(['SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, sourceAppTotals.avgEROASD730, new Date()]);
                 }
                 
                 // Campaign level
                 sourceApp.campaigns.forEach(campaign => {
                   const campaignKey = this.createKey('CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp);
-                  if (!this.memoryCache[campaignKey]) {
+                  if (!this.memoryCache[campaignKey] && campaign.eRoasForecastD730 > 0) {
                     newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, campaign.eRoasForecastD730, new Date()]);
                   }
                 });
@@ -220,7 +220,7 @@ class InitialEROASCache {
               
               // Week level
               const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-              if (!this.memoryCache[weekKey]) {
+              if (!this.memoryCache[weekKey] && weekTotals.avgEROASD730 > 0) {
                 newValues.push(['WEEK', app.appName, weekRange, '', '', weekTotals.avgEROASD730, new Date()]);
               }
               
@@ -228,7 +228,7 @@ class InitialEROASCache {
               Object.values(week.networks).forEach(network => {
                 const networkTotals = calculateWeekTotals(network.campaigns);
                 const networkKey = this.createKey('NETWORK', app.appName, weekRange, network.networkId, network.networkName);
-                if (!this.memoryCache[networkKey]) {
+                if (!this.memoryCache[networkKey] && networkTotals.avgEROASD730 > 0) {
                   newValues.push(['NETWORK', app.appName, weekRange, network.networkId, network.networkName, networkTotals.avgEROASD730, new Date()]);
                 }
               });
@@ -238,7 +238,7 @@ class InitialEROASCache {
               
               // Week level
               const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-              if (!this.memoryCache[weekKey]) {
+              if (!this.memoryCache[weekKey] && weekTotals.avgEROASD730 > 0) {
                 newValues.push(['WEEK', app.appName, weekRange, '', '', weekTotals.avgEROASD730, new Date()]);
               }
               
@@ -246,7 +246,7 @@ class InitialEROASCache {
               if (week.campaigns) {
                 week.campaigns.forEach(campaign => {
                   const campaignKey = this.createKey('CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp);
-                  if (!this.memoryCache[campaignKey]) {
+                  if (!this.memoryCache[campaignKey] && campaign.eRoasForecastD730 > 0) {
                     newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, campaign.eRoasForecastD730, new Date()]);
                   }
                 });

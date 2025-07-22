@@ -684,15 +684,13 @@ function applyEROASRichTextFormatting(sheet, numRows) {
     const beforeArrow = cellValue.substring(0, arrowIndex + 1); // включаем стрелку
     const afterArrow = cellValue.substring(arrowIndex + 1);
     
-    // Создаем rich text value
+    // Создаем rich text value - только левая часть серая, правую часть не трогаем
     const richTextBuilder = SpreadsheetApp.newRichTextValue()
-      .setText(cellValue)
-      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
-        .setForegroundColor('#808080')  // Серый цвет
-        .build())
-      .setTextStyle(beforeArrow.length, cellValue.length, SpreadsheetApp.newTextStyle()
-        .setForegroundColor('#000000')  // Черный цвет
-        .build());
+    .setText(cellValue)
+    .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
+    .setForegroundColor('#808080')  // Серый цвет только для части до стрелки
+    .build());
+    // НЕ устанавливаем цвет для правой части - оставляем цвет от условного форматирования
     
     return richTextBuilder.build();
   });
