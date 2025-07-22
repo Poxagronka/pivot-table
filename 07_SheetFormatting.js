@@ -657,21 +657,16 @@ networkRows.forEach(r => {
   sheet.hideColumns(14, 1); // eROAS 365d 
 }
 
-/**
- * НОВАЯ ФУНКЦИЯ: Применяет rich text форматирование к столбцу eROAS 730d
- * Делает часть до стрелки и саму стрелку серыми
- */
 function applyEROASRichTextFormatting(sheet, numRows) {
   if (numRows <= 1) return;
   
-  const eroasColumn = 15; // eROAS 730d столбец
+  const eroasColumn = 15;
   const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
   const values = range.getValues();
   
   const richTextValues = values.map(row => {
     const cellValue = row[0];
     if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
-      // Если нет стрелки, возвращаем как есть
       return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
     }
     
@@ -680,17 +675,14 @@ function applyEROASRichTextFormatting(sheet, numRows) {
       return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
     }
     
-    // Разделяем на часть до стрелки (включая стрелку) и часть после
-    const beforeArrow = cellValue.substring(0, arrowIndex + 1); // включаем стрелку
-    const afterArrow = cellValue.substring(arrowIndex + 1);
+    const beforeArrow = cellValue.substring(0, arrowIndex);
     
-    // Создаем rich text value - только левая часть серая, правую часть не трогаем
     const richTextBuilder = SpreadsheetApp.newRichTextValue()
     .setText(cellValue)
     .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
-    .setForegroundColor('#808080')  // Серый цвет только для части до стрелки
+    .setForegroundColor('#808080')
+    .setFontSize(9)
     .build());
-    // НЕ устанавливаем цвет для правой части - оставляем цвет от условного форматирования
     
     return richTextBuilder.build();
   });

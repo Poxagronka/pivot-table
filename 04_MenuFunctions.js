@@ -1,7 +1,3 @@
-/**
- * Menu Functions - ОБНОВЛЕНО: упрощенное меню с выбором недель и проектов
- */
-
 var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
 
 function onOpen() {
@@ -12,6 +8,7 @@ function onOpen() {
       .addItem('🔄 Update All Projects (Safe Mode)', 'updateAllProjectsToCurrent')
       .addItem('🎯 Update Selected Projects (Safe Mode)', 'updateSelectedProjectsToCurrent')
       .addItem('🚀 Quick Update Single Project', 'updateSingleProjectQuick')
+      .addItem('⚡ Quick Update All Projects', 'updateAllProjectsQuick')
       .addSeparator()
       .addSubMenu(ui.createMenu('⚙️ Settings')
         .addItem('📄 Open Settings Sheet', 'openSettingsSheet')
@@ -56,7 +53,6 @@ function updateSelectedProjectsToCurrent() {
   
   if (result !== ui.Button.YES) return;
   
-  // Предварительная загрузка настроек
   try {
     ui.alert('Preparing...', 'Loading settings and preparing for update...', ui.ButtonSet.OK);
     preloadSettings();
@@ -72,35 +68,29 @@ function updateSelectedProjectsToCurrent() {
     try {
       var projectName = proj.toUpperCase();
       
-      // Показываем прогресс для каждого проекта
       console.log(`\n=== UPDATING ${projectName} (${index + 1}/${selected.length}) ===`);
       console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
       
-      // Очистка кешей перед каждым проектом (кроме первого)
       if (index > 0) {
         console.log('Clearing caches and waiting before project update...');
         clearSettingsCache();
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        // ОСНОВНАЯ ПАУЗА: 20 секунд между проектами
         console.log('Waiting 20 seconds before next project...');
         Utilities.sleep(20000);
       }
       
-      // Дополнительная пауза каждые 3 проекта
       if (index > 0 && index % 3 === 0) {
         console.log('Extended cooldown after 3 projects (30 seconds)...');
         Utilities.sleep(30000);
       }
       
-      // Обновление проекта
       updateProjectDataWithRetry(projectName);
       
       successfulProjects.push(projectName);
       console.log(`✅ ${projectName} updated successfully`);
       
-      // Пауза после успешного обновления
       Utilities.sleep(3000);
       
     } catch (e) {
@@ -110,13 +100,11 @@ function updateSelectedProjectsToCurrent() {
         error: e.toString().substring(0, 80)
       });
       
-      // Увеличенная пауза после ошибки (30 секунд)
       console.log('Error occurred. Waiting 30 seconds before continuing...');
       Utilities.sleep(30000);
     }
   });
   
-  // Сортировка листов
   if (successfulProjects.length > 0) {
     try {
       console.log('Waiting before sorting sheets...');
@@ -127,7 +115,6 @@ function updateSelectedProjectsToCurrent() {
     }
   }
   
-  // Финальный отчет
   var message = `✅ Update completed!\n\n`;
   
   if (successfulProjects.length > 0) {
@@ -166,7 +153,6 @@ function updateAllProjectsToCurrent() {
   
   if (result !== ui.Button.YES) return;
   
-  // Предварительная загрузка настроек
   try {
     ui.alert('Preparing...', 'Loading settings and preparing for batch update...', ui.ButtonSet.OK);
     preloadSettings();
@@ -183,24 +169,20 @@ function updateAllProjectsToCurrent() {
       console.log(`\n=== UPDATING ${proj} (${index + 1}/${projects.length}) ===`);
       console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
       
-      // Очистка кешей перед каждым проектом (кроме первого)
       if (index > 0) {
         console.log('Clearing caches and waiting before project update...');
         clearSettingsCache();
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        // ОСНОВНАЯ ПАУЗА: 20 секунд между проектами
         console.log('Waiting 20 seconds before next project...');
         Utilities.sleep(20000);
       }
       
-      // Дополнительная пауза каждые 3 проекта
       if (index > 0 && index % 3 === 0) {
         console.log('Extended cooldown after 3 projects (30 seconds)...');
         Utilities.sleep(30000);
         
-        // Показываем промежуточный прогресс
         if (index < projects.length - 1) {
           ui.alert('Progress Update', 
             `Completed: ${index} of ${projects.length} projects\n\n` +
@@ -210,13 +192,11 @@ function updateAllProjectsToCurrent() {
         }
       }
       
-      // Обновление проекта
       updateProjectDataWithRetry(proj);
       
       successfulProjects.push(proj);
       console.log(`✅ ${proj} updated successfully`);
       
-      // Пауза после успешного обновления
       Utilities.sleep(3000);
       
     } catch (e) {
@@ -226,13 +206,11 @@ function updateAllProjectsToCurrent() {
         error: e.toString().substring(0, 80)
       });
       
-      // Увеличенная пауза после ошибки (30 секунд)
       console.log('Error occurred. Waiting 30 seconds before continuing...');
       Utilities.sleep(30000);
     }
   });
   
-  // Сортировка листов
   if (successfulProjects.length > 0) {
     try {
       console.log('Waiting before sorting sheets...');
@@ -244,7 +222,6 @@ function updateAllProjectsToCurrent() {
     }
   }
   
-  // Финальный отчет
   var message = `✅ Update completed!\n\n`;
   
   if (successfulProjects.length > 0) {
@@ -262,7 +239,6 @@ function updateAllProjectsToCurrent() {
   ui.alert('Update Complete', message, ui.ButtonSet.OK);
 }
 
-// Функция быстрого обновления одного проекта (без больших пауз)
 function updateSingleProjectQuick() {
   var ui = SpreadsheetApp.getUi();
   
@@ -288,16 +264,97 @@ function updateSingleProjectQuick() {
   try {
     ui.alert('Processing...', `Updating ${projectName}...`, ui.ButtonSet.OK);
     
-    // Минимальная пауза для одного проекта
     updateProjectDataWithRetry(projectName);
     
-    // Сортировка листов
     Utilities.sleep(2000);
     sortProjectSheetsWithRetry();
     
     ui.alert('Success', `✅ ${projectName} updated successfully!`, ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', `❌ Failed to update ${projectName}:\n\n${e.toString()}`, ui.ButtonSet.OK);
+  }
+}
+
+function updateAllProjectsQuick() {
+  var ui = SpreadsheetApp.getUi();
+  
+  if (!isBearerTokenConfigured()) {
+    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
+  var estimatedMinutes = Math.ceil(projects.length * 0.8);
+  
+  var result = ui.alert('⚡ Quick Update All Projects', 
+    `Update all ${projects.length} projects?\n\n` +
+    `This will use minimal pauses (faster but may timeout if system is busy).\n\n` +
+    `⏱️ Estimated time: ${estimatedMinutes} minutes`, 
+    ui.ButtonSet.YES_NO);
+  
+  if (result !== ui.Button.YES) return;
+  
+  try {
+    ui.alert('Processing...', `Updating all ${projects.length} projects...`, ui.ButtonSet.OK);
+    
+    var successfulProjects = [];
+    var failedProjects = [];
+    
+    projects.forEach(function(proj, index) {
+      try {
+        console.log(`Quick updating ${proj} (${index + 1}/${projects.length})...`);
+        
+        var projectName = proj.toUpperCase();
+        updateProjectDataWithRetry(projectName, 1);
+        
+        successfulProjects.push(proj);
+        console.log(`✅ ${proj} updated successfully`);
+        
+        if (index < projects.length - 1) {
+          Utilities.sleep(2000);
+        }
+        
+      } catch (e) {
+        console.error(`❌ Failed to update ${proj}:`, e);
+        failedProjects.push({
+          project: proj,
+          error: e.toString().substring(0, 50)
+        });
+        
+        if (index < projects.length - 1) {
+          Utilities.sleep(3000);
+        }
+      }
+    });
+    
+    if (successfulProjects.length > 0) {
+      try {
+        Utilities.sleep(1000);
+        sortProjectSheetsWithRetry();
+      } catch (e) {
+        console.error('Error sorting sheets:', e);
+      }
+    }
+    
+    var message = `⚡ Quick Update completed!\n\n`;
+    
+    if (successfulProjects.length > 0) {
+      message += `• Successfully updated: ${successfulProjects.length}/${projects.length} projects\n`;
+      message += `  ${successfulProjects.join(', ')}\n\n`;
+    }
+    
+    if (failedProjects.length > 0) {
+      message += `• Failed projects:\n`;
+      failedProjects.forEach(function(fail) {
+        message += `  ${fail.project}: ${fail.error}...\n`;
+      });
+      message += '\n💡 TIP: Try Safe Mode for failed projects.';
+    }
+    
+    ui.alert('Quick Update Complete', message, ui.ButtonSet.OK);
+    
+  } catch (e) {
+    ui.alert('Error', `❌ Quick update failed:\n\n${e.toString()}`, ui.ButtonSet.OK);
   }
 }
 
@@ -413,7 +470,6 @@ function quickAPICheckAll() {
   ui.alert('API Check Complete', results, ui.ButtonSet.OK);
 }
 
-// ОБНОВЛЕНО: упрощенный мастер создания отчетов
 function smartReportWizard() {
   var ui = SpreadsheetApp.getUi();
   
@@ -427,26 +483,20 @@ function smartReportWizard() {
     }
   }
   
-  // Шаг 1: Выбор проектов
   var scope = showChoice('📈 Generate Report - Step 1/2: Select Projects', ['All Projects', 'Single Project', 'Multiple Projects']);
   if (!scope) return;
   
-  // Шаг 2: Выбор количества недель
   var weeks = promptWeeks('📅 Generate Report - Step 2/2: Select Weeks', 'Enter number of weeks (1-52):');
   if (!weeks) return;
   
-  // Генерация отчетов
   if (scope === 1) {
-    // Все проекты
     generateAllProjects(weeks);
   } else if (scope === 2) {
-    // Один проект
     var project = showChoice('Select Project:', MENU_PROJECTS);
     if (!project) return;
     var projectName = MENU_PROJECTS[project-1].toUpperCase();
     generateSingleProject(projectName, weeks);
   } else {
-    // Несколько проектов
     var selected = showMultiChoice('Select Projects:', MENU_PROJECTS);
     if (!selected || selected.length === 0) return;
     generateMultipleProjects(selected, weeks);
@@ -518,7 +568,7 @@ function generateMultipleProjects(projects, weeks) {
 }
 
 function generateProjectReportByWeeks(projectName, weeks) {
-  var days = weeks * 7; // Конвертируем недели в дни
+  var days = weeks * 7;
   setCurrentProject(projectName);
   generateReport(days);
 }
@@ -607,11 +657,10 @@ function syncTriggersWithSettings() {
 }
 
 function updateProjectDataWithRetry(projectName, maxRetries = 3) {
-  var baseDelay = 5000; // Увеличена базовая задержка до 5 секунд
+  var baseDelay = 5000;
   
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Очистка кешей перед попыткой
       clearSettingsCache();
       SpreadsheetApp.flush();
       Utilities.sleep(1000);
@@ -621,24 +670,19 @@ function updateProjectDataWithRetry(projectName, maxRetries = 3) {
     } catch (e) {
       console.error(`${projectName} update attempt ${attempt} failed:`, e);
       
-      // Специальная обработка таймаутов
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
         console.log('Timeout detected - waiting longer before retry...');
         
-        // Очистка всех кешей
         clearSettingsCache();
         clearAllCommentColumnCaches();
         
-        // Экспоненциальная задержка для таймаутов
         var timeoutDelay = baseDelay * Math.pow(2, attempt);
         console.log(`Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
         
-        // Дополнительная пауза для восстановления соединения
         SpreadsheetApp.flush();
         Utilities.sleep(2000);
       } else {
-        // Обычная экспоненциальная задержка для других ошибок
         var delay = baseDelay * Math.pow(1.5, attempt - 1);
         console.log(`Waiting ${delay}ms before retry...`);
         Utilities.sleep(delay);
