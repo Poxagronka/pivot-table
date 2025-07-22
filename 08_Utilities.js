@@ -239,7 +239,6 @@ function getOrCreateProjectSheet(projectName) {
   return sheet;
 }
 
-// ОБНОВЛЕНО: улучшенная сортировка листов с Settings, To do и скрытыми листами в алфавитном порядке
 function sortProjectSheets() {
   try {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -248,44 +247,39 @@ function sortProjectSheets() {
     // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в порядок проектов
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall', 'Settings', 'To do'];
     
-    // Разделяем листы на категории
-    const projectSheets = [];      // Листы из projectOrder
-    const visibleOtherSheets = []; // Видимые листы не из projectOrder
-    const hiddenSheets = [];       // Скрытые листы
+    // ОБНОВЛЕНО: Сортируем только ВИДИМЫЕ листы
+    const visibleSheets = sheets.filter(sheet => !sheet.isSheetHidden());
     
-    sheets.forEach(sheet => {
+    // Разделяем видимые листы на категории
+    const projectSheets = [];      // Листы из projectOrder
+    const otherVisibleSheets = []; // Видимые листы не из projectOrder
+    
+    visibleSheets.forEach(sheet => {
       const sheetName = sheet.getName();
       const projectIndex = projectOrder.indexOf(sheetName);
-      const isHidden = sheet.isSheetHidden();
       
       if (projectIndex !== -1) {
         // Лист из основного списка
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
-      } else if (isHidden) {
-        // Скрытый лист
-        hiddenSheets.push({ sheet, name: sheetName });
       } else {
         // Видимый лист, не входящий в основной список
-        visibleOtherSheets.push({ sheet, name: sheetName });
+        otherVisibleSheets.push({ sheet, name: sheetName });
       }
     });
     
     // Сортируем каждую категорию
     projectSheets.sort((a, b) => a.index - b.index);
-    visibleOtherSheets.sort((a, b) => a.name.localeCompare(b.name));
-    hiddenSheets.sort((a, b) => a.name.localeCompare(b.name));
+    otherVisibleSheets.sort((a, b) => a.name.localeCompare(b.name));
     
-    // Объединяем в финальный порядок: основные листы + видимые прочие + скрытые в алфавитном порядке
+    // Объединяем в финальный порядок: основные листы + видимые прочие
     const finalOrder = [
       ...projectSheets.map(item => item.sheet),
-      ...visibleOtherSheets.map(item => item.sheet),
-      ...hiddenSheets.map(item => item.sheet)
+      ...otherVisibleSheets.map(item => item.sheet)
     ];
     
-    console.log('Sheet ordering:');
+    console.log('Sheet ordering (visible sheets only):');
     console.log('- Project sheets:', projectSheets.map(s => s.name));
-    console.log('- Visible other sheets:', visibleOtherSheets.map(s => s.name));
-    console.log('- Hidden sheets (alphabetical):', hiddenSheets.map(s => s.name));
+    console.log('- Other visible sheets:', otherVisibleSheets.map(s => s.name));
     
     // Переставляем листы с паузами
     let position = 1;
@@ -305,7 +299,7 @@ function sortProjectSheets() {
       }
     });
     
-    console.log('Project sheets sorted successfully');
+    console.log('Visible project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);
     throw e;
