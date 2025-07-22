@@ -134,6 +134,16 @@ function updateProjectData(projectName) {
   
   // ОБНОВЛЕНО: processProjectApiData теперь автоматически учитывает день недели
   var processed = processProjectApiData(projectName, raw);
+
+  // Записываем первоначальные значения eROAS если это первое добавление прошлой недели
+  if (projectName !== 'OVERALL' && projectName !== 'INCENT_TRAFFIC') {
+  try {
+    const initialEROASCache = new InitialEROASCache(projectName);
+    initialEROASCache.recordInitialValuesFromData(processed);
+  } catch (e) {
+    console.error(`Error recording initial eROAS for ${projectName}:`, e);
+  }
+}
   
   if (Object.keys(processed).length === 0) {
     console.log(`${projectName}: No valid data to process`);

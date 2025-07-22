@@ -1,5 +1,5 @@
 /**
- * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30 + поддержка сеток для OVERALL
+ * Sheet Formatting and Table Creation - ОБНОВЛЕНО: объединенный столбец ROAS D1→D3→D7→D30 + поддержка сеток для OVERALL + кеширование первоначальных eROAS 730d
  */
 
 function createEnhancedPivotTable(appData) {
@@ -8,6 +8,10 @@ function createEnhancedPivotTable(appData) {
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
   else sheet.clear();
+
+  // Инициализация кеша первоначальных eROAS
+  const initialEROASCache = new InitialEROASCache();
+  initialEROASCache.recordInitialValuesFromData(appData);
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -44,10 +48,10 @@ function createEnhancedPivotTable(appData) {
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
         const status = weekWoW.growthStatus || '';
         
-        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
         tableData.push(weekRow);
         
-        addSourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData);
+        addSourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData, app.appName, week, initialEROASCache);
         
       } else {
         const weekTotals = calculateWeekTotals(week.campaigns);
@@ -58,10 +62,10 @@ function createEnhancedPivotTable(appData) {
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
         const status = weekWoW.growthStatus || '';
         
-        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
         tableData.push(weekRow);
         
-        addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData);
+        addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData, app.appName, initialEROASCache);
       }
     });
   });
@@ -89,6 +93,10 @@ function createOverallPivotTable(appData) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     return;
   }
+
+  // Инициализация кеша первоначальных eROAS
+  const initialEROASCache = new InitialEROASCache();
+  initialEROASCache.recordInitialValuesFromData(appData);
 
   const wow = calculateWoWMetrics(appData);
   const headers = getUnifiedHeaders();
@@ -129,7 +137,7 @@ function createOverallPivotTable(appData) {
       const status = weekWoW.growthStatus || '';
       
       formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+      const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
       tableData.push(weekRow);
       
       // Добавляем строки сеток внутри недели
@@ -155,7 +163,8 @@ function createOverallPivotTable(appData) {
           formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
           
           // Создаем строку для сетки
-          const networkRow = createNetworkRow(network.networkName, networkTotals, spendWoW, profitWoW, status);
+          const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+          const networkRow = createNetworkRow(network.networkName, networkTotals, spendWoW, profitWoW, status, app.appName, weekRange, network.networkId, initialEROASCache);
           tableData.push(networkRow);
         });
       }
@@ -182,6 +191,10 @@ function createIncentTrafficPivotTable(networkData) {
     let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
     if (!sheet) sheet = spreadsheet.insertSheet(config.SHEET_NAME);
     else sheet.clear();
+
+    // Инициализация кеша первоначальных eROAS
+    const initialEROASCache = new InitialEROASCache();
+    initialEROASCache.recordInitialValuesFromData(networkData);
 
     const wow = calculateIncentTrafficWoWMetrics(networkData);
     const headers = getUnifiedHeaders();
@@ -222,7 +235,7 @@ function createIncentTrafficPivotTable(networkData) {
         const status = weekWoW.growthStatus || '';
         
         formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status);
+        const weekRow = createWeekRow(week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache);
         tableData.push(weekRow);
         
         // Добавляем приложения
@@ -245,6 +258,14 @@ function createIncentTrafficPivotTable(networkData) {
           
           formatData.push({ row: tableData.length + 1, type: 'APP' });
 
+          const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+          
+          // Форматируем eROAS 730d с первоначальным значением
+          let eROAS730Display = `${appTotals.avgEROASD730.toFixed(0)}%`;
+          if (initialEROASCache) {
+            eROAS730Display = initialEROASCache.formatEROASWithInitial('APP', network.networkName, weekRange, appTotals.avgEROASD730, app.appId, app.appName);
+          }
+
           const appRow = new Array(headers.length).fill('');
           appRow[0] = 'APP';  // Level
           appRow[1] = app.appName;  // Week Range / Source App
@@ -260,7 +281,7 @@ function createIncentTrafficPivotTable(networkData) {
           appRow[11] = `${appTotals.avgRrD7.toFixed(0)}%`;
           appRow[12] = appTotals.avgArpu.toFixed(3);
           appRow[13] = `${appTotals.avgERoas.toFixed(0)}%`;
-          appRow[14] = `${appTotals.avgEROASD730.toFixed(0)}%`;
+          appRow[14] = eROAS730Display;
           appRow[15] = appTotals.totalProfit.toFixed(2);
           appRow[16] = profitWoW;
           appRow[17] = status;
@@ -400,7 +421,7 @@ function createOverallRowGrouping(sheet, tableData, appData) {
   }
 }
 
-function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
+function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData, appName, week, initialEROASCache) {
   const sourceAppKeys = Object.keys(sourceApps).sort((a, b) => {
     const totalSpendA = sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
     const totalSpendB = sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -435,35 +456,48 @@ function addSourceAppRows(tableData, sourceApps, weekKey, wow, formatData) {
       }
     }
     
-    const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status);
+    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+    const sourceAppRow = createSourceAppRow(sourceAppDisplayName, sourceAppTotals, spendWoW, profitWoW, status, appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, initialEROASCache);
     tableData.push(sourceAppRow);
     
-    addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData);
+    addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
   });
 }
 
-function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status) {
+function createSourceAppRow(sourceAppDisplayName, totals, spendWoW, profitWoW, status, appName = '', weekRange = '', sourceAppId = '', sourceAppName = '', initialEROASCache = null) {
   // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
   const combinedRoas = `${totals.avgRoasD1.toFixed(0)}% → ${totals.avgRoasD3.toFixed(0)}% → ${totals.avgRoasD7.toFixed(0)}% → ${totals.avgRoasD30.toFixed(0)}%`;
+  
+  // Форматируем eROAS 730d с первоначальным значением
+  let eROAS730Display = `${totals.avgEROASD730.toFixed(0)}%`;
+  if (initialEROASCache && appName && weekRange) {
+    eROAS730Display = initialEROASCache.formatEROASWithInitial('SOURCE_APP', appName, weekRange, totals.avgEROASD730, sourceAppId, sourceAppName);
+  }
   
   return [
     'SOURCE_APP', sourceAppDisplayName, '', '',
     totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
     combinedRoas, totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
-    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
+    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, eROAS730Display,
     totals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
 }
 
-function createNetworkRow(networkName, totals, spendWoW, profitWoW, status) {
+function createNetworkRow(networkName, totals, spendWoW, profitWoW, status, appName = '', weekRange = '', networkId = '', initialEROASCache = null) {
   // Аналогично campaign row, но для сетки
   const combinedRoas = `${totals.avgRoasD1.toFixed(0)}% → ${totals.avgRoasD3.toFixed(0)}% → ${totals.avgRoasD7.toFixed(0)}% → ${totals.avgRoasD30.toFixed(0)}%`;
+  
+  // Форматируем eROAS 730d с первоначальным значением
+  let eROAS730Display = `${totals.avgEROASD730.toFixed(0)}%`;
+  if (initialEROASCache && appName && weekRange) {
+    eROAS730Display = initialEROASCache.formatEROASWithInitial('NETWORK', appName, weekRange, totals.avgEROASD730, networkId, networkName);
+  }
   
   return [
     'NETWORK', networkName, '', '',
     totals.totalSpend.toFixed(2), spendWoW, totals.totalInstalls, totals.avgCpi.toFixed(3),
     combinedRoas, totals.avgIpm.toFixed(1), `${totals.avgRrD1.toFixed(0)}%`, `${totals.avgRrD7.toFixed(0)}%`,
-    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, `${totals.avgEROASD730.toFixed(0)}%`,
+    totals.avgArpu.toFixed(3), `${totals.avgERoas.toFixed(0)}%`, eROAS730Display,
     totals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
 }
@@ -477,15 +511,22 @@ function getUnifiedHeaders() {
   ];
 }
 
-function createWeekRow(week, weekTotals, spendWoW, profitWoW, status) {
+function createWeekRow(week, weekTotals, spendWoW, profitWoW, status, appName = '', initialEROASCache = null) {
   // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
   const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
+  
+  // Форматируем eROAS 730d с первоначальным значением
+  let eROAS730Display = `${weekTotals.avgEROASD730.toFixed(0)}%`;
+  if (initialEROASCache && appName) {
+    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+    eROAS730Display = initialEROASCache.formatEROASWithInitial('WEEK', appName, weekRange, weekTotals.avgEROASD730);
+  }
   
   return [
     'WEEK', `${week.weekStart} - ${week.weekEnd}`, '', '',
     weekTotals.totalSpend.toFixed(2), spendWoW, weekTotals.totalInstalls, weekTotals.avgCpi.toFixed(3),
     combinedRoas, weekTotals.avgIpm.toFixed(1), `${weekTotals.avgRrD1.toFixed(0)}%`, `${weekTotals.avgRrD7.toFixed(0)}%`,
-    weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, `${weekTotals.avgEROASD730.toFixed(0)}%`,
+    weekTotals.avgArpu.toFixed(3), `${weekTotals.avgERoas.toFixed(0)}%`, eROAS730Display,
     weekTotals.totalProfit.toFixed(2), profitWoW, status, ''
   ];
 }
@@ -531,20 +572,6 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
   });
 
-  appRows.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.APP_ROW.background)
-         .setFontColor(COLORS.APP_ROW.fontColor)
-         .setFontWeight('bold')
-         .setFontSize(10)
-  );
-
-  weekRows.forEach(r =>
-    sheet.getRange(r, 1, 1, numCols)
-         .setBackground(COLORS.WEEK_ROW.background)
-         .setFontSize(10)
-  );
-
   appRows.forEach(r => {
   // Для INCENT_TRAFFIC уровень APP форматируется как кампании (без выделения)
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
@@ -561,20 +588,43 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   }
 });
 
-  campaignRows.forEach(r =>
-  sheet.getRange(r, 1, 1, numCols)
-       .setBackground(COLORS.CAMPAIGN_ROW.background)
-       .setFontSize(9)
-);
+  weekRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.WEEK_ROW.background)
+         .setFontSize(10)
+  );
 
-// ДОБАВИТЬ СЮДА:
-networkRows.forEach(r =>
-  sheet.getRange(r, 1, 1, numCols)
-       .setBackground(COLORS.APP_ROW.background)
-       .setFontColor(COLORS.APP_ROW.fontColor)
-       .setFontWeight('bold')
-       .setFontSize(10)
-);
+  sourceAppRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.SOURCE_APP_ROW.background)
+         .setFontSize(10)
+  );
+
+  campaignRows.forEach(r =>
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.CAMPAIGN_ROW.background)
+         .setFontSize(9)
+  );
+
+ // Замените код форматирования networkRows в функции applyEnhancedFormatting в файле 07_SheetFormatting.js:
+
+// ОБНОВЛЕНО: форматирование сеток зависит от проекта
+networkRows.forEach(r => {
+  if (CURRENT_PROJECT === 'OVERALL') {
+    // Для OVERALL сетки форматируются как кампании (белый фон, обычный текст, 9 шрифт)
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.CAMPAIGN_ROW.background)
+         .setFontWeight('normal')
+         .setFontSize(9);
+  } else {
+    // Для других проектов сетки форматируются как APP_ROW (синий фон, жирный текст, 10 шрифт)
+    sheet.getRange(r, 1, 1, numCols)
+         .setBackground(COLORS.APP_ROW.background)
+         .setFontColor(COLORS.APP_ROW.fontColor)
+         .setFontWeight('bold')
+         .setFontSize(10);
+  }
+});
 
   if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
     hyperlinkRows.forEach(r => {
@@ -593,7 +643,11 @@ networkRows.forEach(r =>
   }
 
   applyConditionalFormatting(sheet, numRows, appData);
+
+  
   sheet.hideColumns(1);
+  sheet.hideColumns(13, 1); // eARPU 365d
+  sheet.hideColumns(14, 1); // eROAS 365d 
 }
 
 function applyConditionalFormatting(sheet, numRows, appData) {
@@ -642,7 +696,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) >= ${targetEROAS})`)
           .setBackground(COLORS.POSITIVE.background)
           .setFontColor(COLORS.POSITIVE.fontColor)
           .setRanges([cellRange]).build()
@@ -650,7 +704,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) >= 120, VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < ${targetEROAS})`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) >= 120, VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) < ${targetEROAS})`)
           .setBackground(COLORS.WARNING.background)
           .setFontColor(COLORS.WARNING.fontColor)
           .setRanges([cellRange]).build()
@@ -658,7 +712,7 @@ function applyConditionalFormatting(sheet, numRows, appData) {
       
       rules.push(
         SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"%","")) < 120)`)
+          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${String.fromCharCode(64 + eroasColumn)}${i + 1})), VALUE(SUBSTITUTE(SUBSTITUTE(${String.fromCharCode(64 + eroasColumn)}${i + 1},"→","-"),"%","")) < 120)`)
           .setBackground(COLORS.NEGATIVE.background)
           .setFontColor(COLORS.NEGATIVE.fontColor)
           .setRanges([cellRange]).build()
@@ -769,7 +823,7 @@ function calculateWeekTotals(campaigns) {
   };
 }
 
-function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
+function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
   if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return;
   }
@@ -791,20 +845,27 @@ function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData) {
     
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    const campaignRow = createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus);
+    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+    const campaignRow = createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus, appName, weekRange, initialEROASCache);
     tableData.push(campaignRow);
   });
 }
 
-function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus) {
+function createCampaignRow(campaign, campaignIdValue, spendPct, profitPct, growthStatus, appName = '', weekRange = '', initialEROASCache = null) {
   // ОБНОВЛЕНО: объединенный ROAS столбец с процентами
   const combinedRoas = `${campaign.roasD1.toFixed(0)}% → ${campaign.roasD3.toFixed(0)}% → ${campaign.roasD7.toFixed(0)}% → ${campaign.roasD30.toFixed(0)}%`;
+  
+  // Форматируем eROAS 730d с первоначальным значением
+  let eROAS730Display = `${campaign.eRoasForecastD730.toFixed(0)}%`;
+  if (initialEROASCache && appName && weekRange) {
+    eROAS730Display = initialEROASCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, campaign.eRoasForecastD730, campaign.campaignId, campaign.sourceApp);
+  }
   
   return [
     'CAMPAIGN', campaign.sourceApp, campaignIdValue, campaign.geo,
     campaign.spend.toFixed(2), spendPct, campaign.installs, campaign.cpi ? campaign.cpi.toFixed(3) : '0.000',
     combinedRoas, campaign.ipm.toFixed(1), `${campaign.rrD1.toFixed(0)}%`, `${campaign.rrD7.toFixed(0)}%`,
-    campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, `${campaign.eRoasForecastD730.toFixed(0)}%`,
+    campaign.eArpuForecast.toFixed(3), `${campaign.eRoasForecast.toFixed(0)}%`, eROAS730Display,
     campaign.eProfitForecast.toFixed(2), profitPct, growthStatus, ''
   ];
 }
