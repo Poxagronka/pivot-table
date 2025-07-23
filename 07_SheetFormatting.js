@@ -1,18 +1,10 @@
 /**
- * Sheet Formatting and Table Creation - ОПТИМИЗИРОВАНО: унифицированные функции + быстрая группировка через Sheets API v4
+ * Sheet Formatting and Table Creation - ОПТИМИЗИРОВАНО: двухфазная группировка с батчингом по сущностям
  */
 
-function createEnhancedPivotTable(appData) {
-  createUnifiedPivotTable(appData);
-}
-
-function createOverallPivotTable(appData) {
-  createUnifiedPivotTable(appData);
-}
-
-function createIncentTrafficPivotTable(networkData) {
-  createUnifiedPivotTable(networkData);
-}
+function createEnhancedPivotTable(appData) { createUnifiedPivotTable(appData); }
+function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
+function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
 
 function createUnifiedPivotTable(data) {
   const config = getCurrentConfig();
@@ -39,11 +31,7 @@ function createUnifiedPivotTable(data) {
   const tableData = [headers];
   const formatData = [];
 
-  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    buildIncentTrafficTable(data, tableData, formatData, wow, initialEROASCache);
-  } else {
-    buildStandardTable(data, tableData, formatData, wow, initialEROASCache);
-  }
+  buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache);
 
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
@@ -54,195 +42,184 @@ function createUnifiedPivotTable(data) {
   sheet.setFrozenColumns(2);
 }
 
-function buildIncentTrafficTable(networkData, tableData, formatData, wow, initialEROASCache) {
-  const networkKeys = Object.keys(networkData).sort((a, b) => 
-    networkData[a].networkName.localeCompare(networkData[b].networkName)
-  );
-  
-  networkKeys.forEach(networkKey => {
-    const network = networkData[networkKey];
+function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    const networkKeys = Object.keys(data).sort((a, b) => 
+      data[a].networkName.localeCompare(data[b].networkName)
+    );
     
-    formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
-    const emptyRow = new Array(getUnifiedHeaders().length).fill('');
-    emptyRow[0] = 'NETWORK';
-    emptyRow[1] = network.networkName;
-    tableData.push(emptyRow);
-    
-    const weekKeys = Object.keys(network.weeks).sort();
-    weekKeys.forEach(weekKey => {
-      const week = network.weeks[weekKey];
+    networkKeys.forEach(networkKey => {
+      const network = data[networkKey];
       
-      const allCampaigns = [];
-      Object.values(week.apps).forEach(app => {
-        allCampaigns.push(...app.campaigns);
-      });
+      formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
+      const emptyRow = new Array(getUnifiedHeaders().length).fill('');
+      emptyRow[0] = 'NETWORK';
+      emptyRow[1] = network.networkName;
+      tableData.push(emptyRow);
       
-      const weekTotals = calculateWeekTotals(allCampaigns);
-      const weekWoWKey = `${networkKey}_${weekKey}`;
-      const weekWoW = wow.weekWoW[weekWoWKey] || {};
-      
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-      const status = weekWoW.growthStatus || '';
-      
-      formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-      const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache);
-      tableData.push(weekRow);
-      
-      const appKeys = Object.keys(week.apps).sort((a, b) => {
-        const totalSpendA = week.apps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
-        const totalSpendB = week.apps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
-        return totalSpendB - totalSpendA;
-      });
-      
-      appKeys.forEach(appKey => {
-        const app = week.apps[appKey];
-        const appTotals = calculateWeekTotals(app.campaigns);
+      const weekKeys = Object.keys(network.weeks).sort();
+      weekKeys.forEach(weekKey => {
+        const week = network.weeks[weekKey];
         
-        const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
-        const appWoW = wow.appWoW[appWoWKey] || {};
+        const allCampaigns = [];
+        Object.values(week.apps).forEach(app => {
+          allCampaigns.push(...app.campaigns);
+        });
         
-        const spendWoW = appWoW.spendChangePercent !== undefined ? `${appWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = appWoW.eProfitChangePercent !== undefined ? `${appWoW.eProfitChangePercent.toFixed(0)}%` : '';
-        const status = appWoW.growthStatus || '';
+        const weekTotals = calculateWeekTotals(allCampaigns);
+        const weekWoWKey = `${networkKey}_${weekKey}`;
+        const weekWoW = wow.weekWoW[weekWoWKey] || {};
         
-        formatData.push({ row: tableData.length + 1, type: 'APP' });
+        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+        const status = weekWoW.growthStatus || '';
         
-        const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-        const appRow = createUnifiedRow('APP', { weekStart: week.weekStart, weekEnd: week.weekEnd }, appTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache, app.appId, app.appName);
-        tableData.push(appRow);
+        formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache);
+        tableData.push(weekRow);
+        
+        const appKeys = Object.keys(week.apps).sort((a, b) => {
+          const totalSpendA = week.apps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          const totalSpendB = week.apps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          return totalSpendB - totalSpendA;
+        });
+        
+        appKeys.forEach(appKey => {
+          const app = week.apps[appKey];
+          const appTotals = calculateWeekTotals(app.campaigns);
+          
+          const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
+          const appWoW = wow.appWoW[appWoWKey] || {};
+          
+          const spendWoW = appWoW.spendChangePercent !== undefined ? `${appWoW.spendChangePercent.toFixed(0)}%` : '';
+          const profitWoW = appWoW.eProfitChangePercent !== undefined ? `${appWoW.eProfitChangePercent.toFixed(0)}%` : '';
+          const status = appWoW.growthStatus || '';
+          
+          formatData.push({ row: tableData.length + 1, type: 'APP' });
+          
+          const appRow = createUnifiedRow('APP', { weekStart: week.weekStart, weekEnd: week.weekEnd }, appTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache, app.appId, app.appName);
+          tableData.push(appRow);
+        });
       });
     });
-  });
-}
-
-function buildStandardTable(appData, tableData, formatData, wow, initialEROASCache) {
-  const appKeys = Object.keys(appData).sort((a, b) => appData[a].appName.localeCompare(appData[b].appName));
-  
-  appKeys.forEach(appKey => {
-    const app = appData[appKey];
+  } else {
+    const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     
-    formatData.push({ row: tableData.length + 1, type: 'APP' });
-    const emptyRow = new Array(getUnifiedHeaders().length).fill('');
-    emptyRow[0] = 'APP';
-    emptyRow[1] = app.appName;
-    tableData.push(emptyRow);
+    appKeys.forEach(appKey => {
+      const app = data[appKey];
+      
+      formatData.push({ row: tableData.length + 1, type: 'APP' });
+      const emptyRow = new Array(getUnifiedHeaders().length).fill('');
+      emptyRow[0] = 'APP';
+      emptyRow[1] = app.appName;
+      tableData.push(emptyRow);
 
-    const weekKeys = Object.keys(app.weeks).sort();
-    weekKeys.forEach(weekKey => {
-      const week = app.weeks[weekKey];
-      
-      formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-      
-      let allCampaigns = [];
-      if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-        Object.values(week.sourceApps).forEach(sourceApp => {
-          allCampaigns.push(...sourceApp.campaigns);
-        });
-      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-        Object.values(week.networks).forEach(network => {
-          allCampaigns.push(...network.campaigns);
-        });
-      } else {
-        allCampaigns = week.campaigns || [];
-      }
-      
-      const weekTotals = calculateWeekTotals(allCampaigns);
-      const appWeekKey = `${app.appName}_${weekKey}`;
-      const weekWoW = wow.appWeekWoW[appWeekKey] || {};
-      
-      const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-      const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-      const status = weekWoW.growthStatus || '';
-      
-      const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
-      tableData.push(weekRow);
-      
-      addUnifiedRows(tableData, week, weekKey, wow, formatData, app.appName, initialEROASCache);
+      const weekKeys = Object.keys(app.weeks).sort();
+      weekKeys.forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        
+        formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+        
+        let allCampaigns = [];
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          Object.values(week.sourceApps).forEach(sourceApp => {
+            allCampaigns.push(...sourceApp.campaigns);
+          });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          Object.values(week.networks).forEach(network => {
+            allCampaigns.push(...network.campaigns);
+          });
+        } else {
+          allCampaigns = week.campaigns || [];
+        }
+        
+        const weekTotals = calculateWeekTotals(allCampaigns);
+        const appWeekKey = `${app.appName}_${weekKey}`;
+        const weekWoW = wow.appWeekWoW[appWeekKey] || {};
+        
+        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+        const status = weekWoW.growthStatus || '';
+        
+        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
+        tableData.push(weekRow);
+        
+        addUnifiedSubRows(tableData, week, weekKey, wow, formatData, app.appName, initialEROASCache);
+      });
     });
-  });
-}
-
-function addUnifiedRows(tableData, week, weekKey, wow, formatData, appName, initialEROASCache) {
-  if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-    addTrickySourceAppRows(tableData, week.sourceApps, weekKey, wow, formatData, appName, week, initialEROASCache);
-  } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-    addOverallNetworkRows(tableData, week.networks, weekKey, wow, formatData, appName, week, initialEROASCache);
-  } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-    addStandardCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData, appName, initialEROASCache);
   }
 }
 
-function addTrickySourceAppRows(tableData, sourceApps, weekKey, wow, formatData, appName, week, initialEROASCache) {
-  const sourceAppKeys = Object.keys(sourceApps).sort((a, b) => {
-    const totalSpendA = sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
-    const totalSpendB = sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
-    return totalSpendB - totalSpendA;
-  });
-  
-  sourceAppKeys.forEach(sourceAppKey => {
-    const sourceApp = sourceApps[sourceAppKey];
-    const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
+function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName, initialEROASCache) {
+  if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+    const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
+      const totalSpendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+      const totalSpendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+      return totalSpendB - totalSpendA;
+    });
     
-    const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
-    const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
-    
-    const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const status = sourceAppWoW.growthStatus || '';
-    
-    formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
-    
-    let sourceAppDisplayName = sourceApp.sourceAppName;
-    if (CURRENT_PROJECT === 'TRICKY') {
-      try {
-        const appsDb = new AppsDatabase('TRICKY');
-        const cache = appsDb.loadFromCache();
-        const appInfo = cache[sourceApp.sourceAppId];
-        if (appInfo && appInfo.linkApp) {
-          sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
-          formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+    sourceAppKeys.forEach(sourceAppKey => {
+      const sourceApp = week.sourceApps[sourceAppKey];
+      const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
+      
+      const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
+      const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
+      
+      const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const status = sourceAppWoW.growthStatus || '';
+      
+      formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
+      
+      let sourceAppDisplayName = sourceApp.sourceAppName;
+      if (CURRENT_PROJECT === 'TRICKY') {
+        try {
+          const appsDb = new AppsDatabase('TRICKY');
+          const cache = appsDb.loadFromCache();
+          const appInfo = cache[sourceApp.sourceAppId];
+          if (appInfo && appInfo.linkApp) {
+            sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+            formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+          }
+        } catch (e) {
+          console.log('Error getting store link for source app:', e);
         }
-      } catch (e) {
-        console.log('Error getting store link for source app:', e);
       }
-    }
+      
+      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
+      tableData.push(sourceAppRow);
+      
+      addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
+    });
+  } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+    const networkKeys = Object.keys(week.networks).sort((a, b) => {
+      const totalSpendA = week.networks[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+      const totalSpendB = week.networks[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+      return totalSpendB - totalSpendA;
+    });
     
-    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-    const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
-    tableData.push(sourceAppRow);
-    
-    addStandardCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
-  });
+    networkKeys.forEach(networkKey => {
+      const network = week.networks[networkKey];
+      const networkTotals = calculateWeekTotals(network.campaigns);
+      
+      const networkWoWKey = `${networkKey}_${weekKey}`;
+      const networkWoW = wow.campaignWoW[networkWoWKey] || {};
+      
+      const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const status = networkWoW.growthStatus || '';
+      
+      formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
+      
+      const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialEROASCache, network.networkId, network.networkName);
+      tableData.push(networkRow);
+    });
+  } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
+    addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData, appName, initialEROASCache);
+  }
 }
 
-function addOverallNetworkRows(tableData, networks, weekKey, wow, formatData, appName, week, initialEROASCache) {
-  const networkKeys = Object.keys(networks).sort((a, b) => {
-    const totalSpendA = networks[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
-    const totalSpendB = networks[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
-    return totalSpendB - totalSpendA;
-  });
-  
-  networkKeys.forEach(networkKey => {
-    const network = networks[networkKey];
-    const networkTotals = calculateWeekTotals(network.campaigns);
-    
-    const networkWoWKey = `${networkKey}_${weekKey}`;
-    const networkWoW = wow.campaignWoW[networkWoWKey] || {};
-    
-    const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const status = networkWoW.growthStatus || '';
-    
-    formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
-    
-    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-    const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialEROASCache, network.networkId, network.networkName);
-    tableData.push(networkRow);
-  });
-}
-
-function addStandardCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
+function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
   if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return;
   }
@@ -264,7 +241,6 @@ function addStandardCampaignRows(tableData, campaigns, week, weekKey, wow, forma
     
     formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
     
-    const weekRange = `${week.weekStart} - ${week.weekEnd}`;
     const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialEROASCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
     tableData.push(campaignRow);
   });
@@ -326,76 +302,91 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
 
 function createUnifiedRowGrouping(sheet, tableData, data) {
   try {
-    console.log('Starting optimized unified row grouping...');
+    console.log('Starting two-phase unified row grouping...');
     const startTime = new Date().getTime();
     
     const sheetId = sheet.getSheetId();
     const spreadsheetId = sheet.getParent().getId();
-    const groupRequests = [];
-    const collapseRequests = [];
     
     if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-      buildIncentTrafficGroups(data, groupRequests, collapseRequests, sheetId);
-    } else {
-      buildStandardGroups(data, groupRequests, collapseRequests, sheetId);
-    }
-    
-    if (groupRequests.length > 0) {
-      console.log(`Creating ${groupRequests.length} groups via batch API...`);
+      const sortedNetworks = Object.keys(data).sort((a, b) => 
+        data[a].networkName.localeCompare(data[b].networkName)
+      );
       
-      const batchSize = 100;
-      for (let i = 0; i < groupRequests.length; i += batchSize) {
-        const batch = groupRequests.slice(i, i + batchSize);
+      let networkIndex = 0;
+      for (const networkKey of sortedNetworks) {
+        console.log(`Processing network ${networkIndex + 1}/${sortedNetworks.length}: ${data[networkKey].networkName}`);
         
-        try {
-          Sheets.Spreadsheets.batchUpdate({
-            requests: batch
-          }, spreadsheetId);
-          
-          if (i + batchSize < groupRequests.length) {
-            Utilities.sleep(100);
-          }
-        } catch (e) {
-          console.error(`Error in group batch ${Math.floor(i/batchSize) + 1}:`, e);
+        processEntityGroups(spreadsheetId, sheetId, data, networkKey, 'network');
+        
+        networkIndex++;
+        if (networkIndex < sortedNetworks.length) {
+          console.log('Waiting 5 seconds before next network...');
+          Utilities.sleep(5000);
         }
       }
+    } else {
+      const sortedApps = Object.keys(data).sort((a, b) => 
+        data[a].appName.localeCompare(data[b].appName)
+      );
       
-      if (collapseRequests.length > 0) {
-        console.log(`Collapsing ${collapseRequests.length} groups...`);
-        Utilities.sleep(500);
+      let appIndex = 0;
+      for (const appKey of sortedApps) {
+        console.log(`Processing app ${appIndex + 1}/${sortedApps.length}: ${data[appKey].appName}`);
         
-        try {
-          Sheets.Spreadsheets.batchUpdate({
-            requests: collapseRequests
-          }, spreadsheetId);
-        } catch (e) {
-          console.log('Fallback collapse method...');
-          try {
-            sheet.getRange(2, 1, tableData.length - 1, 1).collapseGroups();
-          } catch (e2) {
-            console.log('Could not collapse groups');
-          }
+        processEntityGroups(spreadsheetId, sheetId, data, appKey, 'app');
+        
+        appIndex++;
+        if (appIndex < sortedApps.length) {
+          console.log('Waiting 5 seconds before next app...');
+          Utilities.sleep(5000);
         }
       }
     }
     
     const endTime = new Date().getTime();
-    console.log(`Unified row grouping completed in ${(endTime - startTime)/1000}s`);
+    console.log(`Two-phase unified row grouping completed in ${(endTime - startTime)/1000}s`);
     
   } catch (e) {
     console.error('Error in unified row grouping:', e);
   }
 }
 
-function buildIncentTrafficGroups(networkData, groupRequests, collapseRequests, sheetId) {
-  let rowPointer = 2;
-  
-  const sortedNetworks = Object.keys(networkData).sort((a, b) => 
-    networkData[a].networkName.localeCompare(networkData[b].networkName)
-  );
+function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType) {
+  try {
+    console.log(`Phase 1: Creating groups for ${entityType} ${entityKey}`);
+    const createRequests = buildCreateGroupsForEntity(data, entityKey, entityType, sheetId);
+    
+    if (createRequests.length > 0) {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: createRequests
+      }, spreadsheetId);
+      console.log(`Created ${createRequests.length} groups`);
+      
+      Utilities.sleep(1000);
+    }
+    
+    console.log(`Phase 2: Collapsing groups for ${entityType} ${entityKey}`);
+    const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
+    
+    if (collapseRequests.length > 0) {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: collapseRequests
+      }, spreadsheetId);
+      console.log(`Collapsed ${collapseRequests.length} groups`);
+    }
+    
+  } catch (e) {
+    console.error(`Error processing ${entityType} ${entityKey}:`, e);
+  }
+}
 
-  sortedNetworks.forEach(networkKey => {
-    const network = networkData[networkKey];
+function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
+  const groupRequests = [];
+  let rowPointer = calculateRowPointer(data, entityKey, entityType);
+  
+  if (entityType === 'network') {
+    const network = data[entityKey];
     const networkStartRow = rowPointer;
     rowPointer++;
     let networkTotalRows = 0;
@@ -422,22 +413,6 @@ function buildIncentTrafficGroups(networkData, groupRequests, collapseRequests, 
             }
           }
         });
-        
-        collapseRequests.push({
-          updateDimensionGroup: {
-            dimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + appCount
-              },
-              depth: 1,
-              collapsed: true
-            },
-            fields: "collapsed"
-          }
-        });
       }
     });
 
@@ -452,35 +427,9 @@ function buildIncentTrafficGroups(networkData, groupRequests, collapseRequests, 
           }
         }
       });
-      
-      collapseRequests.push({
-        updateDimensionGroup: {
-          dimensionGroup: {
-            range: {
-              sheetId: sheetId,
-              dimension: "ROWS",
-              startIndex: networkStartRow,
-              endIndex: networkStartRow + networkTotalRows
-            },
-            depth: 1,
-            collapsed: true
-          },
-          fields: "collapsed"
-        }
-      });
     }
-  });
-}
-
-function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) {
-  let rowPointer = 2;
-  
-  const sortedApps = Object.keys(appData).sort((a, b) => 
-    appData[a].appName.localeCompare(appData[b].appName)
-  );
-
-  sortedApps.forEach(appKey => {
-    const app = appData[appKey];
+  } else {
+    const app = data[entityKey];
     const appStartRow = rowPointer;
     rowPointer++;
     let appTotalRows = 0;
@@ -520,22 +469,6 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
                 }
               }
             });
-            
-            collapseRequests.push({
-              updateDimensionGroup: {
-                dimensionGroup: {
-                  range: {
-                    sheetId: sheetId,
-                    dimension: "ROWS",
-                    startIndex: sourceAppStartRow,
-                    endIndex: sourceAppStartRow + campaignCount
-                  },
-                  depth: 2,
-                  collapsed: true
-                },
-                fields: "collapsed"
-              }
-            });
           }
         });
         
@@ -553,22 +486,6 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
                 startIndex: weekStartRow,
                 endIndex: weekStartRow + networkCount
               }
-            }
-          });
-          
-          collapseRequests.push({
-            updateDimensionGroup: {
-              dimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: weekStartRow,
-                  endIndex: weekStartRow + networkCount
-                },
-                depth: 1,
-                collapsed: true
-              },
-              fields: "collapsed"
             }
           });
         }
@@ -589,22 +506,6 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
               }
             }
           });
-          
-          collapseRequests.push({
-            updateDimensionGroup: {
-              dimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: weekStartRow,
-                  endIndex: weekStartRow + campaignCount
-                },
-                depth: 1,
-                collapsed: true
-              },
-              fields: "collapsed"
-            }
-          });
         }
       }
       
@@ -617,22 +518,6 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
               startIndex: weekStartRow,
               endIndex: weekStartRow + weekContentRows
             }
-          }
-        });
-        
-        collapseRequests.push({
-          updateDimensionGroup: {
-            dimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + weekContentRows
-              },
-              depth: 1,
-              collapsed: true
-            },
-            fields: "collapsed"
           }
         });
         
@@ -653,7 +538,189 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
           }
         }
       });
+    }
+  }
+  
+  return groupRequests;
+}
+
+function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
+  const collapseRequests = [];
+  let rowPointer = calculateRowPointer(data, entityKey, entityType);
+  
+  if (entityType === 'network') {
+    const network = data[entityKey];
+    const networkStartRow = rowPointer;
+    rowPointer++;
+    let networkTotalRows = 0;
+
+    const sortedWeeks = Object.keys(network.weeks).sort();
+    
+    sortedWeeks.forEach(weekKey => {
+      const week = network.weeks[weekKey];
+      const weekStartRow = rowPointer;
+      rowPointer++;
       
+      const appCount = Object.keys(week.apps).length;
+      rowPointer += appCount;
+      networkTotalRows += 1 + appCount;
+      
+      if (appCount > 0) {
+        collapseRequests.push({
+          updateDimensionGroup: {
+            dimensionGroup: {
+              range: {
+                sheetId: sheetId,
+                dimension: "ROWS",
+                startIndex: weekStartRow,
+                endIndex: weekStartRow + appCount
+              },
+              depth: 2,
+              collapsed: true
+            },
+            fields: "collapsed"
+          }
+        });
+      }
+    });
+
+    if (networkTotalRows > 0) {
+      collapseRequests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: {
+              sheetId: sheetId,
+              dimension: "ROWS",
+              startIndex: networkStartRow,
+              endIndex: networkStartRow + networkTotalRows
+            },
+            depth: 1,
+            collapsed: true
+          },
+          fields: "collapsed"
+        }
+      });
+    }
+  } else {
+    const app = data[entityKey];
+    const appStartRow = rowPointer;
+    rowPointer++;
+    let appTotalRows = 0;
+
+    const sortedWeeks = Object.keys(app.weeks).sort();
+    
+    sortedWeeks.forEach(weekKey => {
+      const week = app.weeks[weekKey];
+      const weekStartRow = rowPointer;
+      rowPointer++;
+      let weekContentRows = 0;
+
+      if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+        const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
+          const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
+          return spendB - spendA;
+        });
+        
+        sourceAppKeys.forEach(sourceAppKey => {
+          const sourceApp = week.sourceApps[sourceAppKey];
+          const sourceAppStartRow = rowPointer;
+          rowPointer++;
+          
+          const campaignCount = sourceApp.campaigns.length;
+          rowPointer += campaignCount;
+          weekContentRows += 1 + campaignCount;
+          
+          if (campaignCount > 0) {
+            collapseRequests.push({
+              updateDimensionGroup: {
+                dimensionGroup: {
+                  range: {
+                    sheetId: sheetId,
+                    dimension: "ROWS",
+                    startIndex: sourceAppStartRow,
+                    endIndex: sourceAppStartRow + campaignCount
+                  },
+                  depth: 3,
+                  collapsed: true
+                },
+                fields: "collapsed"
+              }
+            });
+          }
+        });
+        
+      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+        const networkCount = Object.keys(week.networks).length;
+        rowPointer += networkCount;
+        weekContentRows = networkCount;
+        
+        if (networkCount > 0) {
+          collapseRequests.push({
+            updateDimensionGroup: {
+              dimensionGroup: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: "ROWS",
+                  startIndex: weekStartRow,
+                  endIndex: weekStartRow + networkCount
+                },
+                depth: 2,
+                collapsed: true
+              },
+              fields: "collapsed"
+            }
+          });
+        }
+        
+      } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
+        const campaignCount = week.campaigns ? week.campaigns.length : 0;
+        rowPointer += campaignCount;
+        weekContentRows = campaignCount;
+        
+        if (campaignCount > 0) {
+          collapseRequests.push({
+            updateDimensionGroup: {
+              dimensionGroup: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: "ROWS",
+                  startIndex: weekStartRow,
+                  endIndex: weekStartRow + campaignCount
+                },
+                depth: 2,
+                collapsed: true
+              },
+              fields: "collapsed"
+            }
+          });
+        }
+      }
+      
+      if (weekContentRows > 0) {
+        collapseRequests.push({
+          updateDimensionGroup: {
+            dimensionGroup: {
+              range: {
+                sheetId: sheetId,
+                dimension: "ROWS",
+                startIndex: weekStartRow,
+                endIndex: weekStartRow + weekContentRows
+              },
+              depth: 2,
+              collapsed: true
+            },
+            fields: "collapsed"
+          }
+        });
+        
+        appTotalRows += 1 + weekContentRows;
+      } else {
+        appTotalRows += 1;
+      }
+    });
+
+    if (appTotalRows > 0) {
       collapseRequests.push({
         updateDimensionGroup: {
           dimensionGroup: {
@@ -670,7 +737,62 @@ function buildStandardGroups(appData, groupRequests, collapseRequests, sheetId) 
         }
       });
     }
-  });
+  }
+  
+  return collapseRequests;
+}
+
+function calculateRowPointer(data, entityKey, entityType) {
+  let rowPointer = 2;
+  
+  if (entityType === 'network') {
+    const sortedNetworks = Object.keys(data).sort((a, b) => 
+      data[a].networkName.localeCompare(data[b].networkName)
+    );
+    
+    for (const networkKey of sortedNetworks) {
+      if (networkKey === entityKey) break;
+      
+      const network = data[networkKey];
+      rowPointer++;
+      
+      Object.keys(network.weeks).forEach(weekKey => {
+        const week = network.weeks[weekKey];
+        rowPointer++; 
+        rowPointer += Object.keys(week.apps).length;
+      });
+    }
+  } else {
+    const sortedApps = Object.keys(data).sort((a, b) => 
+      data[a].appName.localeCompare(data[b].appName)
+    );
+    
+    for (const appKey of sortedApps) {
+      if (appKey === entityKey) break;
+      
+      const app = data[appKey];
+      rowPointer++;
+      
+      Object.keys(app.weeks).forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        rowPointer++;
+        
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          Object.keys(week.sourceApps).forEach(sourceAppKey => {
+            const sourceApp = week.sourceApps[sourceAppKey];
+            rowPointer++;
+            rowPointer += sourceApp.campaigns.length;
+          });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          rowPointer += Object.keys(week.networks).length;
+        } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
+          rowPointer += week.campaigns ? week.campaigns.length : 0;
+        }
+      });
+    }
+  }
+  
+  return rowPointer;
 }
 
 function getUnifiedHeaders() {
@@ -714,17 +836,17 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     eroasRange.setHorizontalAlignment('right');
   }
 
-  const appRows = [], weekRows = [], sourceAppRows = [], campaignRows = [], hyperlinkRows = [], networkRows = [];
+  const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
   formatData.forEach(item => {
-    if (item.type === 'APP') appRows.push(item.row);
-    if (item.type === 'WEEK') weekRows.push(item.row);
-    if (item.type === 'SOURCE_APP') sourceAppRows.push(item.row);
-    if (item.type === 'CAMPAIGN') campaignRows.push(item.row);
-    if (item.type === 'NETWORK') networkRows.push(item.row);
-    if (item.type === 'HYPERLINK') hyperlinkRows.push(item.row);
+    if (item.type === 'APP') rowTypeMap.app.push(item.row);
+    if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
+    if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
+    if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
+    if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
+    if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
   });
 
-  appRows.forEach(r => {
+  rowTypeMap.app.forEach(r => {
     if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       sheet.getRange(r, 1, 1, numCols)
            .setBackground(COLORS.CAMPAIGN_ROW.background)
@@ -739,25 +861,25 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     }
   });
 
-  weekRows.forEach(r =>
+  rowTypeMap.week.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.WEEK_ROW.background)
          .setFontSize(10)
   );
 
-  sourceAppRows.forEach(r =>
+  rowTypeMap.sourceApp.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.SOURCE_APP_ROW.background)
          .setFontSize(10)
   );
 
-  campaignRows.forEach(r =>
+  rowTypeMap.campaign.forEach(r =>
     sheet.getRange(r, 1, 1, numCols)
          .setBackground(COLORS.CAMPAIGN_ROW.background)
          .setFontSize(9)
   );
 
-  networkRows.forEach(r => {
+  rowTypeMap.network.forEach(r => {
     if (CURRENT_PROJECT === 'OVERALL') {
       sheet.getRange(r, 1, 1, numCols)
            .setBackground(COLORS.CAMPAIGN_ROW.background)
@@ -772,8 +894,8 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     }
   });
 
-  if (hyperlinkRows.length > 0 && CURRENT_PROJECT === 'TRICKY') {
-    hyperlinkRows.forEach(r => {
+  if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
+    rowTypeMap.hyperlink.forEach(r => {
       const linkCell = sheet.getRange(r, 2);
       linkCell.setFontColor('#000000').setFontLine('none');
     });
