@@ -6,7 +6,7 @@ const INITIAL_EROAS_CACHE_SPREADSHEET_ID = '1JBYtINHH7yLwdsfCPV3q3sj6NlP3WmftsPv
 
 class InitialEROASCache {
   constructor(projectName = null) {
-    this.projectName = projectName || CURRENT_PROJECT;
+    this.projectName = projectName ? projectName.toUpperCase() : CURRENT_PROJECT;
     this.cacheSpreadsheet = null;
     this.cacheSheet = null;
     this.memoryCache = null;

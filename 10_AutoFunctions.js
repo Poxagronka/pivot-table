@@ -63,6 +63,7 @@ function autoUpdateAllProjects() {
 }
 
 function cacheProjectComments(projectName) {
+  projectName = projectName.toUpperCase();
   var config = getProjectConfig(projectName);
   var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -79,6 +80,7 @@ function cacheProjectComments(projectName) {
 }
 
 function updateProjectData(projectName) {
+  projectName = projectName.toUpperCase();
   var config = getProjectConfig(projectName);
   var spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   var sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -192,6 +194,7 @@ function saveAllCommentsToCache() {
 }
 
 function saveProjectCommentsManual(projectName) {
+  projectName = projectName.toUpperCase();
   console.log(`Saving comments for ${projectName}...`);
   
   try {

@@ -31,6 +31,7 @@ function isBearerTokenConfigured() {
 }
 
 function getTargetEROAS(projectName, appName = null) {
+  projectName = projectName.toUpperCase();
   try {
     const settings = loadSettingsFromSheet();
     
@@ -60,6 +61,7 @@ function getTargetEROAS(projectName, appName = null) {
 }
 
 function getGrowthThresholds(projectName) {
+  projectName = projectName.toUpperCase();
   try {
     const settings = loadSettingsFromSheet();
     return settings.growthThresholds[projectName] || getDefaultGrowthThresholds();
@@ -389,6 +391,7 @@ function getCurrentApiConfig() {
 }
 
 function getProjectConfig(projectName) {
+  projectName = projectName.toUpperCase();
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
@@ -405,6 +408,7 @@ function getProjectConfig(projectName) {
 }
 
 function getProjectApiConfig(projectName) {
+  projectName = projectName.toUpperCase();
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
@@ -412,6 +416,7 @@ function getProjectApiConfig(projectName) {
 }
 
 function setCurrentProject(projectName) {
+  projectName = projectName.toUpperCase();
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }

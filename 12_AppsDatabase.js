@@ -5,7 +5,7 @@
 
 class AppsDatabase {
   constructor(projectName = null) {
-    this.projectName = projectName || CURRENT_PROJECT;
+    this.projectName = projectName ? projectName.toUpperCase() : CURRENT_PROJECT;
     this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
     
     // Only TRICKY project uses Apps Database

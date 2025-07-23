@@ -9,8 +9,8 @@ var COMMENT_CACHE_GLOBAL = {
 
 class CommentCache {
   constructor(projectName = null) {
-    this.projectName = projectName || CURRENT_PROJECT;
-    this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
+    this.projectName = projectName ? projectName.toUpperCase() : CURRENT_PROJECT; 
+    this.config = projectName ? getProjectConfig(this.projectName) : getCurrentConfig(); // Использовать нормализованное имя
     this.cacheSpreadsheetId = COMMENTS_CACHE_SPREADSHEET_ID;
     this.cacheSheetName = null;
     this.cacheSheetId = null;
