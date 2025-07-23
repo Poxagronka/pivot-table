@@ -3,6 +3,7 @@ function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
 function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
 
 function createUnifiedPivotTable(data) {
+  const startTime = Date.now();
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -35,7 +36,7 @@ function createUnifiedPivotTable(data) {
   writeBatchedData(sheet, tableData, headers.length);
   
   console.log(`${CURRENT_PROJECT}: Applying formatting...`);
-  applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, data);
+  applyOptimizedFormatting(sheet, tableData.length, headers.length, formatData, data);
   
   console.log(`${CURRENT_PROJECT}: Creating row grouping...`);
   createUnifiedRowGrouping(sheet, tableData, data);
@@ -43,11 +44,12 @@ function createUnifiedPivotTable(data) {
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(2);
   
-  console.log(`${CURRENT_PROJECT}: Table creation completed`);
+  const endTime = Date.now();
+  console.log(`${CURRENT_PROJECT}: Table creation completed in ${(endTime - startTime) / 1000}s`);
 }
 
 function writeBatchedData(sheet, tableData, numCols) {
-  const BATCH_SIZE = 500;
+  const BATCH_SIZE = 1000;
   const totalRows = tableData.length;
   
   if (totalRows <= BATCH_SIZE) {
@@ -66,14 +68,26 @@ function writeBatchedData(sheet, tableData, numCols) {
     
     console.log(`Writing batch ${++batchCount}: rows ${currentRow}-${currentRow + batchSize - 1}`);
     
-    const range = sheet.getRange(currentRow, 1, batchSize, numCols);
-    range.setValues(batchData);
+    try {
+      const range = sheet.getRange(currentRow, 1, batchSize, numCols);
+      range.setValues(batchData);
+    } catch (e) {
+      console.error(`Error writing batch ${batchCount}:`, e);
+      if (e.toString().includes('timed out')) {
+        console.log('Write timeout, waiting and retrying...');
+        Utilities.sleep(5000);
+        const range = sheet.getRange(currentRow, 1, batchSize, numCols);
+        range.setValues(batchData);
+      } else {
+        throw e;
+      }
+    }
     
     currentRow += batchSize;
     
     if (currentRow <= totalRows) {
-      console.log(`Pausing between batches...`);
-      Utilities.sleep(1500);
+      console.log(`Pausing between write batches...`);
+      Utilities.sleep(1000);
       SpreadsheetApp.flush();
     }
   }
@@ -81,10 +95,43 @@ function writeBatchedData(sheet, tableData, numCols) {
   console.log(`Completed writing ${totalRows} rows in ${batchCount} batches`);
 }
 
-function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
-  const config = getCurrentConfig();
+function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) {
+  const formatStartTime = Date.now();
   
-  console.log('Applying header formatting...');
+  try {
+    console.log('Applying header formatting...');
+    applyHeaderFormatting(sheet, numCols);
+    
+    console.log('Setting column widths...');
+    setColumnWidths(sheet);
+
+    if (numRows > 1) {
+      console.log('Applying data range formatting...');
+      applyDataRangeFormatting(sheet, numRows, numCols);
+      
+      console.log('Applying row type formatting...');
+      applyRowTypeFormattingOptimized(sheet, numRows, numCols, formatData);
+      
+      console.log('Applying optimized conditional formatting...');
+      applyOptimizedConditionalFormatting(sheet, numRows);
+      
+      console.log('Applying eROAS rich text formatting...');
+      applyEROASRichTextFormattingOptimized(sheet, numRows);
+    }
+    
+    sheet.hideColumns(1);
+    sheet.hideColumns(13, 1);
+    sheet.hideColumns(14, 1);
+    
+    const formatEndTime = Date.now();
+    console.log(`${CURRENT_PROJECT}: Formatting completed in ${(formatEndTime - formatStartTime) / 1000}s`);
+  } catch (e) {
+    console.error(`Error in formatting: ${e}`);
+    throw e;
+  }
+}
+
+function applyHeaderFormatting(sheet, numCols) {
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange
     .setBackground(COLORS.HEADER.background)
@@ -94,13 +141,21 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     .setVerticalAlignment('middle')
     .setFontSize(10)
     .setWrap(true);
+}
 
-  console.log('Setting column widths...');
+function setColumnWidths(sheet) {
   const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
-  columnWidths.forEach(col => sheet.setColumnWidth(col.c, col.w));
+  columnWidths.forEach(col => {
+    try {
+      sheet.setColumnWidth(col.c, col.w);
+    } catch (e) {
+      console.error(`Error setting column width ${col.c}:`, e);
+    }
+  });
+}
 
-  if (numRows > 1) {
-    console.log('Applying data range formatting...');
+function applyDataRangeFormatting(sheet, numRows, numCols) {
+  try {
     const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
     allDataRange.setVerticalAlignment('middle');
     
@@ -122,23 +177,12 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
     sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
     sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.0');
     sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');
+  } catch (e) {
+    console.error('Error in data range formatting:', e);
   }
-
-  console.log('Applying row type formatting...');
-  applyRowTypeFormatting(sheet, numRows, numCols, formatData);
-  
-  console.log('Applying conditional formatting...');
-  applyConditionalFormatting(sheet, numRows, appData);
-  
-  console.log('Applying eROAS rich text formatting...');
-  applyEROASRichTextFormatting(sheet, numRows);
-  
-  sheet.hideColumns(1);
-  sheet.hideColumns(13, 1);
-  sheet.hideColumns(14, 1);
 }
 
-function applyRowTypeFormatting(sheet, numRows, numCols, formatData) {
+function applyRowTypeFormattingOptimized(sheet, numRows, numCols, formatData) {
   const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
   formatData.forEach(item => {
     if (item.type === 'APP') rowTypeMap.app.push(item.row);
@@ -151,132 +195,108 @@ function applyRowTypeFormatting(sheet, numRows, numCols, formatData) {
 
   if (rowTypeMap.app.length > 0) {
     console.log(`Formatting ${rowTypeMap.app.length} app rows...`);
-    batchFormatRows(sheet, rowTypeMap.app, numCols, (range) => {
-      if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-        range.setBackground(COLORS.CAMPAIGN_ROW.background)
-             .setFontWeight('normal')
-             .setFontSize(9);
-      } else {
-        range.setBackground(COLORS.APP_ROW.background)
-             .setFontColor(COLORS.APP_ROW.fontColor)
-             .setFontWeight('bold')
-             .setFontSize(10);
-      }
+    batchFormatRowsOptimized(sheet, rowTypeMap.app, numCols, (ranges) => {
+      ranges.forEach(range => {
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+          range.setBackground(COLORS.CAMPAIGN_ROW.background)
+               .setFontWeight('normal')
+               .setFontSize(9);
+        } else {
+          range.setBackground(COLORS.APP_ROW.background)
+               .setFontColor(COLORS.APP_ROW.fontColor)
+               .setFontWeight('bold')
+               .setFontSize(10);
+        }
+      });
     });
   }
 
   if (rowTypeMap.week.length > 0) {
     console.log(`Formatting ${rowTypeMap.week.length} week rows...`);
-    batchFormatRows(sheet, rowTypeMap.week, numCols, (range) => {
-      range.setBackground(COLORS.WEEK_ROW.background).setFontSize(10);
+    batchFormatRowsOptimized(sheet, rowTypeMap.week, numCols, (ranges) => {
+      ranges.forEach(range => range.setBackground(COLORS.WEEK_ROW.background).setFontSize(10));
     });
   }
 
   if (rowTypeMap.sourceApp.length > 0) {
     console.log(`Formatting ${rowTypeMap.sourceApp.length} source app rows...`);
-    batchFormatRows(sheet, rowTypeMap.sourceApp, numCols, (range) => {
-      range.setBackground(COLORS.SOURCE_APP_ROW.background).setFontSize(10);
+    batchFormatRowsOptimized(sheet, rowTypeMap.sourceApp, numCols, (ranges) => {
+      ranges.forEach(range => range.setBackground(COLORS.SOURCE_APP_ROW.background).setFontSize(10));
     });
   }
 
   if (rowTypeMap.campaign.length > 0) {
     console.log(`Formatting ${rowTypeMap.campaign.length} campaign rows...`);
-    batchFormatRows(sheet, rowTypeMap.campaign, numCols, (range) => {
-      range.setBackground(COLORS.CAMPAIGN_ROW.background).setFontSize(9);
+    batchFormatRowsOptimized(sheet, rowTypeMap.campaign, numCols, (ranges) => {
+      ranges.forEach(range => range.setBackground(COLORS.CAMPAIGN_ROW.background).setFontSize(9));
     });
   }
 
   if (rowTypeMap.network.length > 0) {
     console.log(`Formatting ${rowTypeMap.network.length} network rows...`);
-    batchFormatRows(sheet, rowTypeMap.network, numCols, (range) => {
-      if (CURRENT_PROJECT === 'OVERALL') {
-        range.setBackground(COLORS.CAMPAIGN_ROW.background)
-             .setFontWeight('normal')
-             .setFontSize(9);
-      } else {
-        range.setBackground(COLORS.APP_ROW.background)
-             .setFontColor(COLORS.APP_ROW.fontColor)
-             .setFontWeight('bold')
-             .setFontSize(10);
-      }
+    batchFormatRowsOptimized(sheet, rowTypeMap.network, numCols, (ranges) => {
+      ranges.forEach(range => {
+        if (CURRENT_PROJECT === 'OVERALL') {
+          range.setBackground(COLORS.CAMPAIGN_ROW.background)
+               .setFontWeight('normal')
+               .setFontSize(9);
+        } else {
+          range.setBackground(COLORS.APP_ROW.background)
+               .setFontColor(COLORS.APP_ROW.fontColor)
+               .setFontWeight('bold')
+               .setFontSize(10);
+        }
+      });
     });
   }
 
   if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
     console.log(`Formatting ${rowTypeMap.hyperlink.length} hyperlink rows...`);
-    rowTypeMap.hyperlink.forEach(r => {
-      const linkCell = sheet.getRange(r, 2);
-      linkCell.setFontColor('#000000').setFontLine('none');
-    });
+    try {
+      rowTypeMap.hyperlink.forEach(r => {
+        const linkCell = sheet.getRange(r, 2);
+        linkCell.setFontColor('#000000').setFontLine('none');
+      });
+    } catch (e) {
+      console.error('Error formatting hyperlinks:', e);
+    }
   }
 }
 
-function batchFormatRows(sheet, rows, numCols, formatFunction) {
-  const BATCH_SIZE = 100;
+function batchFormatRowsOptimized(sheet, rows, numCols, formatFunction) {
+  const BATCH_SIZE = 500;
   
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batchRows = rows.slice(i, i + BATCH_SIZE);
+    const ranges = [];
     
-    batchRows.forEach(rowNum => {
-      const range = sheet.getRange(rowNum, 1, 1, numCols);
-      formatFunction(range);
-    });
-    
-    if (i + BATCH_SIZE < rows.length) {
-      Utilities.sleep(200);
-      SpreadsheetApp.flush();
+    try {
+      batchRows.forEach(rowNum => {
+        ranges.push(sheet.getRange(rowNum, 1, 1, numCols));
+      });
+      
+      formatFunction(ranges);
+      
+      if (i + BATCH_SIZE < rows.length) {
+        Utilities.sleep(100);
+        SpreadsheetApp.flush();
+      }
+    } catch (e) {
+      console.error(`Error in batch format (rows ${i}-${i + batchRows.length}):`, e);
+      if (e.toString().includes('timed out')) {
+        Utilities.sleep(3000);
+        formatFunction(ranges);
+      }
     }
   }
 }
 
-function applyEROASRichTextFormatting(sheet, numRows) {
-  if (numRows <= 1) return;
-  
-  const eroasColumn = 15;
-  const BATCH_SIZE = 200;
-  
-  for (let startRow = 2; startRow <= numRows; startRow += BATCH_SIZE) {
-    const endRow = Math.min(startRow + BATCH_SIZE - 1, numRows);
-    const batchSize = endRow - startRow + 1;
-    
-    const range = sheet.getRange(startRow, eroasColumn, batchSize, 1);
-    const values = range.getValues();
-    
-    const richTextValues = values.map(row => {
-      const cellValue = row[0];
-      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
-      }
-      
-      const arrowIndex = cellValue.indexOf('→');
-      if (arrowIndex === -1) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
-      }
-      
-      const beforeArrow = cellValue.substring(0, arrowIndex);
-      
-      const richTextBuilder = SpreadsheetApp.newRichTextValue()
-      .setText(cellValue)
-      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
-      .setForegroundColor('#808080')
-      .setFontSize(9)
-      .build());
-      
-      return richTextBuilder.build();
-    });
-    
-    range.setRichTextValues(richTextValues.map(rtv => [rtv]));
-    
-    if (endRow < numRows) {
-      Utilities.sleep(300);
-    }
-  }
-}
-
-function applyConditionalFormatting(sheet, numRows, appData) {
+function applyOptimizedConditionalFormatting(sheet, numRows) {
   const rules = [];
   
-  if (numRows > 1) {
+  if (numRows <= 1) return;
+  
+  try {
     const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
     rules.push(
       SpreadsheetApp.newConditionalFormatRule()
@@ -293,63 +313,6 @@ function applyConditionalFormatting(sheet, numRows, appData) {
         .setRanges([spendRange]).build()
     );
 
-    const eroasColumn = 15;
-    const data = sheet.getDataRange().getValues();
-    
-    console.log('Applying eROAS conditional formatting...');
-    for (let i = 1; i < Math.min(data.length, 1000); i++) {
-      const level = data[i][0];
-      let appName = '';
-      let targetEROAS = 150;
-      
-      if (level === 'APP') {
-        appName = data[i][1];
-        targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-      } else {
-        for (let j = i - 1; j >= 1; j--) {
-          if (data[j][0] === 'APP') {
-            appName = data[j][1];
-            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-            break;
-          }
-        }
-      }
-      
-      const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
-      const columnLetter = String.fromCharCode(64 + eroasColumn);
-      const cellAddress = `${columnLetter}${i + 1}`;
-      
-      const extractValueFormula = `IF(ISERROR(SEARCH("→",${cellAddress})), VALUE(SUBSTITUTE(${cellAddress},"%","")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(${cellAddress},"→",REPT(" ",100)),100)),"%","")))`;
-      
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= ${targetEROAS})`)
-          .setBackground(COLORS.POSITIVE.background)
-          .setFontColor(COLORS.POSITIVE.fontColor)
-          .setRanges([cellRange]).build()
-      );
-      
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= 120, ${extractValueFormula} < ${targetEROAS})`)
-          .setBackground(COLORS.WARNING.background)
-          .setFontColor(COLORS.WARNING.fontColor)
-          .setRanges([cellRange]).build()
-      );
-      
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} < 120)`)
-          .setBackground(COLORS.NEGATIVE.background)
-          .setFontColor(COLORS.NEGATIVE.fontColor)
-          .setRanges([cellRange]).build()
-      );
-      
-      if (i % 100 === 0) {
-        console.log(`Processed ${i} eROAS formatting rules...`);
-      }
-    }
-
     const profitColumn = 17;
     const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
     rules.push(
@@ -365,6 +328,35 @@ function applyConditionalFormatting(sheet, numRows, appData) {
         .setBackground(COLORS.NEGATIVE.background)
         .setFontColor(COLORS.NEGATIVE.fontColor)
         .setRanges([profitRange]).build()
+    );
+
+    const eroasColumn = 15;
+    const eroasRange = sheet.getRange(2, eroasColumn, numRows - 1, 1);
+    
+    const defaultTarget = getTargetEROAS(CURRENT_PROJECT, '');
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2:O)), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(O2:O,"→",REPT(" ",100)),100)),"%","")) >= ${defaultTarget})`)
+        .setBackground(COLORS.POSITIVE.background)
+        .setFontColor(COLORS.POSITIVE.fontColor)
+        .setRanges([eroasRange]).build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2:O)), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(O2:O,"→",REPT(" ",100)),100)),"%","")) >= 120, VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(O2:O,"→",REPT(" ",100)),100)),"%","")) < ${defaultTarget})`)
+        .setBackground(COLORS.WARNING.background)
+        .setFontColor(COLORS.WARNING.fontColor)
+        .setRanges([eroasRange]).build()
+    );
+    
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=AND(NOT(ISBLANK(O2:O)), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(O2:O,"→",REPT(" ",100)),100)),"%","")) < 120)`)
+        .setBackground(COLORS.NEGATIVE.background)
+        .setFontColor(COLORS.NEGATIVE.fontColor)
+        .setRanges([eroasRange]).build()
     );
 
     const growthColumn = 18;
@@ -398,18 +390,86 @@ function applyConditionalFormatting(sheet, numRows, appData) {
           .setRanges([growthRange]).build()
       );
     });
-  }
-  
-  console.log(`Applying ${rules.length} conditional format rules...`);
-  const RULES_BATCH_SIZE = 50;
-  
-  for (let i = 0; i < rules.length; i += RULES_BATCH_SIZE) {
-    const batchRules = rules.slice(i, i + RULES_BATCH_SIZE);
-    sheet.setConditionalFormatRules(sheet.getConditionalFormatRules().concat(batchRules));
     
-    if (i + RULES_BATCH_SIZE < rules.length) {
-      Utilities.sleep(500);
-      SpreadsheetApp.flush();
+    console.log(`Applying ${rules.length} conditional format rules in optimized batches...`);
+    const RULES_BATCH_SIZE = 200;
+    
+    for (let i = 0; i < rules.length; i += RULES_BATCH_SIZE) {
+      const batchRules = rules.slice(i, i + RULES_BATCH_SIZE);
+      
+      try {
+        sheet.setConditionalFormatRules(sheet.getConditionalFormatRules().concat(batchRules));
+        
+        if (i + RULES_BATCH_SIZE < rules.length) {
+          Utilities.sleep(200);
+          SpreadsheetApp.flush();
+        }
+      } catch (e) {
+        console.error(`Error applying conditional format rules batch ${i / RULES_BATCH_SIZE + 1}:`, e);
+        if (e.toString().includes('timed out')) {
+          console.log('Conditional format timeout, waiting and retrying...');
+          Utilities.sleep(5000);
+          sheet.setConditionalFormatRules(sheet.getConditionalFormatRules().concat(batchRules));
+        } else {
+          console.log('Skipping problematic conditional format batch');
+        }
+      }
+    }
+    
+    console.log(`Applied ${rules.length} conditional format rules successfully`);
+  } catch (e) {
+    console.error('Error in conditional formatting:', e);
+  }
+}
+
+function applyEROASRichTextFormattingOptimized(sheet, numRows) {
+  if (numRows <= 1) return;
+  
+  const eroasColumn = 15;
+  const BATCH_SIZE = 500;
+  
+  for (let startRow = 2; startRow <= numRows; startRow += BATCH_SIZE) {
+    const endRow = Math.min(startRow + BATCH_SIZE - 1, numRows);
+    const batchSize = endRow - startRow + 1;
+    
+    try {
+      const range = sheet.getRange(startRow, eroasColumn, batchSize, 1);
+      const values = range.getValues();
+      
+      const richTextValues = values.map(row => {
+        const cellValue = row[0];
+        if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
+          return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
+        }
+        
+        const arrowIndex = cellValue.indexOf('→');
+        if (arrowIndex === -1) {
+          return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
+        }
+        
+        const beforeArrow = cellValue.substring(0, arrowIndex);
+        
+        const richTextBuilder = SpreadsheetApp.newRichTextValue()
+        .setText(cellValue)
+        .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
+        .setForegroundColor('#808080')
+        .setFontSize(9)
+        .build());
+        
+        return richTextBuilder.build();
+      });
+      
+      range.setRichTextValues(richTextValues.map(rtv => [rtv]));
+      
+      if (endRow < numRows) {
+        Utilities.sleep(200);
+      }
+    } catch (e) {
+      console.error(`Error applying rich text formatting to rows ${startRow}-${endRow}:`, e);
+      if (e.toString().includes('timed out')) {
+        console.log('Rich text timeout, skipping this batch');
+        Utilities.sleep(2000);
+      }
     }
   }
 }
