@@ -20,7 +20,6 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         networkIndex++;
         if (networkIndex < sortedNetworks.length) {
           console.log('Waiting 1 seconds before next network...');
-          Utilities.sleep(1000);
         }
       }
     } else {
@@ -37,7 +36,6 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         appIndex++;
         if (appIndex < sortedApps.length) {
           console.log('Waiting 1 seconds before next app...');
-          Utilities.sleep(1000);
         }
       }
     }
