@@ -429,27 +429,14 @@ function getCachedBundleId(campaignName, campaignId = '') {
   return bundleId;
 }
 
+// Заменить функцию полностью:
 function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   if (!bundleId || CURRENT_PROJECT !== 'TRICKY') {
     return bundleId || 'Unknown';
   }
   
-  const appInfo = appsDbCache[bundleId];
-  
-  if (appInfo && appInfo.publisher !== bundleId) {
-    const publisher = appInfo.publisher || '';
-    const appName = appInfo.appName || '';
-    
-    if (publisher && appName && publisher !== appName) {
-      return `${publisher} ${appName}`;
-    } else if (publisher) {
-      return publisher;
-    } else if (appName) {
-      return appName;
-    }
-  }
-  
-  return bundleId;
+  const appsDb = new AppsDatabase('TRICKY');
+  return appsDb.getSourceAppDisplayName(bundleId);
 }
 
 function processApiData(rawData, includeLastWeek = null) {
@@ -697,7 +684,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
   const startTime = Date.now();
   
   ensureBundleIdCacheLoaded();
-  const appsDbCache = getOptimizedAppsDb();
+  const appsDb = new AppsDatabase('TRICKY');
   
   const appData = {};
   const newBundleIds = new Map();
@@ -809,7 +796,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           appData[appKey].weeks[weekKey].sourceApps['unknown'].campaigns.push(campaignData);
         } else {
           if (!appData[appKey].weeks[weekKey].sourceApps[bundleId]) {
-            const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
+            const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId);
             appData[appKey].weeks[weekKey].sourceApps[bundleId] = {
               sourceAppId: bundleId,
               sourceAppName: sourceAppDisplayName,
