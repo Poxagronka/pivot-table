@@ -1,5 +1,5 @@
 /**
- * Auto Functions - ОБНОВЛЕНО: всегда сортирует листы + учитывает день недели для предыдущей недели + INCENT_TRAFFIC
+ * Auto Functions - ОБНОВЛЕНО: ежечасное кеширование + улучшенное логирование + INCENT_TRAFFIC
  */
 
 function autoCacheAllProjects() {
@@ -11,7 +11,6 @@ function autoCacheAllProjects() {
   }
   
   try {
-    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для автокеширования
     ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'].forEach(function(proj) {
       try {
         console.log(`Caching ${proj}...`);
@@ -35,7 +34,6 @@ function autoUpdateAllProjects() {
   }
   
   try {
-    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для автообновления
     var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
     var successCount = 0;
     
@@ -49,7 +47,6 @@ function autoUpdateAllProjects() {
       }
     });
     
-    // ИЗМЕНЕНО: всегда сортируем листы после автообновления (убрали условие successCount > 1)
     if (successCount > 0) {
       try {
         sortProjectSheets();
@@ -132,10 +129,8 @@ function updateProjectData(projectName) {
     return;
   }
   
-  // ОБНОВЛЕНО: processProjectApiData теперь автоматически учитывает день недели
   var processed = processProjectApiData(projectName, raw);
 
-  // Записываем первоначальные значения eROAS если это первое добавление прошлой недели
   if (projectName !== 'OVERALL' && projectName !== 'INCENT_TRAFFIC') {
   try {
     const initialEROASCache = new InitialEROASCache(projectName);
@@ -174,7 +169,6 @@ function updateProjectData(projectName) {
 function saveAllCommentsToCache() {
   var ui = SpreadsheetApp.getUi();
   try {
-    // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для сохранения комментариев
     var projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
     var successCount = 0;
     
@@ -264,7 +258,6 @@ function enableAutoCache() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // ИЗМЕНЕНО: кеширование каждый час вместо раз в день
     ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
     saveSettingToSheet('automation.autoCache', true);
     
@@ -296,7 +289,6 @@ function enableAutoUpdate() {
       .filter(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; })
       .forEach(function(t) { ScriptApp.deleteTrigger(t); });
     
-    // ИЗМЕНЕНО: автообновление каждый день в 5:00 AM
     ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
     saveSettingToSheet('automation.autoUpdate', true);
     
@@ -331,7 +323,6 @@ function syncTriggersWithSettings() {
     var updateTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoUpdateAllProjects'; });
     
     if (settings.automation.autoCache && !cacheTrigger) {
-      // ИЗМЕНЕНО: кеширование каждый час
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().everyHours(1).create();
       console.log('Created auto cache trigger (hourly)');
     } else if (!settings.automation.autoCache && cacheTrigger) {
@@ -340,7 +331,6 @@ function syncTriggersWithSettings() {
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
-      // ИЗМЕНЕНО: создаем триггер на каждый день в 5:00 AM
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
       console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {

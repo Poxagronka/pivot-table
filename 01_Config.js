@@ -1,5 +1,5 @@
 /**
- * Configuration file - ОБНОВЛЕНО: добавлены ROAS D-3 и D-30 метрики
+ * Configuration file - ОБНОВЛЕНО: умная очистка кеша TRICKY + отслеживание предыдущего проекта
  */
 
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
@@ -34,23 +34,19 @@ function getTargetEROAS(projectName, appName = null) {
   try {
     const settings = loadSettingsFromSheet();
     
-    // TRICKY проект - всегда 250%
     if (projectName === 'TRICKY') {
       return settings.targetEROAS.tricky || 250;
     }
     
-    // Приложения с "Business" в названии - всегда 140% 
     if (appName && appName.toLowerCase().includes('business')) {
       return settings.targetEROAS.business || 140;
     }
     
-    // Все остальное - 150%
     return settings.targetEROAS.ceg || 150;
     
   } catch (e) {
     console.error('Error loading target eROAS:', e);
     
-    // Fallback логика
     if (projectName === 'TRICKY') {
       return 250;
     }
@@ -135,7 +131,6 @@ function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 function getIncentTrafficGrowthThresholds() { return getGrowthThresholds('INCENT_TRAFFIC'); }
 
 
-// ОБНОВЛЕНО: добавлены ROAS D-3 и D-30
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 
   { id: "installs", day: null }, 
@@ -337,7 +332,7 @@ var PROJECTS = {
       ATTRIBUTION_PARTNER: ["Stack"],
       ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
       ATTRIBUTION_CAMPAIGN_SEARCH: null,
-      ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]  // новое поле для исключения
+      ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
     },
     GROUP_BY: [
       { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
@@ -374,6 +369,7 @@ var PROJECTS = {
 };
 
 var CURRENT_PROJECT = 'TRICKY';
+var PREVIOUS_PROJECT = null;
 
 function getCurrentConfig() {
   return {
@@ -415,18 +411,17 @@ function getProjectApiConfig(projectName) {
   return PROJECTS[projectName].API_CONFIG;
 }
 
-
 function setCurrentProject(projectName) {
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
   
-  // Очищаем кеш TRICKY только при переключении НА TRICKY
-  // Это нужно для загрузки свежих данных Apps Database
-  if (projectName === 'TRICKY' && CURRENT_PROJECT !== 'TRICKY') {
+  PREVIOUS_PROJECT = CURRENT_PROJECT;
+  
+  if (projectName === 'TRICKY' && PREVIOUS_PROJECT !== 'TRICKY') {
     try {
       clearTrickyCaches();
-      console.log('TRICKY caches cleared (switching TO TRICKY)');
+      console.log('TRICKY caches cleared (switching TO TRICKY from ' + PREVIOUS_PROJECT + ')');
     } catch (e) {
       console.log('Cache clear function not available');
     }
@@ -435,7 +430,6 @@ function setCurrentProject(projectName) {
   CURRENT_PROJECT = projectName;
 }
 
-// ОБНОВЛЕНО: новая ширина для объединенного столбца ROAS
 var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
@@ -456,7 +450,7 @@ var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
-  NETWORK_ROW: { background: '#d1e7fe', fontColor: 'black' },  // ДОБАВИТЬ
+  NETWORK_ROW: { background: '#d1e7fe', fontColor: 'black' },
   SOURCE_APP_ROW: { background: '#f0f8ff' },
   CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },
