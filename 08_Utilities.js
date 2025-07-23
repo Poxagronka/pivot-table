@@ -1,5 +1,5 @@
 /**
- * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов + INCENT_TRAFFIC
+ * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов + INCENT_TRAFFIC + умное форматирование валют
  */
 
 // Date Utils
@@ -134,8 +134,8 @@ function clearAllDataSilent() {
 }
 
 function clearProjectDataSilent(projectName) {
-  const maxRetries = 3; // Увеличено количество попыток
-  const baseDelay = 5000; // Увеличена базовая задержка
+  const maxRetries = 3;
+  const baseDelay = 5000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -148,7 +148,6 @@ function clearProjectDataSilent(projectName) {
       
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
-      // Сохранение комментариев с обработкой таймаутов
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
           const cache = new CommentCache(projectName);
@@ -163,31 +162,25 @@ function clearProjectDataSilent(projectName) {
         }
       }
       
-      // Увеличенная пауза перед операциями с листами
       Utilities.sleep(2000);
       SpreadsheetApp.flush();
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      // Пауза после создания нового листа
       Utilities.sleep(1000);
       SpreadsheetApp.flush();
       
       if (oldSheet) {
-        // Попытка удалить старый лист с обработкой ошибок
         try {
           spreadsheet.deleteSheet(oldSheet);
         } catch (deleteError) {
           console.error(`${projectName}: Error deleting old sheet, will try to continue:`, deleteError);
-          // Если не удалось удалить, попробуем переименовать новый лист в уникальное имя
           const uniqueName = config.SHEET_NAME + '_' + Date.now();
           newSheet.setName(uniqueName);
           Utilities.sleep(1000);
-          // Потом попробуем еще раз удалить старый
           try {
             spreadsheet.deleteSheet(oldSheet);
-            // И переименовать обратно
             newSheet.setName(config.SHEET_NAME);
           } catch (e) {
             console.error(`${projectName}: Failed to handle sheet deletion:`, e);
@@ -198,7 +191,6 @@ function clearProjectDataSilent(projectName) {
         }
       }
       
-      // Пауза перед переименованием
       Utilities.sleep(1000);
       SpreadsheetApp.flush();
       
@@ -209,13 +201,11 @@ function clearProjectDataSilent(projectName) {
     } catch (e) {
       console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
       
-      // Специальная обработка таймаутов
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
         const timeoutDelay = baseDelay * Math.pow(2, attempt);
         console.log(`Timeout detected. Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
         
-        // Очистка и сброс соединения
         SpreadsheetApp.flush();
         Utilities.sleep(2000);
       } else if (attempt === maxRetries) {
@@ -244,34 +234,27 @@ function sortProjectSheets() {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
-    // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в порядок проектов
     const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall', 'Settings', 'To do'];
     
-    // ОБНОВЛЕНО: Сортируем только ВИДИМЫЕ листы
     const visibleSheets = sheets.filter(sheet => !sheet.isSheetHidden());
     
-    // Разделяем видимые листы на категории
-    const projectSheets = [];      // Листы из projectOrder
-    const otherVisibleSheets = []; // Видимые листы не из projectOrder
+    const projectSheets = [];
+    const otherVisibleSheets = [];
     
     visibleSheets.forEach(sheet => {
       const sheetName = sheet.getName();
       const projectIndex = projectOrder.indexOf(sheetName);
       
       if (projectIndex !== -1) {
-        // Лист из основного списка
         projectSheets.push({ sheet, index: projectIndex, name: sheetName });
       } else {
-        // Видимый лист, не входящий в основной список
         otherVisibleSheets.push({ sheet, name: sheetName });
       }
     });
     
-    // Сортируем каждую категорию
     projectSheets.sort((a, b) => a.index - b.index);
     otherVisibleSheets.sort((a, b) => a.name.localeCompare(b.name));
     
-    // Объединяем в финальный порядок: основные листы + видимые прочие
     const finalOrder = [
       ...projectSheets.map(item => item.sheet),
       ...otherVisibleSheets.map(item => item.sheet)
@@ -281,7 +264,6 @@ function sortProjectSheets() {
     console.log('- Project sheets:', projectSheets.map(s => s.name));
     console.log('- Other visible sheets:', otherVisibleSheets.map(s => s.name));
     
-    // Переставляем листы с паузами
     let position = 1;
     
     finalOrder.forEach((sheet, index) => {
@@ -290,7 +272,6 @@ function sortProjectSheets() {
         spreadsheet.moveActiveSheet(position);
         position++;
         
-        // Небольшая пауза между перемещениями
         if (index < finalOrder.length - 1) {
           Utilities.sleep(200);
         }
@@ -350,6 +331,14 @@ function formatCurrency(amount, currency = 'USD') {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);
+}
+
+function formatSmartCurrency(amount) {
+  if (Math.abs(amount) >= 1) {
+    return amount.toFixed(0);
+  } else {
+    return amount.toFixed(2);
+  }
 }
 
 function formatPercentage(value, decimals = 1) {
@@ -482,7 +471,6 @@ function getProjectStatus(projectName) {
 }
 
 function clearAllCommentColumnCaches() {
-  // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для очистки кешей
   const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
   projects.forEach(proj => {
     try {

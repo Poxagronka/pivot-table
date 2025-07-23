@@ -1,6 +1,6 @@
 function createUnifiedRowGrouping(sheet, tableData, data) {
   try {
-    console.log('Starting two-phase unified row grouping...');
+    console.log('Creating row grouping...');
     const startTime = new Date().getTime();
     
     const sheetId = sheet.getSheetId();
@@ -11,37 +11,21 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         data[a].networkName.localeCompare(data[b].networkName)
       );
       
-      let networkIndex = 0;
       for (const networkKey of sortedNetworks) {
-        console.log(`Processing network ${networkIndex + 1}/${sortedNetworks.length}: ${data[networkKey].networkName}`);
-        
         processEntityGroups(spreadsheetId, sheetId, data, networkKey, 'network');
-        
-        networkIndex++;
-        if (networkIndex < sortedNetworks.length) {
-          console.log('Waiting 1 seconds before next network...');
-        }
       }
     } else {
       const sortedApps = Object.keys(data).sort((a, b) => 
         data[a].appName.localeCompare(data[b].appName)
       );
       
-      let appIndex = 0;
       for (const appKey of sortedApps) {
-        console.log(`Processing app ${appIndex + 1}/${sortedApps.length}: ${data[appKey].appName}`);
-        
         processEntityGroups(spreadsheetId, sheetId, data, appKey, 'app');
-        
-        appIndex++;
-        if (appIndex < sortedApps.length) {
-          console.log('Waiting 1 seconds before next app...');
-        }
       }
     }
     
     const endTime = new Date().getTime();
-    console.log(`Two-phase unified row grouping completed in ${(endTime - startTime)/1000}s`);
+    console.log(`Row grouping completed in ${(endTime - startTime)/1000}s`);
     
   } catch (e) {
     console.error('Error in unified row grouping:', e);
@@ -50,11 +34,9 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
 
 function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType) {
   try {
-    console.log(`Phase 1: Creating groups for ${entityType} ${entityKey}`);
     const createRequests = buildCreateGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (createRequests.length > 0) {
-      console.log(`Creating ${createRequests.length} groups for ${entityType} ${entityKey}`);
       Sheets.Spreadsheets.batchUpdate({
         requests: createRequests
       }, spreadsheetId);
@@ -62,11 +44,9 @@ function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType
       Utilities.sleep(1000);
     }
     
-    console.log(`Phase 2: Collapsing groups for ${entityType} ${entityKey}`);
     const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (collapseRequests.length > 0) {
-      console.log(`Collapsing ${collapseRequests.length} groups for ${entityType} ${entityKey}`);
       Sheets.Spreadsheets.batchUpdate({
         requests: collapseRequests
       }, spreadsheetId);

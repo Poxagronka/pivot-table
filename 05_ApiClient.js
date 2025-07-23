@@ -527,10 +527,6 @@ function processApiData(rawData, includeLastWeek = null) {
           eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
         };
 
-        if (metrics.spend <= 0.5) {
-          return;
-        }
-
         const sunday = getSundayOfWeek(new Date(date));
         const appKey = app.id;
         
@@ -747,9 +743,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
         };
 
-        if (metrics.spend <= 0.5) {
-          return;
-        }
+    
 
         let campaignName = 'Unknown';
         let campaignId = 'Unknown';

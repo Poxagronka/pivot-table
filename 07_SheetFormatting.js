@@ -137,11 +137,11 @@ function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {
   }
 
   if (numRows > 1) {
-    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0');
+    sheet.getRange(2, 5, numRows - 1, 1).setNumberFormat('$0.0');
     sheet.getRange(2, 8, numRows - 1, 1).setNumberFormat('$0.0');
     sheet.getRange(2, 10, numRows - 1, 1).setNumberFormat('0.0');
     sheet.getRange(2, 13, numRows - 1, 1).setNumberFormat('$0.0');
-    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0');
+    sheet.getRange(2, 16, numRows - 1, 1).setNumberFormat('$0.0');
   }
 
   applyConditionalFormatting(sheet, numRows, appData);

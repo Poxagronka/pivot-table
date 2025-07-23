@@ -218,10 +218,10 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eROAS730Display = initialEROASCache.formatEROASWithInitial('WEEK', appName, weekRange, data.avgEROASD730);
     }
     
-    row[4] = data.totalSpend.toFixed(2); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
+    row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = data.totalProfit.toFixed(2); row[16] = profitWoW; row[17] = status;
+    row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
   } else if (level === 'CAMPAIGN') {
     row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
     const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
@@ -232,10 +232,10 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eROAS730Display = initialEROASCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, data.eRoasForecastD730, data.campaignId, data.sourceApp);
     }
     
-    row[4] = data.spend.toFixed(2); row[5] = spendWoW; row[6] = data.installs; row[7] = data.cpi ? data.cpi.toFixed(3) : '0.000';
+    row[4] = formatSmartCurrency(data.spend); row[5] = spendWoW; row[6] = data.installs; row[7] = data.cpi ? data.cpi.toFixed(3) : '0.000';
     row[8] = combinedRoas; row[9] = data.ipm.toFixed(1); row[10] = `${data.rrD1.toFixed(0)}%`; row[11] = `${data.rrD7.toFixed(0)}%`;
     row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = data.eProfitForecast.toFixed(2); row[16] = profitWoW; row[17] = status;
+    row[15] = formatSmartCurrency(data.eProfitForecast); row[16] = profitWoW; row[17] = status;
   } else {
     row[1] = displayName || identifier;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
@@ -246,10 +246,10 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
     }
     
-    row[4] = data.totalSpend.toFixed(2); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
+    row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = data.totalProfit.toFixed(2); row[16] = profitWoW; row[17] = status;
+    row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
   }
   
   row[18] = '';
