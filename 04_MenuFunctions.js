@@ -54,16 +54,11 @@ function updateSelectedProjectsToCurrent() {
   if (result !== ui.Button.YES) return;
   
   try {
-    ui.alert('Preparing...', 'Loading settings and Apps Database...', ui.ButtonSet.OK);
+    ui.alert('Preparing...', 'Loading settings and preparing for update...', ui.ButtonSet.OK);
     preloadSettings();
-    
-    if (selected.some(proj => proj.toUpperCase() === 'TRICKY')) {
-      preloadAppsDatabase();
-    }
-    
     Utilities.sleep(2000);
   } catch (e) {
-    logError('Error preloading:', e);
+    console.error('Error preloading settings:', e);
   }
   
   var successfulProjects = [];
@@ -73,52 +68,50 @@ function updateSelectedProjectsToCurrent() {
     try {
       var projectName = proj.toUpperCase();
       
-      logInfo(`\n=== UPDATING ${projectName} (${index + 1}/${selected.length}) ===`);
-      logInfo(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
+      console.log(`\n=== UPDATING ${projectName} (${index + 1}/${selected.length}) ===`);
+      console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
       
       if (index > 0) {
-        logInfo('Clearing caches and waiting before project update...');
+        console.log('Clearing caches and waiting before project update...');
         clearSettingsCache();
-        if (projectName !== 'TRICKY') {
-          clearAllCommentColumnCaches();
-        }
+        clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        logInfo('Waiting 20 seconds before next project...');
+        console.log('Waiting 20 seconds before next project...');
         Utilities.sleep(20000);
       }
       
       if (index > 0 && index % 3 === 0) {
-        logInfo('Extended cooldown after 3 projects (30 seconds)...');
+        console.log('Extended cooldown after 3 projects (30 seconds)...');
         Utilities.sleep(30000);
       }
       
       updateProjectDataWithRetry(projectName);
       
       successfulProjects.push(projectName);
-      logInfo(`✅ ${projectName} updated successfully`);
+      console.log(`✅ ${projectName} updated successfully`);
       
       Utilities.sleep(3000);
       
     } catch (e) {
-      logError(`❌ Failed to update ${proj}:`, e);
+      console.error(`❌ Failed to update ${proj}:`, e);
       failedProjects.push({
         project: proj,
         error: e.toString().substring(0, 80)
       });
       
-      logInfo('Error occurred. Waiting 30 seconds before continuing...');
+      console.log('Error occurred. Waiting 30 seconds before continuing...');
       Utilities.sleep(30000);
     }
   });
   
   if (successfulProjects.length > 0) {
     try {
-      logInfo('Waiting before sorting sheets...');
+      console.log('Waiting before sorting sheets...');
       Utilities.sleep(5000);
       sortProjectSheetsWithRetry();
     } catch (e) {
-      logError('Error sorting sheets:', e);
+      console.error('Error sorting sheets:', e);
     }
   }
   
@@ -161,12 +154,11 @@ function updateAllProjectsToCurrent() {
   if (result !== ui.Button.YES) return;
   
   try {
-    ui.alert('Preparing...', 'Loading settings and Apps Database for batch update...', ui.ButtonSet.OK);
+    ui.alert('Preparing...', 'Loading settings and preparing for batch update...', ui.ButtonSet.OK);
     preloadSettings();
-    preloadAppsDatabase();
     Utilities.sleep(2000);
   } catch (e) {
-    logError('Error preloading:', e);
+    console.error('Error preloading settings:', e);
   }
   
   var successfulProjects = [];
@@ -174,23 +166,21 @@ function updateAllProjectsToCurrent() {
   
   projects.forEach(function(proj, index) {
     try {
-      logInfo(`\n=== UPDATING ${proj} (${index + 1}/${projects.length}) ===`);
-      logInfo(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
+      console.log(`\n=== UPDATING ${proj} (${index + 1}/${projects.length}) ===`);
+      console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
       
       if (index > 0) {
-        logInfo('Clearing caches and waiting before project update...');
+        console.log('Clearing caches and waiting before project update...');
         clearSettingsCache();
-        if (proj.toUpperCase() !== 'TRICKY') {
-          clearAllCommentColumnCaches();
-        }
+        clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        logInfo('Waiting 20 seconds before next project...');
+        console.log('Waiting 20 seconds before next project...');
         Utilities.sleep(20000);
       }
       
       if (index > 0 && index % 3 === 0) {
-        logInfo('Extended cooldown after 3 projects (30 seconds)...');
+        console.log('Extended cooldown after 3 projects (30 seconds)...');
         Utilities.sleep(30000);
         
         if (index < projects.length - 1) {
@@ -205,30 +195,30 @@ function updateAllProjectsToCurrent() {
       updateProjectDataWithRetry(proj);
       
       successfulProjects.push(proj);
-      logInfo(`✅ ${proj} updated successfully`);
+      console.log(`✅ ${proj} updated successfully`);
       
       Utilities.sleep(3000);
       
     } catch (e) {
-      logError(`❌ Failed to update ${proj}:`, e);
+      console.error(`❌ Failed to update ${proj}:`, e);
       failedProjects.push({
         project: proj,
         error: e.toString().substring(0, 80)
       });
       
-      logInfo('Error occurred. Waiting 30 seconds before continuing...');
+      console.log('Error occurred. Waiting 30 seconds before continuing...');
       Utilities.sleep(30000);
     }
   });
   
   if (successfulProjects.length > 0) {
     try {
-      logInfo('Waiting before sorting sheets...');
+      console.log('Waiting before sorting sheets...');
       Utilities.sleep(5000);
       sortProjectSheetsWithRetry();
-      logInfo('Sheets sorted successfully');
+      console.log('Sheets sorted successfully');
     } catch (e) {
-      logError('Error sorting sheets:', e);
+      console.error('Error sorting sheets:', e);
     }
   }
   
@@ -274,10 +264,6 @@ function updateSingleProjectQuick() {
   try {
     ui.alert('Processing...', `Updating ${projectName}...`, ui.ButtonSet.OK);
     
-    if (projectName === 'TRICKY') {
-      preloadAppsDatabase();
-    }
-    
     updateProjectDataWithRetry(projectName);
     
     Utilities.sleep(2000);
@@ -311,27 +297,25 @@ function updateAllProjectsQuick() {
   try {
     ui.alert('Processing...', `Updating all ${projects.length} projects...`, ui.ButtonSet.OK);
     
-    preloadAppsDatabase();
-    
     var successfulProjects = [];
     var failedProjects = [];
     
     projects.forEach(function(proj, index) {
       try {
-        logInfo(`Quick updating ${proj} (${index + 1}/${projects.length})...`);
+        console.log(`Quick updating ${proj} (${index + 1}/${projects.length})...`);
         
         var projectName = proj.toUpperCase();
         updateProjectDataWithRetry(projectName, 1);
         
         successfulProjects.push(proj);
-        logInfo(`✅ ${proj} updated successfully`);
+        console.log(`✅ ${proj} updated successfully`);
         
         if (index < projects.length - 1) {
           Utilities.sleep(2000);
         }
         
       } catch (e) {
-        logError(`❌ Failed to update ${proj}:`, e);
+        console.error(`❌ Failed to update ${proj}:`, e);
         failedProjects.push({
           project: proj,
           error: e.toString().substring(0, 50)
@@ -348,7 +332,7 @@ function updateAllProjectsQuick() {
         Utilities.sleep(1000);
         sortProjectSheetsWithRetry();
       } catch (e) {
-        logError('Error sorting sheets:', e);
+        console.error('Error sorting sheets:', e);
       }
     }
     
@@ -412,8 +396,7 @@ function showQuickStatus() {
   message += `🔐 Bearer Token: ${tokenStatus}\n`;
   message += `💾 Auto Cache: ${cacheStatus}\n`;
   message += `🔄 Auto Update: ${updateStatus}\n`;
-  message += `🎯 Metrics: Unified (eROAS D730)\n`;
-  message += `📱 Apps Database: Smart Cache (1 hour)\n\n`;
+  message += `🎯 Metrics: Unified (eROAS D730)\n\n`;
   
   var triggers = ScriptApp.getProjectTriggers();
   var cacheTrigger = triggers.find(function(t) { return t.getHandlerFunction() === 'autoCacheAllProjects'; });
@@ -447,12 +430,6 @@ function showQuickStatus() {
   message += '• Auto Cache: Every hour\n';
   message += '• Auto Update: Daily at 5:00 AM\n';
   message += '• Previous week data: Included starting from Tuesday\n\n';
-  
-  message += '⚡ PERFORMANCE OPTIMIZATIONS:\n';
-  message += '• Apps Database: 1-hour cache duration\n';
-  message += '• Smart cache clearing: Only on TRICKY switch\n';
-  message += '• Batch operations: Preloaded Apps Database\n';
-  message += '• Optimized logging: Production mode\n\n';
   
   message += '💡 TIP: Use Settings sheet to configure all options\n';
   message += '🔧 Use "Force Update Settings" if you have old targets';
@@ -534,16 +511,14 @@ function generateAllProjects(weeks) {
   try {
     ui.alert('Processing...', `Generating reports for all ${total} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
     
-    preloadAppsDatabase();
-    
     for (var i = 0; i < MENU_PROJECTS.length; i++) {
       var proj = MENU_PROJECTS[i];
       try { 
-        logInfo(`Generating report for ${proj} (${weeks} weeks)...`);
+        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
         generateProjectReportByWeeks(proj.toUpperCase(), weeks); 
         success++; 
       } catch(e) { 
-        logError(`Error generating ${proj}:`, e); 
+        console.error(`Error generating ${proj}:`, e); 
       }
     }
     
@@ -559,11 +534,6 @@ function generateSingleProject(projectName, weeks) {
   
   try {
     ui.alert('Processing...', `Generating ${projectName} report (${weeks} weeks)...`, ui.ButtonSet.OK);
-    
-    if (projectName === 'TRICKY') {
-      preloadAppsDatabase();
-    }
-    
     generateProjectReportByWeeks(projectName, weeks);
     sortProjectSheets();
     ui.alert('✅ Complete', `${projectName} report generated successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
@@ -579,18 +549,14 @@ function generateMultipleProjects(projects, weeks) {
   try {
     ui.alert('Processing...', `Generating reports for ${projects.length} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
     
-    if (projects.some(proj => proj.toUpperCase() === 'TRICKY')) {
-      preloadAppsDatabase();
-    }
-    
     for (var i = 0; i < projects.length; i++) {
       var proj = projects[i];
       try {
-        logInfo(`Generating report for ${proj} (${weeks} weeks)...`);
+        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
         generateProjectReportByWeeks(proj.toUpperCase(), weeks);
         success++;
       } catch(e) {
-        logError(`Error generating ${proj}:`, e);
+        console.error(`Error generating ${proj}:`, e);
       }
     }
     
@@ -632,7 +598,7 @@ function clearAllProjectsData() {
         clearProjectDataSilent(proj);
         successCount++;
       } catch (e) {
-        logError(`Error clearing ${proj}:`, e);
+        console.error(`Error clearing ${proj}:`, e);
       }
     });
     
@@ -657,11 +623,7 @@ function clearProjectAllData(projectName) {
 
 function debugSingleProject() {
   var p = showChoice('Select Project to Debug:', MENU_PROJECTS);
-  if (p) {
-    setLogLevel('DEBUG');
-    debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
-    setLogLevel('INFO');
-  }
+  if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
 }
 
 function syncTriggersWithSettings() {
@@ -674,23 +636,23 @@ function syncTriggersWithSettings() {
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      logInfo('Created auto cache trigger');
+      console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
-      logInfo('Deleted auto cache trigger');
+      console.log('Deleted auto cache trigger');
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
-      logInfo('Created auto update trigger');
+      console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
       ScriptApp.deleteTrigger(updateTrigger);
-      logInfo('Deleted auto update trigger');
+      console.log('Deleted auto update trigger');
     }
     
-    logInfo('Triggers synchronized with Settings sheet');
+    console.log('Triggers synchronized with Settings sheet');
   } catch (e) {
-    logError('Error syncing triggers with settings:', e);
+    console.error('Error syncing triggers with settings:', e);
   }
 }
 
@@ -706,25 +668,23 @@ function updateProjectDataWithRetry(projectName, maxRetries = 3) {
       updateProjectData(projectName);
       return;
     } catch (e) {
-      logError(`${projectName} update attempt ${attempt} failed:`, e);
+      console.error(`${projectName} update attempt ${attempt} failed:`, e);
       
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
-        logInfo('Timeout detected - waiting longer before retry...');
+        console.log('Timeout detected - waiting longer before retry...');
         
         clearSettingsCache();
-        if (projectName !== 'TRICKY') {
-          clearAllCommentColumnCaches();
-        }
+        clearAllCommentColumnCaches();
         
         var timeoutDelay = baseDelay * Math.pow(2, attempt);
-        logInfo(`Waiting ${timeoutDelay}ms before retry...`);
+        console.log(`Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
         
         SpreadsheetApp.flush();
         Utilities.sleep(2000);
       } else {
         var delay = baseDelay * Math.pow(1.5, attempt - 1);
-        logInfo(`Waiting ${delay}ms before retry...`);
+        console.log(`Waiting ${delay}ms before retry...`);
         Utilities.sleep(delay);
       }
       
@@ -743,14 +703,14 @@ function sortProjectSheetsWithRetry(maxRetries = 2) {
       sortProjectSheets();
       return;
     } catch (e) {
-      logError(`Sheet sorting attempt ${attempt} failed:`, e);
+      console.error(`Sheet sorting attempt ${attempt} failed:`, e);
       
       if (attempt === maxRetries) {
         throw e;
       }
       
       var delay = baseDelay * attempt;
-      logInfo(`Waiting ${delay}ms before retry...`);
+      console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
     }
   }
@@ -842,10 +802,10 @@ function showAppsDbStatus() {
       var bundleIds = Object.keys(cache);
       var sampleApp = cache[bundleIds[0]];
       message += '• Last Updated: ' + (sampleApp.lastUpdated || 'Unknown') + '\n';
-      message += '• Cache Duration: 1 hour (optimized)\n';
+      message += '• Cache Sheet: ' + (appsDb.cacheSheet ? 'Found' : 'Missing') + '\n';
       
       var shouldUpdate = appsDb.shouldUpdateCache();
-      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>1h old)' : 'NO') + '\n\n';
+      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>24h old)' : 'NO') + '\n\n';
       
       message += 'SAMPLE ENTRIES:\n';
       var sampleCount = Math.min(3, bundleIds.length);
@@ -903,8 +863,13 @@ function clearAppsDbCache() {
   if (ui.alert('Clear Apps Database Cache', 'Clear cached app data? Will rebuild on next refresh.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   
   try {
-    clearTrickyCaches();
-    ui.alert('Success', 'Apps Database cache cleared.', ui.ButtonSet.OK);
+    var appsDb = new AppsDatabase('TRICKY');
+    if (appsDb.cacheSheet && appsDb.cacheSheet.getLastRow() > 1) {
+      appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
+      ui.alert('Success', 'Apps Database cache cleared.', ui.ButtonSet.OK);
+    } else {
+      ui.alert('No Cache', 'Apps Database cache sheet not found.', ui.ButtonSet.OK);
+    }
   } catch (e) {
     ui.alert('Error', 'Error clearing cache: ' + e.toString(), ui.ButtonSet.OK);
   }
