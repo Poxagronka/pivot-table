@@ -12,13 +12,11 @@ function onOpen() {
       .addSeparator()
       .addSubMenu(ui.createMenu('⚙️ Settings')
         .addItem('📄 Open Settings Sheet', 'openSettingsSheet')
-        .addItem('🔄 Refresh Settings', 'refreshSettingsDialog')
-        .addItem('🔧 Force Update Settings', 'forceUpdateSettingsSheet')
+        .addItem('🔄 Refresh Settings', 'refreshSettings')
         .addItem('📊 System Status', 'showQuickStatus')
         .addSeparator()
-        .addItem('🧹 Clear Column Cache', 'clearColumnCacheDialog')
+        .addItem('🧹 Clear Column Cache', 'clearColumnCache')
         .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
-        .addItem('🗑️ Clear Data...', 'clearDataWizard')
         .addSeparator()
         .addItem('🔍 Quick API Check', 'quickAPICheckAll')
         .addItem('📱 Apps Database (TRICKY)', 'appsDbWizard')
@@ -29,10 +27,8 @@ function onOpen() {
 }
 
 function updateSelectedProjectsToCurrent() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
+    openSettingsSheet();
     return;
   }
   
@@ -40,21 +36,10 @@ function updateSelectedProjectsToCurrent() {
   var selected = showMultiChoice('Select Projects to Update:', projects);
   
   if (!selected || selected.length === 0) {
-    ui.alert('No Selection', 'No projects selected for update.', ui.ButtonSet.OK);
     return;
   }
   
-  var estimatedMinutes = Math.ceil(selected.length * 1.5);
-  var result = ui.alert('🔄 Update Selected Projects', 
-    `Update ${selected.length} selected projects?\n\n${selected.join(', ')}\n\n` +
-    `⏱️ Estimated time: ${estimatedMinutes} minutes\n` +
-    `(Using safe mode with extended pauses to prevent timeouts)`, 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
-  
   try {
-    ui.alert('Preparing...', 'Loading settings and preparing for update...', ui.ButtonSet.OK);
     preloadSettings();
     Utilities.sleep(2000);
   } catch (e) {
@@ -77,13 +62,8 @@ function updateSelectedProjectsToCurrent() {
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        console.log('Waiting 20 seconds before next project...');
-        Utilities.sleep(20000);
-      }
-      
-      if (index > 0 && index % 3 === 0) {
-        console.log('Extended cooldown after 3 projects (30 seconds)...');
-        Utilities.sleep(30000);
+        console.log('Waiting 5 seconds before next project...');
+        Utilities.sleep(5000);
       }
       
       updateProjectDataWithRetry(projectName);
@@ -115,46 +95,18 @@ function updateSelectedProjectsToCurrent() {
     }
   }
   
-  var message = `✅ Update completed!\n\n`;
-  
-  if (successfulProjects.length > 0) {
-    message += `• Successfully updated: ${successfulProjects.length}/${selected.length} projects\n`;
-    message += `  ${successfulProjects.join(', ')}\n\n`;
-  }
-  
-  if (failedProjects.length > 0) {
-    message += `• Failed projects:\n`;
-    failedProjects.forEach(function(fail) {
-      message += `  ${fail.project}: ${fail.error}...\n`;
-    });
-    message += '\n💡 TIP: Try updating failed projects individually.';
-  }
-  
-  ui.alert('Update Complete', message, ui.ButtonSet.OK);
+  console.log(`Update completed: ${successfulProjects.length}/${selected.length} projects updated`);
 }
 
 function updateAllProjectsToCurrent() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
+    openSettingsSheet();
     return;
   }
   
   var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  var estimatedMinutes = Math.ceil(projects.length * 1.5);
-  
-  var result = ui.alert('🔄 Update All Projects', 
-    `This will update all ${projects.length} projects with the latest data.\n\n` +
-    `⏱️ Estimated time: ${estimatedMinutes} minutes\n` +
-    `(Using safe mode with extended pauses to prevent timeouts)\n\n` +
-    `Continue?`, 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
   
   try {
-    ui.alert('Preparing...', 'Loading settings and preparing for batch update...', ui.ButtonSet.OK);
     preloadSettings();
     Utilities.sleep(2000);
   } catch (e) {
@@ -175,21 +127,8 @@ function updateAllProjectsToCurrent() {
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        console.log('Waiting 20 seconds before next project...');
-        Utilities.sleep(20000);
-      }
-      
-      if (index > 0 && index % 3 === 0) {
-        console.log('Extended cooldown after 3 projects (30 seconds)...');
-        Utilities.sleep(30000);
-        
-        if (index < projects.length - 1) {
-          ui.alert('Progress Update', 
-            `Completed: ${index} of ${projects.length} projects\n\n` +
-            `Next: ${projects.slice(index, Math.min(index + 3, projects.length)).join(', ')}\n\n` +
-            `Please wait...`, 
-            ui.ButtonSet.OK);
-        }
+        console.log('Waiting 5 seconds before next project...');
+        Utilities.sleep(5000);
       }
       
       updateProjectDataWithRetry(proj);
@@ -222,28 +161,12 @@ function updateAllProjectsToCurrent() {
     }
   }
   
-  var message = `✅ Update completed!\n\n`;
-  
-  if (successfulProjects.length > 0) {
-    message += `• Successfully updated: ${successfulProjects.length}/${projects.length} projects\n`;
-  }
-  
-  if (failedProjects.length > 0) {
-    message += `\n• Failed projects:\n`;
-    failedProjects.forEach(function(fail) {
-      message += `  ${fail.project}: ${fail.error}...\n`;
-    });
-    message += '\n💡 TIP: Try updating failed projects individually.';
-  }
-  
-  ui.alert('Update Complete', message, ui.ButtonSet.OK);
+  console.log(`Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
 }
 
 function updateSingleProjectQuick() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
+    openSettingsSheet();
     return;
   }
   
@@ -254,49 +177,27 @@ function updateSingleProjectQuick() {
   
   var projectName = projects[choice - 1].toUpperCase();
   
-  var result = ui.alert('🚀 Quick Update Single Project', 
-    `Update ${projectName} project?\n\n` +
-    `This will use minimal pauses (faster but may timeout if system is busy).`, 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
-  
   try {
-    ui.alert('Processing...', `Updating ${projectName}...`, ui.ButtonSet.OK);
-    
     updateProjectDataWithRetry(projectName);
     
     Utilities.sleep(2000);
     sortProjectSheetsWithRetry();
     
-    ui.alert('Success', `✅ ${projectName} updated successfully!`, ui.ButtonSet.OK);
+    console.log(`${projectName} updated successfully`);
   } catch (e) {
-    ui.alert('Error', `❌ Failed to update ${projectName}:\n\n${e.toString()}`, ui.ButtonSet.OK);
+    console.error(`Failed to update ${projectName}: ${e.toString()}`);
   }
 }
 
 function updateAllProjectsQuick() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    ui.alert('🔐 Token Required', 'Bearer token is not configured. Please set it in Settings sheet first.', ui.ButtonSet.OK);
+    openSettingsSheet();
     return;
   }
   
   var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  var estimatedMinutes = Math.ceil(projects.length * 0.8);
-  
-  var result = ui.alert('⚡ Quick Update All Projects', 
-    `Update all ${projects.length} projects?\n\n` +
-    `This will use minimal pauses (faster but may timeout if system is busy).\n\n` +
-    `⏱️ Estimated time: ${estimatedMinutes} minutes`, 
-    ui.ButtonSet.YES_NO);
-  
-  if (result !== ui.Button.YES) return;
   
   try {
-    ui.alert('Processing...', `Updating all ${projects.length} projects...`, ui.ButtonSet.OK);
-    
     var successfulProjects = [];
     var failedProjects = [];
     
@@ -336,50 +237,26 @@ function updateAllProjectsQuick() {
       }
     }
     
-    var message = `⚡ Quick Update completed!\n\n`;
-    
-    if (successfulProjects.length > 0) {
-      message += `• Successfully updated: ${successfulProjects.length}/${projects.length} projects\n`;
-      message += `  ${successfulProjects.join(', ')}\n\n`;
-    }
-    
-    if (failedProjects.length > 0) {
-      message += `• Failed projects:\n`;
-      failedProjects.forEach(function(fail) {
-        message += `  ${fail.project}: ${fail.error}...\n`;
-      });
-      message += '\n💡 TIP: Try Safe Mode for failed projects.';
-    }
-    
-    ui.alert('Quick Update Complete', message, ui.ButtonSet.OK);
+    console.log(`Quick Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
     
   } catch (e) {
-    ui.alert('Error', `❌ Quick update failed:\n\n${e.toString()}`, ui.ButtonSet.OK);
+    console.error(`Quick update failed: ${e.toString()}`);
   }
 }
 
-function refreshSettingsDialog() {
-  var ui = SpreadsheetApp.getUi();
-  
+function refreshSettings() {
   try {
     var settings = refreshSettingsFromSheet();
     
-    var message = '🔄 Settings Refreshed!\n\n';
-    message += `🔐 Bearer Token: ${settings.bearerToken ? 'Found' : 'Not Set'}\n`;
-    message += `💾 Auto Cache: ${settings.automation.autoCache ? 'Enabled' : 'Disabled'}\n`;
-    message += `🔄 Auto Update: ${settings.automation.autoUpdate ? 'Enabled' : 'Disabled'}\n`;
-    message += `🎯 eROAS D730 Targets: Updated\n`;
-    
     try {
       syncTriggersWithSettings();
-      message += '\n✅ Triggers synchronized';
+      console.log('Settings refreshed and triggers synchronized');
     } catch (e) {
-      message += '\n⚠️ Error syncing triggers: ' + e.toString();
+      console.error('Error syncing triggers:', e);
     }
     
-    ui.alert('Settings Refreshed', message, ui.ButtonSet.OK);
   } catch (e) {
-    ui.alert('Error', 'Error refreshing settings: ' + e.toString(), ui.ButtonSet.OK);
+    console.error('Error refreshing settings:', e);
   }
 }
 
@@ -431,19 +308,14 @@ function showQuickStatus() {
   message += '• Auto Update: Daily at 5:00 AM\n';
   message += '• Previous week data: Included starting from Tuesday\n\n';
   
-  message += '💡 TIP: Use Settings sheet to configure all options\n';
-  message += '🔧 Use "Force Update Settings" if you have old targets';
+  message += '💡 TIP: Use Settings sheet to configure all options';
   
   ui.alert('System Status', message, ui.ButtonSet.OK);
 }
 
 function quickAPICheckAll() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    if (ui.alert('🔐 Token Required', 'Bearer token not configured. Open Settings sheet?', ui.ButtonSet.YES_NO) === ui.Button.YES) {
-      openSettingsSheet();
-    }
+    openSettingsSheet();
     return;
   }
   
@@ -467,20 +339,13 @@ function quickAPICheckAll() {
     }
   });
   
-  ui.alert('API Check Complete', results, ui.ButtonSet.OK);
+  console.log(results);
 }
 
 function smartReportWizard() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (!isBearerTokenConfigured()) {
-    if (ui.alert('🔐 Token Required', 'Bearer token is not configured. Open Settings sheet?', ui.ButtonSet.YES_NO) === ui.Button.YES) {
-      openSettingsSheet();
-      return;
-    } else {
-      ui.alert('❌ Cannot Generate Reports', 'Bearer token is required for API access.', ui.ButtonSet.OK);
-      return;
-    }
+    openSettingsSheet();
+    return;
   }
   
   var scope = showChoice('📈 Generate Report - Step 1/2: Select Projects', ['All Projects', 'Single Project', 'Multiple Projects']);
@@ -504,13 +369,10 @@ function smartReportWizard() {
 }
 
 function generateAllProjects(weeks) {
-  var ui = SpreadsheetApp.getUi();
   var success = 0;
   var total = MENU_PROJECTS.length;
   
   try {
-    ui.alert('Processing...', `Generating reports for all ${total} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
-    
     for (var i = 0; i < MENU_PROJECTS.length; i++) {
       var proj = MENU_PROJECTS[i];
       try { 
@@ -523,32 +385,26 @@ function generateAllProjects(weeks) {
     }
     
     sortProjectSheets();
-    ui.alert('✅ Complete', `Generated ${success}/${total} reports successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+    console.log(`Generated ${success}/${total} reports successfully for last ${weeks} weeks`);
   } catch(e) {
-    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
+    console.error('Error generating all projects:', e);
   }
 }
 
 function generateSingleProject(projectName, weeks) {
-  var ui = SpreadsheetApp.getUi();
-  
   try {
-    ui.alert('Processing...', `Generating ${projectName} report (${weeks} weeks)...`, ui.ButtonSet.OK);
     generateProjectReportByWeeks(projectName, weeks);
     sortProjectSheets();
-    ui.alert('✅ Complete', `${projectName} report generated successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+    console.log(`${projectName} report generated successfully for last ${weeks} weeks`);
   } catch(e) {
-    ui.alert('❌ Error', `Error generating ${projectName} report:\n\n${e.toString()}`, ui.ButtonSet.OK);
+    console.error(`Error generating ${projectName} report: ${e.toString()}`);
   }
 }
 
 function generateMultipleProjects(projects, weeks) {
-  var ui = SpreadsheetApp.getUi();
   var success = 0;
   
   try {
-    ui.alert('Processing...', `Generating reports for ${projects.length} projects (${weeks} weeks each)...`, ui.ButtonSet.OK);
-    
     for (var i = 0; i < projects.length; i++) {
       var proj = projects[i];
       try {
@@ -561,9 +417,9 @@ function generateMultipleProjects(projects, weeks) {
     }
     
     sortProjectSheets();
-    ui.alert('✅ Complete', `Generated ${success}/${projects.length} reports successfully!\n\nPeriod: Last ${weeks} weeks`, ui.ButtonSet.OK);
+    console.log(`Generated ${success}/${projects.length} reports successfully for last ${weeks} weeks`);
   } catch(e) {
-    ui.alert('❌ Error', e.toString(), ui.ButtonSet.OK);
+    console.error('Error generating multiple projects:', e);
   }
 }
 
@@ -573,53 +429,7 @@ function generateProjectReportByWeeks(projectName, weeks) {
   generateReport(days);
 }
 
-function clearDataWizard() {
-  var choice = showChoice('🗑️ Clear Data', ['Clear All Projects', 'Clear Single Project']);
-  if (!choice) return;
-  
-  if (choice === 1) {
-    clearAllProjectsData();
-  } else {
-    var p = showChoice('Select Project:', MENU_PROJECTS);
-    if (p) clearProjectAllData(MENU_PROJECTS[p-1].toUpperCase());
-  }
-}
 
-function clearAllProjectsData() {
-  var ui = SpreadsheetApp.getUi();
-  if (ui.alert('Confirm Clear All', 'Clear data from ALL projects? Comments preserved.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  
-  try {
-    var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-    var successCount = 0;
-    
-    projects.forEach(function(proj) {
-      try {
-        clearProjectDataSilent(proj);
-        successCount++;
-      } catch (e) {
-        console.error(`Error clearing ${proj}:`, e);
-      }
-    });
-    
-    ui.alert(successCount === projects.length ? 'Success' : 'Partial Success', 
-             `Cleared ${successCount} of ${projects.length} projects. Comments preserved.`, ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert('Error', 'Error clearing data: ' + e.toString(), ui.ButtonSet.OK);
-  }
-}
-
-function clearProjectAllData(projectName) {
-  var ui = SpreadsheetApp.getUi();
-  if (ui.alert(`Clear ${projectName} Data`, `Clear all ${projectName} data? Comments preserved.`, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  
-  try {
-    clearProjectDataSilent(projectName);
-    ui.alert('Success', `${projectName} data cleared. Comments preserved.`, ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert('Error', `Error clearing ${projectName}: ${e.toString()}`, ui.ButtonSet.OK);
-  }
-}
 
 function debugSingleProject() {
   var p = showChoice('Select Project to Debug:', MENU_PROJECTS);
@@ -747,7 +557,6 @@ function promptWeeks(title, prompt) {
   if (result.getSelectedButton() !== ui.Button.OK) return null;
   var weeks = parseInt(result.getResponseText());
   if (isNaN(weeks) || weeks < 1 || weeks > 52) {
-    ui.alert('❌ Invalid Input', 'Please enter a number between 1 and 52 weeks.', ui.ButtonSet.OK);
     return null;
   }
   return weeks;
@@ -758,14 +567,7 @@ function generateProjectReportForDateRange(projectName, startDate, endDate) { se
 function debugProjectReportGeneration(projectName) { setCurrentProject(projectName); debugReportGeneration(); }
 
 function appsDbWizard() {
-  var ui = SpreadsheetApp.getUi();
-  
   if (CURRENT_PROJECT !== 'TRICKY') {
-    var switchResult = ui.alert('Apps Database - TRICKY Only', 
-      'Apps Database is only used for TRICKY project.\n\nSwitch to TRICKY project now?', 
-      ui.ButtonSet.YES_NO);
-    
-    if (switchResult !== ui.Button.YES) return;
     setCurrentProject('TRICKY');
   }
   
@@ -788,72 +590,62 @@ function appsDbWizard() {
 }
 
 function showAppsDbStatus() {
-  var ui = SpreadsheetApp.getUi();
-  
   try {
     var appsDb = new AppsDatabase('TRICKY');
     var cache = appsDb.loadFromCache();
     var appCount = Object.keys(cache).length;
     
-    var message = '📱 APPS DATABASE STATUS\n\n';
-    message += '• Total Apps: ' + appCount + '\n';
+    console.log(`Apps Database Status: ${appCount} apps cached`);
     
     if (appCount > 0) {
       var bundleIds = Object.keys(cache);
       var sampleApp = cache[bundleIds[0]];
-      message += '• Last Updated: ' + (sampleApp.lastUpdated || 'Unknown') + '\n';
-      message += '• Cache Sheet: ' + (appsDb.cacheSheet ? 'Found' : 'Missing') + '\n';
+      console.log(`Last Updated: ${sampleApp.lastUpdated || 'Unknown'}`);
+      console.log(`Cache Sheet: ${appsDb.cacheSheet ? 'Found' : 'Missing'}`);
       
       var shouldUpdate = appsDb.shouldUpdateCache();
-      message += '• Update Needed: ' + (shouldUpdate ? 'YES (>24h old)' : 'NO') + '\n\n';
+      console.log(`Update Needed: ${shouldUpdate ? 'YES (>24h old)' : 'NO'}`);
       
-      message += 'SAMPLE ENTRIES:\n';
+      console.log('Sample entries:');
       var sampleCount = Math.min(3, bundleIds.length);
       for (var i = 0; i < sampleCount; i++) {
         var bundleId = bundleIds[i];
         var app = cache[bundleId];
-        message += '• ' + bundleId + ' → ' + app.publisher + ' ' + app.appName + '\n';
+        console.log(`${bundleId} → ${app.publisher} ${app.appName}`);
       }
     } else {
-      message += '• Status: Empty cache\n';
-      message += '• Action Required: Refresh database';
+      console.log('Status: Empty cache - refresh needed');
     }
-    
-    ui.alert('Apps Database Status', message, ui.ButtonSet.OK);
   } catch (e) {
-    ui.alert('Error', 'Error checking Apps Database status: ' + e.toString(), ui.ButtonSet.OK);
+    console.error('Error checking Apps Database status:', e);
   }
 }
 
 function showAppsDbSample() {
-  var ui = SpreadsheetApp.getUi();
-  
   try {
     var appsDb = new AppsDatabase('TRICKY');
     var cache = appsDb.loadFromCache();
     var bundleIds = Object.keys(cache);
     
     if (bundleIds.length === 0) {
-      ui.alert('No Data', 'Apps Database cache is empty. Please refresh first.', ui.ButtonSet.OK);
+      console.log('Apps Database cache is empty. Please refresh first.');
       return;
     }
     
-    var message = '📱 APPS DATABASE SAMPLE\n\n';
+    console.log('Apps Database Sample:');
     var sampleCount = Math.min(5, bundleIds.length);
     
     for (var i = 0; i < sampleCount; i++) {
       var bundleId = bundleIds[i];
       var app = cache[bundleId];
-      message += bundleId + '\n  → ' + app.publisher + ' ' + app.appName + '\n\n';
+      console.log(`${bundleId} → ${app.publisher} ${app.appName}`);
     }
     
     if (bundleIds.length > sampleCount) {
-      message += '... and ' + (bundleIds.length - sampleCount) + ' more apps';
+      console.log(`... and ${bundleIds.length - sampleCount} more apps`);
     }
-    
-    ui.alert('Apps Database Sample', message, ui.ButtonSet.OK);
   } catch (e) {
-    ui.alert('Error', 'Error showing sample data: ' + e.toString(), ui.ButtonSet.OK);
+    console.error('Error showing sample data:', e);
   }
 }
 
@@ -866,25 +658,18 @@ function clearAppsDbCache() {
     var appsDb = new AppsDatabase('TRICKY');
     if (appsDb.cacheSheet && appsDb.cacheSheet.getLastRow() > 1) {
       appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
-      ui.alert('Success', 'Apps Database cache cleared.', ui.ButtonSet.OK);
+      console.log('Apps Database cache cleared');
     } else {
-      ui.alert('No Cache', 'Apps Database cache sheet not found.', ui.ButtonSet.OK);
+      console.log('Apps Database cache sheet not found');
     }
   } catch (e) {
-    ui.alert('Error', 'Error clearing cache: ' + e.toString(), ui.ButtonSet.OK);
+    console.error('Error clearing cache:', e);
   }
 }
 
-function clearColumnCacheDialog() {
-  var ui = SpreadsheetApp.getUi();
-  var result = ui.alert('🧹 Clear Column Cache', 
-    'Clear cached column positions for all projects?\n\nThis will force re-detection of column positions on next use.', 
-    ui.ButtonSet.YES_NO);
-  
-  if (result === ui.Button.YES) {
-    clearAllCommentColumnCaches();
-    ui.alert('✅ Success', 'Column cache cleared for all projects.', ui.ButtonSet.OK);
-  }
+function clearColumnCache() {
+  clearAllCommentColumnCaches();
+  console.log('Column cache cleared for all projects');
 }
 
 function openGitHubRepo() {

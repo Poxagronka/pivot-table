@@ -512,27 +512,6 @@ function openSettingsSheet() {
   SpreadsheetApp.getUi().alert('Settings Sheet', 'Лист Settings с исправленной логикой таргетов!\n\n🎯 TRICKY: 250% (весь проект)\n💼 Business: 140% (приложения с "Business")\n📱 Остальные: 150% (по умолчанию)\n\nИспользуйте "🔄 Refresh Settings" после изменений.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function forceUpdateSettingsSheet() {
-  const ui = SpreadsheetApp.getUi();
-  const result = ui.alert('🔄 Force Update Settings', 'Принудительно обновить лист Settings?\n\nЭто создаст структуру с исправленной логикой таргетов.', ui.ButtonSet.YES_NO);
-  
-  if (result === ui.Button.YES) {
-    const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
-    let sheet = spreadsheet.getSheetByName(SETTINGS_SHEET_NAME);
-    
-    if (sheet) {
-      spreadsheet.deleteSheet(sheet);
-    }
-    
-    sheet = spreadsheet.insertSheet(SETTINGS_SHEET_NAME);
-    createSettingsLayout(sheet);
-    populateDefaultSettings(sheet);
-    clearSettingsCache();
-    
-    ui.alert('✅ Updated', 'Лист Settings обновлен с правильной логикой!\n\n🎯 Таргеты исправлены:\n• TRICKY проект: 250%\n• Business приложения: 140%\n• Остальные: 150%\n\nТеперь Applovin будет использовать правильные таргеты!', ui.ButtonSet.OK);
-  }
-}
-
 // ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для получения дефолтных порогов
 function getDefaultGrowthThresholdsForAllProjects() {
   const defaultThresholds = getDefaultGrowthThresholds();
