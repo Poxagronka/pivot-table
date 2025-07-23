@@ -1,8 +1,7 @@
-/**
- * API Client - ОПТИМИЗИРОВАНО: Bundle ID Cache + улучшенная производительность для TRICKY
- */
-
 var BUNDLE_ID_CACHE = new Map();
+var BUNDLE_ID_CACHE_LOADED = false;
+var BUNDLE_ID_CACHE_TIME = null;
+var BUNDLE_ID_CACHE_DURATION = 21600000; // 6 hours
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
 var BUNDLE_ID_CACHE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM/edit?gid=754371211#gid=754371211';
@@ -265,31 +264,44 @@ function getGraphQLQuery() {
   }`;
 }
 
-function loadBundleIdCache() {
+function ensureBundleIdCacheLoaded() {
+  const now = new Date().getTime();
+  
+  if (BUNDLE_ID_CACHE_LOADED && BUNDLE_ID_CACHE_TIME && (now - BUNDLE_ID_CACHE_TIME) < BUNDLE_ID_CACHE_DURATION) {
+    return;
+  }
+  
+  console.log('Loading Bundle ID Cache from table...');
+  
   try {
     const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
     const sheet = spreadsheet.getSheetByName('Bundle ID Cache');
     
     if (!sheet) {
       console.log('Bundle ID Cache sheet not found, creating...');
-      return createBundleIdCacheSheet();
+      createBundleIdCacheSheet();
+      BUNDLE_ID_CACHE_LOADED = true;
+      BUNDLE_ID_CACHE_TIME = now;
+      return;
     }
     
     const data = sheet.getDataRange().getValues();
-    const cache = new Map();
+    BUNDLE_ID_CACHE.clear();
     
     for (let i = 1; i < data.length; i++) {
       const [campaignName, campaignId, bundleId, lastUpdated] = data[i];
       if (campaignName && bundleId) {
-        cache.set(campaignName, { campaignId, bundleId, lastUpdated });
+        BUNDLE_ID_CACHE.set(campaignName, { campaignId, bundleId, lastUpdated });
       }
     }
     
-    console.log(`Bundle ID Cache loaded: ${cache.size} entries`);
-    return cache;
+    BUNDLE_ID_CACHE_LOADED = true;
+    BUNDLE_ID_CACHE_TIME = now;
+    console.log(`Bundle ID Cache loaded: ${BUNDLE_ID_CACHE.size} entries`);
   } catch (e) {
     console.error('Error loading Bundle ID Cache:', e);
-    return new Map();
+    BUNDLE_ID_CACHE_LOADED = true;
+    BUNDLE_ID_CACHE_TIME = now;
   }
 }
 
@@ -307,15 +319,13 @@ function createBundleIdCacheSheet() {
     sheet.setColumnWidth(4, 150);
     
     console.log('Bundle ID Cache sheet created');
-    return new Map();
   } catch (e) {
     console.error('Error creating Bundle ID Cache sheet:', e);
-    return new Map();
   }
 }
 
-function saveBundleIdCache(cache) {
-  if (cache.size === 0) return;
+function saveBundleIdCache(newCache) {
+  if (newCache.size === 0) return;
   
   try {
     const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
@@ -326,20 +336,20 @@ function saveBundleIdCache(cache) {
       return;
     }
     
-    const data = [];
     const now = new Date();
+    const newEntries = [];
     
-    cache.forEach((value, campaignName) => {
-      data.push([campaignName, value.campaignId || '', value.bundleId, now]);
+    newCache.forEach((value, campaignName) => {
+      if (!BUNDLE_ID_CACHE.has(campaignName)) {
+        newEntries.push([campaignName, value.campaignId || '', value.bundleId, now]);
+        BUNDLE_ID_CACHE.set(campaignName, value);
+      }
     });
     
-    if (data.length > 0) {
-      if (sheet.getLastRow() > 1) {
-        sheet.deleteRows(2, sheet.getLastRow() - 1);
-      }
-      
-      sheet.getRange(2, 1, data.length, 4).setValues(data);
-      console.log(`Bundle ID Cache saved: ${data.length} entries`);
+    if (newEntries.length > 0) {
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow + 1, 1, newEntries.length, 4).setValues(newEntries);
+      console.log(`Bundle ID Cache: saved ${newEntries.length} new entries`);
     }
   } catch (e) {
     console.error('Error saving Bundle ID Cache:', e);
@@ -349,11 +359,11 @@ function saveBundleIdCache(cache) {
 function getOptimizedAppsDb() {
   const now = new Date().getTime();
   
-  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 21600000) {
+  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < BUNDLE_ID_CACHE_DURATION) {
     return APPS_DB_CACHE;
   }
   
-  console.log('Loading Apps Database from new sheet...');
+  console.log('Loading Apps Database...');
   try {
     const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
     let sheet = spreadsheet.getSheetByName('Apps Database');
@@ -416,7 +426,6 @@ function getCachedBundleId(campaignName, campaignId = '') {
   }
   
   const bundleId = extractBundleIdFromCampaign(campaignName);
-  BUNDLE_ID_CACHE.set(campaignName, { campaignId, bundleId });
   return bundleId;
 }
 
@@ -456,9 +465,6 @@ function processApiData(rawData, includeLastWeek = null) {
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
   console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
-  console.log(`Current week start: ${currentWeekStart}`);
-  console.log(`Last week start: ${lastWeekStart}`);
-  console.log(`Include last week: ${shouldIncludeLastWeek}`);
 
   let processedCount = 0;
 
@@ -627,10 +633,6 @@ function processApiData(rawData, includeLastWeek = null) {
         console.error(`Error processing row ${batchStart + index}:`, error);
       }
     });
-    
-    if (batchEnd < stats.length && batchStart % (BATCH_SIZE * 5) === 0) {
-      console.log(`Processed ${batchEnd}/${stats.length} records...`);
-    }
   }
 
   Object.values(appData).forEach(app => {
@@ -697,10 +699,8 @@ function processApiData(rawData, includeLastWeek = null) {
 
 function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
   const startTime = Date.now();
-  console.log('Loading Bundle ID Cache...');
-  const bundleIdCache = loadBundleIdCache();
   
-  console.log('Loading Apps Database...');
+  ensureBundleIdCacheLoaded();
   const appsDbCache = getOptimizedAppsDb();
   
   const appData = {};
@@ -765,7 +765,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
         }
 
         const bundleId = getCachedBundleId(campaignName, campaignId);
-        if (bundleId) {
+        if (bundleId && !BUNDLE_ID_CACHE.has(campaignName)) {
           newBundleIds.set(campaignName, { campaignId, bundleId });
         }
 
@@ -831,10 +831,6 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
         console.error(`Error processing TRICKY row ${batchStart + index}:`, error);
       }
     });
-    
-    if (batchEnd < stats.length && batchStart % (BATCH_SIZE * 5) === 0) {
-      console.log(`Processed ${batchEnd}/${stats.length} records...`);
-    }
   }
 
   Object.values(appData).forEach(app => {
@@ -997,6 +993,8 @@ function extractProjectGeoFromCampaign(projectName, campaignName) {
 
 function clearTrickyCaches() {
   BUNDLE_ID_CACHE.clear();
+  BUNDLE_ID_CACHE_LOADED = false;
+  BUNDLE_ID_CACHE_TIME = null;
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
   console.log('TRICKY caches cleared');

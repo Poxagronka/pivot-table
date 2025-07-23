@@ -54,10 +54,10 @@ function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType
     const createRequests = buildCreateGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (createRequests.length > 0) {
+      console.log(`Creating ${createRequests.length} groups for ${entityType} ${entityKey}`);
       Sheets.Spreadsheets.batchUpdate({
         requests: createRequests
       }, spreadsheetId);
-      console.log(`Created ${createRequests.length} groups`);
       
       Utilities.sleep(1000);
     }
@@ -66,10 +66,10 @@ function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType
     const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (collapseRequests.length > 0) {
+      console.log(`Collapsing ${collapseRequests.length} groups for ${entityType} ${entityKey}`);
       Sheets.Spreadsheets.batchUpdate({
         requests: collapseRequests
       }, spreadsheetId);
-      console.log(`Collapsed ${collapseRequests.length} groups`);
     }
     
   } catch (e) {
@@ -173,36 +173,10 @@ function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
         rowPointer += networkCount;
         weekContentRows = networkCount;
         
-        if (networkCount > 0) {
-          groupRequests.push({
-            addDimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + networkCount
-              }
-            }
-          });
-        }
-        
       } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
         weekContentRows = campaignCount;
-        
-        if (campaignCount > 0) {
-          groupRequests.push({
-            addDimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + campaignCount
-              }
-            }
-          });
-        }
       }
       
       if (weekContentRows > 0) {
@@ -351,46 +325,10 @@ function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
         rowPointer += networkCount;
         weekContentRows = networkCount;
         
-        if (networkCount > 0) {
-          collapseRequests.push({
-            updateDimensionGroup: {
-              dimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: weekStartRow,
-                  endIndex: weekStartRow + networkCount
-                },
-                depth: 2,
-                collapsed: true
-              },
-              fields: "collapsed"
-            }
-          });
-        }
-        
       } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
         weekContentRows = campaignCount;
-        
-        if (campaignCount > 0) {
-          collapseRequests.push({
-            updateDimensionGroup: {
-              dimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: weekStartRow,
-                  endIndex: weekStartRow + campaignCount
-                },
-                depth: 2,
-                collapsed: true
-              },
-              fields: "collapsed"
-            }
-          });
-        }
       }
       
       if (weekContentRows > 0) {
