@@ -431,14 +431,6 @@ function generateReport(days) {
       return;
     }
     
-    const processed = processApiData(raw);
-    // Записываем первоначальные значения eROAS
-try {
-  const initialEROASCache = new InitialEROASCache();
-  initialEROASCache.recordInitialValuesFromData(processed);
-} catch (e) {
-  console.error(`Error recording initial eROAS for ${CURRENT_PROJECT}:`, e);
-}
     if (Object.keys(processed).length === 0) {
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
@@ -474,14 +466,6 @@ function generateReportForDateRange(startDate, endDate) {
       return;
     }
     
-    const processed = processApiData(raw, true);
-    // Записываем первоначальные значения eROAS
-try {
-  const initialEROASCache = new InitialEROASCache();
-  initialEROASCache.recordInitialValuesFromData(processed);
-} catch (e) {
-  console.error(`Error recording initial eROAS for ${CURRENT_PROJECT}:`, e);
-}
     if (Object.keys(processed).length === 0) {
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
       return;
@@ -632,14 +616,7 @@ function updateAllDataToCurrent() {
       return;
     }
     
-    const processed = processApiData(raw);
-    // Записываем первоначальные значения eROAS
-try {
-  const initialEROASCache = new InitialEROASCache();
-  initialEROASCache.recordInitialValuesFromData(processed);
-} catch (e) {
-  console.error(`Error recording initial eROAS for ${CURRENT_PROJECT}:`, e);
-}
+  
     if (Object.keys(processed).length === 0) {
       ui.alert('No valid data to process.');
       return;

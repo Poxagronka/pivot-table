@@ -132,15 +132,6 @@ function updateProjectData(projectName) {
   }
   
   var processed = processProjectApiData(projectName, raw);
-
-  if (projectName !== 'OVERALL' && projectName !== 'INCENT_TRAFFIC') {
-  try {
-    const initialEROASCache = new InitialEROASCache(projectName);
-    initialEROASCache.recordInitialValuesFromData(processed);
-  } catch (e) {
-    console.error(`Error recording initial eROAS for ${projectName}:`, e);
-  }
-}
   
   if (Object.keys(processed).length === 0) {
     console.log(`${projectName}: No valid data to process`);

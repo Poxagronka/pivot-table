@@ -374,7 +374,7 @@ function processApiData(rawData, includeLastWeek = null) {
         eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
       };
       // Пропускаем записи с нулевым spend (дополнительная проверка после API фильтра)
-        if (metrics.spend <= 0) {
+        if (metrics.spend <= 0.5) {
           return;
         }
       const sunday = getSundayOfWeek(new Date(date));
