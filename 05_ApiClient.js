@@ -1,10 +1,11 @@
 /**
- * API Client - ОБНОВЛЕНО: обработка ROAS D-1, D-3, D-7, D-30 + поддержка сеток для OVERALL + отладка INCENT_TRAFFIC
+ * API Client - ОПТИМИЗИРОВАНО: убраны детальные логи + умное кеширование
  */
 
 var BUNDLE_ID_CACHE = {};
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
+var APPS_DB_INSTANCE = null;
 
 function fetchCampaignData(dateRange) {
   const config = getCurrentConfig();
@@ -258,18 +259,38 @@ function getGraphQLQuery() {
 function getOptimizedAppsDb() {
   const now = new Date().getTime();
   
-  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 600000) {
+  if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < 3600000) {
+    logDebugInfo('Using cached Apps Database');
     return APPS_DB_CACHE;
   }
   
-  console.log('Loading Apps Database...');
-  const appsDb = new AppsDatabase('TRICKY');
-  appsDb.ensureCacheUpToDate();
-  APPS_DB_CACHE = appsDb.loadFromCache();
+  if (!APPS_DB_INSTANCE) {
+    logInfo('Creating new Apps Database instance');
+    APPS_DB_INSTANCE = new AppsDatabase('TRICKY');
+  }
+  
+  APPS_DB_INSTANCE.ensureCacheUpToDate();
+  APPS_DB_CACHE = APPS_DB_INSTANCE.loadFromCache();
   APPS_DB_CACHE_TIME = now;
   
-  console.log(`Apps Database loaded: ${Object.keys(APPS_DB_CACHE).length} apps`);
+  logInfo(`Apps Database loaded: ${Object.keys(APPS_DB_CACHE).length} apps`);
   return APPS_DB_CACHE;
+}
+
+function preloadAppsDatabase() {
+  if (CURRENT_PROJECT !== 'TRICKY') return;
+  
+  logInfo('Preloading Apps Database for batch operations...');
+  
+  if (!APPS_DB_INSTANCE) {
+    APPS_DB_INSTANCE = new AppsDatabase('TRICKY');
+  }
+  
+  APPS_DB_INSTANCE.preloadCache();
+  APPS_DB_CACHE = APPS_DB_INSTANCE.loadFromCache();
+  APPS_DB_CACHE_TIME = new Date().getTime();
+  
+  logInfo('Apps Database preloaded successfully');
 }
 
 function getCachedBundleId(campaignName) {
@@ -316,10 +337,10 @@ function processApiData(rawData, includeLastWeek = null) {
   const dayOfWeek = today.getDay();
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
-  console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
-  console.log(`Current week start: ${currentWeekStart}`);
-  console.log(`Last week start: ${lastWeekStart}`);
-  console.log(`Include last week: ${shouldIncludeLastWeek}`);
+  logInfo(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
+  logDebugInfo(`Current week start: ${currentWeekStart}`);
+  logDebugInfo(`Last week start: ${lastWeekStart}`);
+  logDebugInfo(`Include last week: ${shouldIncludeLastWeek}`);
 
   let appsDbCache = null;
   if (CURRENT_PROJECT === 'TRICKY') {
@@ -335,17 +356,6 @@ function processApiData(rawData, includeLastWeek = null) {
       const monday = getMondayOfWeek(new Date(date));
       const weekKey = formatDateForAPI(monday);
       
-      // Детальное логирование для INCENT_TRAFFIC
-      if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
-        console.log(`INCENT_TRAFFIC record ${index}:`);
-        console.log(`  - date: ${date}`);
-        console.log(`  - weekKey: ${weekKey}`);
-        console.log(`  - currentWeekStart: ${currentWeekStart}`);
-        console.log(`  - lastWeekStart: ${lastWeekStart}`);
-        console.log(`  - shouldIncludeLastWeek: ${shouldIncludeLastWeek}`);
-        console.log(`  - will be filtered: ${weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)}`);
-      }
-
       if (weekKey >= currentWeekStart) {
         return;
       }
@@ -356,54 +366,33 @@ function processApiData(rawData, includeLastWeek = null) {
 
       let campaign, app, network, metricsStartIndex;
       
-      // ОТЛАДКА: проверка условия для INCENT_TRAFFIC
-      if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
-        console.log(`INCENT_TRAFFIC processing row ${index}, checking condition:`, CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC');
-      }
-      
       if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
         campaign = null;
-        network = row[1];  // Attribution Network HID
+        network = row[1];
         app = row[2];
         metricsStartIndex = 3;
-        
-        // Отладка для INCENT_TRAFFIC
-        if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
-          console.log('Processing as OVERALL/INCENT_TRAFFIC format');
-          console.log(`INCENT_TRAFFIC row ${index} structure:`, {
-            network: network ? `${network.__typename} (${network.id || network.value})` : 'null',
-            app: app ? `${app.__typename} (${app.name})` : 'null',
-            metricsCount: row.length - metricsStartIndex
-          });
-        }
       } else {
         campaign = row[1];
         app = row[2];
         network = null;
         metricsStartIndex = 3;
-        
-        // Отладка для INCENT_TRAFFIC - должно НЕ попадать сюда
-        if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && index < 5) {
-          console.log('WARNING: INCENT_TRAFFIC processing as regular format!');
-        }
       }
       
-      // ОБНОВЛЕНО: новая структура метрик с ROAS D-1, D-3, D-7, D-30
       const metrics = {
-        cpi: parseFloat(row[metricsStartIndex].value) || 0,         // 0: cpi
-        installs: parseInt(row[metricsStartIndex + 1].value) || 0,  // 1: installs
-        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,     // 2: ipm
-        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,   // 3: spend
-        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,    // 4: retention_rate D1
-        roasD1: parseFloat(row[metricsStartIndex + 5].value) || 0,  // 5: roas D1
-        roasD3: parseFloat(row[metricsStartIndex + 6].value) || 0,  // 6: roas D3
-        rrD7: parseFloat(row[metricsStartIndex + 7].value) || 0,    // 7: retention_rate D7
-        roasD7: parseFloat(row[metricsStartIndex + 8].value) || 0,  // 8: roas D7
-        roasD30: parseFloat(row[metricsStartIndex + 9].value) || 0, // 9: roas D30
-        eArpuForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,  // 10: e_arpu_forecast D365
-        eRoasForecast: parseFloat(row[metricsStartIndex + 11].value) || 0,  // 11: e_roas_forecast D365
-        eProfitForecast: parseFloat(row[metricsStartIndex + 12].value) || 0, // 12: e_profit_forecast D730
-        eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0 // 13: e_roas_forecast D730
+        cpi: parseFloat(row[metricsStartIndex].value) || 0,
+        installs: parseInt(row[metricsStartIndex + 1].value) || 0,
+        ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
+        spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
+        rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
+        roasD1: parseFloat(row[metricsStartIndex + 5].value) || 0,
+        roasD3: parseFloat(row[metricsStartIndex + 6].value) || 0,
+        rrD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
+        roasD7: parseFloat(row[metricsStartIndex + 8].value) || 0,
+        roasD30: parseFloat(row[metricsStartIndex + 9].value) || 0,
+        eArpuForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
+        eRoasForecast: parseFloat(row[metricsStartIndex + 11].value) || 0,
+        eProfitForecast: parseFloat(row[metricsStartIndex + 12].value) || 0,
+        eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
       };
 
       const sunday = getSundayOfWeek(new Date(date));
@@ -424,11 +413,10 @@ function processApiData(rawData, includeLastWeek = null) {
           appData[appKey].weeks[weekKey] = {
             weekStart: formatDateForAPI(monday),
             weekEnd: formatDateForAPI(sunday),
-            networks: {} // Добавляем группировку по сеткам
+            networks: {}
           };
         }
         
-        // Получаем информацию о сетке
         const networkId = network?.id || 'unknown';
         const networkName = network?.value || 'Unknown Network';
         
@@ -531,18 +519,18 @@ function processApiData(rawData, includeLastWeek = null) {
 
         processedCount++;
         
-        if (processedCount % 100 === 0) {
-          console.log(`Processed ${processedCount}/${stats.length} records...`);
+        if (processedCount % 1000 === 0) {
+          logDebugInfo(`Processed ${processedCount}/${stats.length} records...`);
         }
       }
 
     } catch (error) {
-      console.error(`Error processing row ${index}:`, error);
+      logError(`Error processing row ${index}:`, error);
     }
   });
 
   if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
-    console.log('Optimized TRICKY grouping...');
+    logInfo('Optimized TRICKY grouping...');
     
     Object.keys(trickyWeeklyData).forEach(appKey => {
       const appInfo = trickyWeeklyData[appKey];
@@ -596,33 +584,14 @@ function processApiData(rawData, includeLastWeek = null) {
       });
     });
     
-    console.log('TRICKY optimized grouping completed');
+    logInfo('TRICKY optimized grouping completed');
   }
 
-  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ INCENT_TRAFFIC - перегруппировка сетка → неделя → приложение
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    console.log('=== INCENT_TRAFFIC Regrouping Debug ===');
-    console.log('appData before regrouping:', {
-      appCount: Object.keys(appData).length,
-      apps: Object.keys(appData).map(key => appData[key].appName)
-    });
-    
-    // Проверим структуру данных
-    Object.values(appData).forEach(app => {
-      console.log(`App: ${app.appName}`);
-      Object.values(app.weeks).forEach(week => {
-        console.log(`  Week: ${week.weekStart}`);
-        if (week.networks) {
-          console.log(`    Networks:`, Object.keys(week.networks));
-        } else {
-          console.log(`    NO NETWORKS! campaigns:`, week.campaigns?.length || 0);
-        }
-      });
-    });
+    logDebugInfo('INCENT_TRAFFIC: Regrouping to network-first structure');
     
     const networkData = {};
     
-    // Перегруппируем данные: сетка → неделя → приложение
     Object.values(appData).forEach(app => {
       Object.values(app.weeks).forEach(week => {
         if (week.networks) {
@@ -653,21 +622,15 @@ function processApiData(rawData, includeLastWeek = null) {
               campaigns: network.campaigns
             };
           });
-        } else {
-          console.log('WARNING: No networks in week data for INCENT_TRAFFIC!');
         }
       });
     });
     
-    console.log('networkData after regrouping:', {
-      networkCount: Object.keys(networkData).length,
-      networks: Object.keys(networkData)
-    });
-    
+    logInfo(`INCENT_TRAFFIC: Regrouped into ${Object.keys(networkData).length} networks`);
     return networkData;
   }
 
-  console.log(`Processing completed: ${processedCount} records processed`);
+  logInfo(`Processing completed: ${processedCount} records processed`);
   return appData;
 }
 
@@ -811,5 +774,6 @@ function clearTrickyCaches() {
   BUNDLE_ID_CACHE = {};
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
-  console.log('TRICKY caches cleared');
+  APPS_DB_INSTANCE = null;
+  logDebugInfo('TRICKY caches cleared');
 }

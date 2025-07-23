@@ -1,6 +1,5 @@
 /**
- * Apps Database Cache Management - ИСПРАВЛЕНО: правильное извлечение bundle ID из названия кампании
- * Кеширует данные из внешней таблицы Apps Database для группировки по Publisher + App Name
+ * Apps Database Cache Management - ОПТИМИЗИРОВАНО: кеш 1 час + Sheets API v4 + batch операции
  */
 
 class AppsDatabase {
@@ -8,81 +7,170 @@ class AppsDatabase {
     this.projectName = projectName || CURRENT_PROJECT;
     this.config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
     
-    // Only TRICKY project uses Apps Database
     if (this.projectName !== 'TRICKY') {
       this.cacheSheet = null;
       return;
     }
     
-    this.cacheSheet = this.getOrCreateCacheSheet();
+    this.cacheSpreadsheetId = MAIN_SHEET_ID;
+    this.cacheSheetName = this.config.APPS_CACHE_SHEET;
+    this.memoryCache = null;
+    this.memoryCacheTime = null;
+    this.CACHE_DURATION = 3600000;
   }
 
-  /**
-   * Get or create the apps cache sheet
-   */
   getOrCreateCacheSheet() {
     if (!this.config.APPS_CACHE_SHEET) return null;
     
-    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
-    let sheet = spreadsheet.getSheetByName(this.config.APPS_CACHE_SHEET);
-    
-    if (!sheet) {
-      sheet = spreadsheet.insertSheet(this.config.APPS_CACHE_SHEET);
-      sheet.hideSheet();
-      // Headers: Bundle ID, Publisher, App Name, Link App, Last Updated
-      sheet.getRange(1, 1, 1, 5).setValues([['Bundle ID', 'Publisher', 'App Name', 'Link App', 'Last Updated']]);
+    try {
+      const spreadsheet = Sheets.Spreadsheets.get(this.cacheSpreadsheetId);
+      let sheet = spreadsheet.sheets.find(s => s.properties.title === this.cacheSheetName);
+      
+      if (!sheet) {
+        const addSheetRequest = {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: this.cacheSheetName
+              }
+            }
+          }]
+        };
+        
+        const response = Sheets.Spreadsheets.batchUpdate(addSheetRequest, this.cacheSpreadsheetId);
+        const newSheet = response.replies[0].addSheet;
+        
+        const headerRequest = {
+          requests: [{
+            updateCells: {
+              range: {
+                sheetId: newSheet.properties.sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: 5
+              },
+              rows: [{
+                values: [
+                  { userEnteredValue: { stringValue: 'Bundle ID' } },
+                  { userEnteredValue: { stringValue: 'Publisher' } },
+                  { userEnteredValue: { stringValue: 'App Name' } },
+                  { userEnteredValue: { stringValue: 'Link App' } },
+                  { userEnteredValue: { stringValue: 'Last Updated' } }
+                ]
+              }],
+              fields: 'userEnteredValue'
+            }
+          }]
+        };
+        
+        Sheets.Spreadsheets.batchUpdate(headerRequest, this.cacheSpreadsheetId);
+        return { sheetId: newSheet.properties.sheetId, title: this.cacheSheetName };
+      } else {
+        return { sheetId: sheet.properties.sheetId, title: sheet.properties.title };
+      }
+    } catch (e) {
+      logError('Error creating/accessing cache sheet:', e);
+      throw e;
     }
-    return sheet;
   }
 
-  /**
-   * Load apps data from cache
-   */
   loadFromCache() {
-    if (!this.cacheSheet) return {};
+    const now = new Date().getTime();
+    
+    if (this.memoryCache && this.memoryCacheTime && (now - this.memoryCacheTime) < this.CACHE_DURATION) {
+      logDebugInfo('Apps Database: Using memory cache');
+      return this.memoryCache;
+    }
+    
+    if (!this.cacheSheetName) return {};
     
     const apps = {};
-    const data = this.cacheSheet.getDataRange().getValues();
     
-    for (let i = 1; i < data.length; i++) {
-      const [bundleId, publisher, appName, linkApp, lastUpdated] = data[i];
-      if (bundleId) {
-        apps[bundleId] = {
-          publisher: publisher || 'Unknown Publisher',
-          appName: appName || 'Unknown App',
-          linkApp: linkApp || '',
-          lastUpdated: lastUpdated
-        };
+    try {
+      const range = `${this.cacheSheetName}!A:E`;
+      const response = Sheets.Spreadsheets.Values.get(this.cacheSpreadsheetId, range);
+      
+      if (!response.values || response.values.length <= 1) {
+        this.memoryCache = apps;
+        this.memoryCacheTime = now;
+        return apps;
       }
+      
+      for (let i = 1; i < response.values.length; i++) {
+        const [bundleId, publisher, appName, linkApp, lastUpdated] = response.values[i];
+        if (bundleId) {
+          apps[bundleId] = {
+            publisher: publisher || 'Unknown Publisher',
+            appName: appName || 'Unknown App',
+            linkApp: linkApp || '',
+            lastUpdated: lastUpdated
+          };
+        }
+      }
+      
+      this.memoryCache = apps;
+      this.memoryCacheTime = now;
+      
+      logInfo(`Apps Database: Loaded ${Object.keys(apps).length} apps into cache`);
+    } catch (e) {
+      logError('Error loading Apps Database cache:', e);
     }
     
     return apps;
   }
 
-  /**
-   * Update cache from external Apps Database table
-   */
   updateCacheFromExternalTable() {
-    if (!this.cacheSheet) return false;
+    if (!this.cacheSheetName) return false;
     
     try {
-      const externalSpreadsheet = SpreadsheetApp.openById(APPS_DATABASE_ID);
-      const externalSheet = externalSpreadsheet.getSheetByName(APPS_DATABASE_SHEET);
+      logInfo('Apps Database: Starting cache update from external table');
       
-      if (!externalSheet) return false;
+      const externalRange = `${APPS_DATABASE_SHEET}!A:Z`;
+      const externalResponse = Sheets.Spreadsheets.Values.get(APPS_DATABASE_ID, externalRange);
       
-      const externalData = externalSheet.getDataRange().getValues();
-      if (externalData.length < 2) return false;
+      if (!externalResponse.values || externalResponse.values.length < 2) {
+        logError('Apps Database: No data in external table');
+        return false;
+      }
       
+      const externalData = externalResponse.values;
       const headers = externalData[0];
       const linkAppCol = this.findColumnIndex(headers, ['Link App', 'link_app', 'linkapp', 'links']);
       const publisherCol = this.findColumnIndex(headers, ['Publisher', 'publisher']);
       const appNameCol = this.findColumnIndex(headers, ['App Name', 'app_name', 'appname']);
       
-      if (linkAppCol === -1) return false;
+      if (linkAppCol === -1) {
+        logError('Apps Database: Link App column not found');
+        return false;
+      }
       
-      if (this.cacheSheet.getLastRow() > 1) {
-        this.cacheSheet.deleteRows(2, this.cacheSheet.getLastRow() - 1);
+      this.getOrCreateCacheSheet();
+      
+      const clearRequest = {
+        requests: [{
+          updateCells: {
+            range: {
+              sheetId: null,
+              startRowIndex: 1,
+              endRowIndex: 100000,
+              startColumnIndex: 0,
+              endColumnIndex: 5
+            },
+            fields: 'userEnteredValue'
+          }
+        }]
+      };
+      
+      try {
+        const spreadsheet = Sheets.Spreadsheets.get(this.cacheSpreadsheetId);
+        const sheet = spreadsheet.sheets.find(s => s.properties.title === this.cacheSheetName);
+        if (sheet) {
+          clearRequest.requests[0].updateCells.range.sheetId = sheet.properties.sheetId;
+          Sheets.Spreadsheets.batchUpdate(clearRequest, this.cacheSpreadsheetId);
+        }
+      } catch (e) {
+        logError('Error clearing cache sheet:', e);
       }
       
       const cacheData = [];
@@ -125,7 +213,7 @@ class AppsDatabase {
               appName = publisher;
             }
             
-            cacheData.push([bundleId, publisher, appName, linkApp, now]);
+            cacheData.push([bundleId, publisher, appName, linkApp, now.toISOString()]);
           }
         } else {
           let publisherRaw = publisherCol !== -1 ? row[publisherCol] : '';
@@ -140,20 +228,47 @@ class AppsDatabase {
       }
       
       if (cacheData.length > 0) {
-        const lastRow = this.cacheSheet.getLastRow();
-        this.cacheSheet.getRange(lastRow + 1, 1, cacheData.length, 5).setValues(cacheData);
+        const batchSize = 1000;
+        const batches = [];
+        
+        for (let i = 0; i < cacheData.length; i += batchSize) {
+          batches.push(cacheData.slice(i, i + batchSize));
+        }
+        
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          const batch = batches[batchIndex];
+          const startRow = 1 + (batchIndex * batchSize);
+          const endRow = startRow + batch.length;
+          
+          const batchRequest = {
+            valueInputOption: 'RAW',
+            data: [{
+              range: `${this.cacheSheetName}!A${startRow + 1}:E${endRow}`,
+              values: batch
+            }]
+          };
+          
+          Sheets.Spreadsheets.Values.batchUpdate(batchRequest, this.cacheSpreadsheetId);
+          
+          if (batchIndex < batches.length - 1) {
+            Utilities.sleep(100);
+          }
+        }
+        
+        logInfo(`Apps Database: Cached ${cacheData.length} apps in ${batches.length} batches`);
       }
+      
+      this.memoryCache = null;
+      this.memoryCacheTime = null;
       
       return true;
       
     } catch (e) {
+      logError('Error updating Apps Database cache:', e);
       return false;
     }
   }
 
-  /**
-   * Extract bundle ID from a single store link
-   */
   extractBundleIdFromLink(linkApp) {
     if (!linkApp || typeof linkApp !== 'string') return null;
     
@@ -196,15 +311,12 @@ class AppsDatabase {
       }
       
     } catch (e) {
-      // Silent fail
+      logError('Error extracting bundle ID from link:', e);
     }
     
     return null;
   }
 
-  /**
-   * Find column index by possible header names
-   */
   findColumnIndex(headers, possibleNames) {
     for (let i = 0; i < headers.length; i++) {
       const header = (headers[i] || '').toString().toLowerCase().trim();
@@ -217,9 +329,6 @@ class AppsDatabase {
     return -1;
   }
 
-  /**
-   * Get app info by bundle ID
-   */
   getAppInfo(bundleId) {
     if (!bundleId || this.projectName !== 'TRICKY') {
       return { publisher: 'Unknown Publisher', appName: 'Unknown App', linkApp: '' };
@@ -236,7 +345,6 @@ class AppsDatabase {
       };
     }
     
-    // If not found, return bundle ID as fallback
     return {
       publisher: bundleId,
       appName: '',
@@ -244,9 +352,6 @@ class AppsDatabase {
     };
   }
 
-  /**
-   * Get source app display name (Publisher + App Name or bundle ID)
-   */
   getSourceAppDisplayName(bundleId) {
     if (!bundleId || this.projectName !== 'TRICKY') {
       return bundleId || 'Unknown';
@@ -270,23 +375,19 @@ class AppsDatabase {
     return bundleId;
   }
 
-  /**
-   * Check if cache needs update (older than 24 hours)
-   */
   shouldUpdateCache() {
-    if (!this.cacheSheet || this.projectName !== 'TRICKY') return false;
+    if (!this.cacheSheetName || this.projectName !== 'TRICKY') return false;
     
     const cache = this.loadFromCache();
     const bundleIds = Object.keys(cache);
     
-    if (bundleIds.length === 0) return true; // Empty cache
+    if (bundleIds.length === 0) return true;
     
-    // Check if any entry is older than 24 hours
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const oneHourAgo = new Date(Date.now() - this.CACHE_DURATION);
     
     for (const bundleId of bundleIds) {
       const lastUpdated = cache[bundleId].lastUpdated;
-      if (!lastUpdated || new Date(lastUpdated) < oneDayAgo) {
+      if (!lastUpdated || new Date(lastUpdated) < oneHourAgo) {
         return true;
       }
     }
@@ -294,26 +395,37 @@ class AppsDatabase {
     return false;
   }
 
-  /**
-   * Ensure cache is up to date
-   */
   ensureCacheUpToDate() {
     if (this.projectName !== 'TRICKY') return;
     
     try {
       if (this.shouldUpdateCache()) {
+        logInfo('Apps Database: Cache is outdated, updating...');
         this.updateCacheFromExternalTable();
+      } else {
+        logDebugInfo('Apps Database: Cache is up to date');
       }
     } catch (e) {
-      // Silent fail
+      logError('Error ensuring Apps Database cache is up to date:', e);
     }
+  }
+
+  preloadCache() {
+    if (this.projectName !== 'TRICKY') return;
+    
+    logInfo('Apps Database: Preloading cache...');
+    this.ensureCacheUpToDate();
+    this.loadFromCache();
+    logInfo('Apps Database: Cache preloaded successfully');
+  }
+
+  clearMemoryCache() {
+    this.memoryCache = null;
+    this.memoryCacheTime = null;
+    logDebugInfo('Apps Database: Memory cache cleared');
   }
 }
 
-/**
- * Extract bundle ID from campaign name - ИСПРАВЛЕНО: правильная логика поиска включая случаи с "=" в конце
- * Проверяет ДВА варианта: bundle ID до "=" и bundle ID после "="
- */
 function extractBundleIdFromCampaign(campaignName) {
   if (!campaignName) return null;
   
@@ -368,25 +480,18 @@ function extractBundleIdFromCampaign(campaignName) {
   return null;
 }
 
-/**
- * Валидация bundle ID - НОВАЯ ФУНКЦИЯ
- * Проверяет, является ли строка валидным bundle ID (Android или iOS)
- */
 function isValidBundleId(bundleId) {
   if (!bundleId || typeof bundleId !== 'string') return false;
   
   const trimmed = bundleId.trim();
   if (trimmed.length < 3) return false;
   
-  // Android bundle ID: содержит точку и начинается с буквы
   if (trimmed.includes('.') && /^[a-zA-Z]/.test(trimmed)) {
-    // Дополнительная проверка: должен содержать только допустимые символы
     if (/^[a-zA-Z][a-zA-Z0-9._]*[a-zA-Z0-9]$/.test(trimmed)) {
       return true;
     }
   }
   
-  // iOS App ID: только цифры, 8+ символов
   if (/^\d{8,}$/.test(trimmed)) {
     return true;
   }
@@ -394,9 +499,6 @@ function isValidBundleId(bundleId) {
   return false;
 }
 
-/**
- * Global function to refresh Apps Database cache manually
- */
 function refreshAppsDatabase() {
   const ui = SpreadsheetApp.getUi();
   
@@ -421,221 +523,159 @@ function refreshAppsDatabase() {
   }
 }
 
-/**
- * Debug function to update Apps Database with detailed logging
- */
 function debugAppsDatabase() {
-  console.log('=== APPS DATABASE DEBUG START ===');
+  setLogLevel('DEBUG');
+  
+  logDebugInfo('=== APPS DATABASE DEBUG START ===');
   
   if (CURRENT_PROJECT !== 'TRICKY') {
-    console.log('ОШИБКА: Apps Database только для TRICKY проекта');
+    logError('Apps Database только для TRICKY проекта');
     return;
   }
   
   try {
     const appsDb = new AppsDatabase('TRICKY');
-    console.log('✅ AppsDatabase объект создан');
+    logDebugInfo('AppsDatabase объект создан');
     
-    // Check cache sheet
-    if (!appsDb.cacheSheet) {
-      console.log('❌ Cache sheet не найден');
+    if (!appsDb.cacheSheetName) {
+      logError('Cache sheet не найден');
       return;
     }
-    console.log('✅ Cache sheet найден:', appsDb.config.APPS_CACHE_SHEET);
+    logDebugInfo('Cache sheet найден:', appsDb.cacheSheetName);
     
-    // Access external spreadsheet
-    console.log('📋 Подключаемся к внешней таблице:', APPS_DATABASE_ID);
-    const externalSpreadsheet = SpreadsheetApp.openById(APPS_DATABASE_ID);
-    console.log('✅ Внешняя таблица подключена');
+    logDebugInfo('Подключаемся к внешней таблице:', APPS_DATABASE_ID);
     
-    const externalSheet = externalSpreadsheet.getSheetByName(APPS_DATABASE_SHEET);
-    if (!externalSheet) {
-      console.log('❌ Лист не найден:', APPS_DATABASE_SHEET);
-      return;
-    }
-    console.log('✅ Лист найден:', APPS_DATABASE_SHEET);
-    
-    // Get data
-    const externalData = externalSheet.getDataRange().getValues();
-    console.log('📊 Данных получено:', externalData.length, 'строк');
-    
-    if (externalData.length < 2) {
-      console.log('❌ Недостаточно данных в таблице');
-      return;
-    }
-    
-    // Analyze headers
-    const headers = externalData[0];
-    console.log('📋 Заголовки:', headers);
-    
-    const linkAppCol = appsDb.findColumnIndex(headers, ['Link App', 'link_app', 'linkapp', 'links']);
-    const publisherCol = appsDb.findColumnIndex(headers, ['Publisher', 'publisher']);
-    const appNameCol = appsDb.findColumnIndex(headers, ['App Name', 'app_name', 'appname']);
-    
-    console.log('🔍 Найденные колонки:');
-    console.log('  - Link App:', linkAppCol, linkAppCol !== -1 ? `(${headers[linkAppCol]})` : '(НЕ НАЙДЕНА)');
-    console.log('  - Publisher:', publisherCol, publisherCol !== -1 ? `(${headers[publisherCol]})` : '(НЕ НАЙДЕНА)');
-    console.log('  - App Name:', appNameCol, appNameCol !== -1 ? `(${headers[appNameCol]})` : '(НЕ НАЙДЕНА)');
-    
-    if (linkAppCol === -1) {
-      console.log('❌ КРИТИЧЕСКАЯ ОШИБКА: Link App колонка не найдена!');
-      console.log('🔍 Возможные варианты названий:', ['Link App', 'link_app', 'linkapp', 'links']);
-      return;
-    }
-    
-    // Process sample data
-    console.log('🔬 Анализ первых 5 строк данных:');
-    const sampleSize = Math.min(5, externalData.length - 1);
-    
-    for (let i = 1; i <= sampleSize; i++) {
-      const row = externalData[i];
-      const linkApp = row[linkAppCol];
-      const publisher = publisherCol !== -1 ? row[publisherCol] : 'Unknown Publisher';
-      const appName = appNameCol !== -1 ? row[appNameCol] : 'Unknown App';
+    try {
+      const externalRange = `${APPS_DATABASE_SHEET}!A:Z`;
+      const externalResponse = Sheets.Spreadsheets.Values.get(APPS_DATABASE_ID, externalRange);
+      logDebugInfo('Внешняя таблица подключена');
       
-      console.log(`\n📱 Строка ${i}:`);
-      console.log('  Publisher:', `"${publisher}"`, publisher ? '✅' : '❌ ПУСТОЙ');
-      console.log('  App Name:', `"${appName}"`, appName ? '✅' : '❌ ПУСТОЙ');
-      console.log('  Link App:', linkApp?.substring(0, 100) + (linkApp?.length > 100 ? '...' : ''));
-      
-      if (linkApp && linkApp.trim()) {
-        const bundleId = appsDb.extractBundleIdFromLink(linkApp);
-        console.log('  Extracted Bundle ID:', bundleId || 'НЕ УДАЛОСЬ ИЗВЛЕЧЬ');
-        
-        if (bundleId) {
-          // Simulate processing logic
-          let processedPublisher = (publisher && publisher.trim()) ? publisher.trim() : '';
-          let processedAppName = (appName && appName.trim()) ? appName.trim() : '';
-          
-          if (!processedPublisher && !processedAppName) {
-            processedPublisher = 'Unknown Publisher';
-            processedAppName = 'Unknown App';
-          } else if (!processedPublisher) {
-            processedPublisher = processedAppName;
-          } else if (!processedAppName) {
-            processedAppName = processedPublisher;
-          }
-          
-          console.log('  Final Display:', `${processedPublisher} ${processedAppName}`);
-        } else {
-          console.log('  🔍 Анализ ссылки:');
-          console.log('    - Содержит apps.apple.com:', linkApp.includes('apps.apple.com'));
-          console.log('    - Содержит play.google.com:', linkApp.includes('play.google.com'));
-          console.log('    - iOS /id pattern:', /\/id(\d{8,})/.test(linkApp));
-          console.log('    - Android id= pattern:', /[?&]id=([a-zA-Z][a-zA-Z0-9._]+)/.test(linkApp));
-          console.log('    - Длина ссылки:', linkApp.length);
-        }
-      } else {
-        console.log('  ⚠️ Пустая ссылка');
+      if (!externalResponse.values || externalResponse.values.length < 2) {
+        logError('Недостаточно данных в таблице');
+        return;
       }
-    }
-    
-    // Full processing
-    console.log('\n🚀 Начинаем полную обработку...');
-    const success = appsDb.updateCacheFromExternalTable();
-    
-    if (success) {
-      const cache = appsDb.loadFromCache();
-      const count = Object.keys(cache).length;
-      console.log('✅ УСПЕХ! Кеш обновлен:', count, 'приложений');
       
-      // Show sample cached data with analysis
-      console.log('\n📊 Примеры кешированных данных:');
-      const cacheKeys = Object.keys(cache).slice(0, 5);
-      let emptyPublisherCount = 0;
-      let emptyAppNameCount = 0;
+      logDebugInfo('Данных получено:', externalResponse.values.length, 'строк');
       
-      cacheKeys.forEach(bundleId => {
-        const app = cache[bundleId];
-        console.log(`  ${bundleId} → ${app.publisher} ${app.appName}`);
+      const headers = externalResponse.values[0];
+      logDebugInfo('Заголовки:', headers);
+      
+      const linkAppCol = appsDb.findColumnIndex(headers, ['Link App', 'link_app', 'linkapp', 'links']);
+      const publisherCol = appsDb.findColumnIndex(headers, ['Publisher', 'publisher']);
+      const appNameCol = appsDb.findColumnIndex(headers, ['App Name', 'app_name', 'appname']);
+      
+      logDebugInfo('Найденные колонки:');
+      logDebugInfo('  - Link App:', linkAppCol, linkAppCol !== -1 ? `(${headers[linkAppCol]})` : '(НЕ НАЙДЕНА)');
+      logDebugInfo('  - Publisher:', publisherCol, publisherCol !== -1 ? `(${headers[publisherCol]})` : '(НЕ НАЙДЕНА)');
+      logDebugInfo('  - App Name:', appNameCol, appNameCol !== -1 ? `(${headers[appNameCol]})` : '(НЕ НАЙДЕНА)');
+      
+      if (linkAppCol === -1) {
+        logError('КРИТИЧЕСКАЯ ОШИБКА: Link App колонка не найдена!');
+        return;
+      }
+      
+      logDebugInfo('Анализ первых 5 строк данных:');
+      const sampleSize = Math.min(5, externalResponse.values.length - 1);
+      
+      for (let i = 1; i <= sampleSize; i++) {
+        const row = externalResponse.values[i];
+        const linkApp = row[linkAppCol];
+        const publisher = publisherCol !== -1 ? row[publisherCol] : 'Unknown Publisher';
+        const appName = appNameCol !== -1 ? row[appNameCol] : 'Unknown App';
         
-        if (app.publisher === 'Unknown Publisher') emptyPublisherCount++;
-        if (app.appName === 'Unknown App') emptyAppNameCount++;
-      });
+        logDebugInfo(`\nСтрока ${i}:`);
+        logDebugInfo('  Publisher:', `"${publisher}"`, publisher ? '✅' : '❌ ПУСТОЙ');
+        logDebugInfo('  App Name:', `"${appName}"`, appName ? '✅' : '❌ ПУСТОЙ');
+        logDebugInfo('  Link App:', linkApp?.substring(0, 100) + (linkApp?.length > 100 ? '...' : ''));
+        
+        if (linkApp && linkApp.trim()) {
+          const bundleId = appsDb.extractBundleIdFromLink(linkApp);
+          logDebugInfo('  Extracted Bundle ID:', bundleId || 'НЕ УДАЛОСЬ ИЗВЛЕЧЬ');
+        } else {
+          logDebugInfo('  ⚠️ Пустая ссылка');
+        }
+      }
       
-      // Overall statistics
-      console.log('\n📈 СТАТИСТИКА КАЧЕСТВА ДАННЫХ:');
-      console.log(`  - Всего в кеше: ${count} приложений`);
-      console.log(`  - С пустыми Publisher: ~${Math.round(emptyPublisherCount * count / cacheKeys.length)}`);
-      console.log(`  - С пустыми App Name: ~${Math.round(emptyAppNameCount * count / cacheKeys.length)}`);
-      console.log(`  - Поддержка объединенных ячеек: ✅ Включена`);
-    } else {
-      console.log('❌ ОШИБКА: Обновление кеша провалилось');
+      logDebugInfo('Начинаем полную обработку...');
+      const success = appsDb.updateCacheFromExternalTable();
+      
+      if (success) {
+        const cache = appsDb.loadFromCache();
+        const count = Object.keys(cache).length;
+        logInfo('УСПЕХ! Кеш обновлен:', count, 'приложений');
+      } else {
+        logError('ОШИБКА: Обновление кеша провалилось');
+      }
+      
+    } catch (e) {
+      logError('Ошибка работы с внешней таблицей:', e);
     }
     
   } catch (e) {
-    console.log('💥 ИСКЛЮЧЕНИЕ:', e.toString());
-    console.log('📋 Stack trace:', e.stack);
+    logError('ИСКЛЮЧЕНИЕ:', e.toString());
   }
   
-    console.log('\n=== APPS DATABASE DEBUG END ===');
+  logDebugInfo('=== APPS DATABASE DEBUG END ===');
+  setLogLevel('INFO');
 }
 
-/**
- * Test function to debug bundle ID extraction and Apps Database lookup
- */
 function testAppsDbBundleExtraction() {
-  console.log('=== TESTING BUNDLE ID EXTRACTION AND APPS DB LOOKUP ===');
+  setLogLevel('DEBUG');
+  logDebugInfo('=== TESTING BUNDLE ID EXTRACTION AND APPS DB LOOKUP ===');
   
-  // Set project to TRICKY
   setCurrentProject('TRICKY');
-  console.log('Project set to:', CURRENT_PROJECT);
+  logDebugInfo('Project set to:', CURRENT_PROJECT);
   
-  // Test campaign names from the table including new case
   const testCampaigns = [
     '[pb tricky] | NPCW | USA | bm | I | subject = words.puzzle.wordgame.free.connect Bidmachine AMBO CPI skipctr',
     '[pb tricky] | NPCW | GBR | bm | I | subject = com.fanatee.cody Bidmachine skipctr AMBO CPI',
     '[pb tricky] | NPCNM | CAN | bm | I | subject = 6473832648 AMBO CPI abdoul Bidmachine skipctr autobudget',
     '[pb tricky] | NPKS | USA | subj=com.intensedev.classicsolitaire.gp Bidmachine AMBO CPA skipctr',
-    'com.easybrain.number.puzzle.game=80 Pub/Smaato СPP_nc_easybrain'  // НОВЫЙ ТЕСТ СЛУЧАЙ
+    'com.easybrain.number.puzzle.game=80 Pub/Smaato СPP_nc_easybrain'
   ];
   
-  console.log('\n🧪 TESTING CAMPAIGN NAME PROCESSING:');
+  logDebugInfo('TESTING CAMPAIGN NAME PROCESSING:');
   
   testCampaigns.forEach((campaignName, index) => {
-    console.log(`\n--- Test ${index + 1}: "${campaignName}" ---`);
+    logDebugInfo(`\n--- Test ${index + 1}: "${campaignName}" ---`);
     
-    // Step 1: Extract bundle ID
     const bundleId = extractBundleIdFromCampaign(campaignName);
-    console.log(`Extracted bundle ID: "${bundleId}"`);
+    logDebugInfo(`Extracted bundle ID: "${bundleId}"`);
     
     if (bundleId) {
-      // Step 2: Get Apps Database instance
       const appsDb = new AppsDatabase('TRICKY');
-      console.log('Apps Database instance created');
+      logDebugInfo('Apps Database instance created');
       
-      // Step 3: Get display name
       const displayName = appsDb.getSourceAppDisplayName(bundleId);
-      console.log(`Final display name: "${displayName}"`);
+      logDebugInfo(`Final display name: "${displayName}"`);
       
-      // Step 4: Check cache directly
       const cache = appsDb.loadFromCache();
       const cacheEntry = cache[bundleId];
-      console.log(`Cache entry for "${bundleId}":`, cacheEntry);
+      logDebugInfo(`Cache entry for "${bundleId}":`, cacheEntry);
       
     } else {
-      console.log('❌ Bundle ID extraction failed');
+      logDebugInfo('❌ Bundle ID extraction failed');
     }
   });
   
-  // Additional cache statistics
   try {
     const appsDb = new AppsDatabase('TRICKY');
     const cache = appsDb.loadFromCache();
     const cacheSize = Object.keys(cache).length;
-    console.log(`\n📊 Apps Database cache size: ${cacheSize} entries`);
+    logDebugInfo(`Apps Database cache size: ${cacheSize} entries`);
     
     if (cacheSize > 0) {
       const sampleKeys = Object.keys(cache).slice(0, 5);
-      console.log('📋 Sample cache entries:');
+      logDebugInfo('Sample cache entries:');
       sampleKeys.forEach(key => {
         const entry = cache[key];
-        console.log(`  ${key} → ${entry.publisher} ${entry.appName}`);
+        logDebugInfo(`  ${key} → ${entry.publisher} ${entry.appName}`);
       });
     }
   } catch (e) {
-    console.log('❌ Error loading cache:', e);
+    logError('Error loading cache:', e);
   }
   
-  console.log('\n=== TESTING COMPLETE ===');
+  logDebugInfo('=== TESTING COMPLETE ===');
+  setLogLevel('INFO');
 }
