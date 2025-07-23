@@ -12,7 +12,7 @@ function calculateWoWMetrics(appData) {
     const campaignData = {};
     const appWeekData = {};
     const sourceAppData = {};
-    const networkData = {}; // Добавляем для OVERALL
+    const networkData = {};
 
     Object.values(appData).forEach(app => {
       appWeekData[app.appName] = {};
@@ -65,7 +65,6 @@ function calculateWoWMetrics(appData) {
             });
           });
         } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-          // Обработка сеток для OVERALL
           Object.values(week.networks).forEach(network => {
             allCampaigns.push(...network.campaigns);
             
@@ -86,7 +85,6 @@ function calculateWoWMetrics(appData) {
             };
           });
         } else if (CURRENT_PROJECT === 'OVERALL' && week.campaigns) {
-          // Обратная совместимость со старой структурой
           allCampaigns = week.campaigns || [];
         } else if (CURRENT_PROJECT === 'OVERALL') {
           allCampaigns = week.campaigns || [];
@@ -126,7 +124,6 @@ function calculateWoWMetrics(appData) {
 
     const campaignWoW = {};
     
-    // Обработка WoW для сеток в OVERALL
     if (CURRENT_PROJECT === 'OVERALL') {
       const networks = {};
       Object.values(networkData).forEach(d => {
@@ -235,14 +232,12 @@ function calculateIncentTrafficWoWMetrics(networkData) {
   const appWoW = {};
   const networkWoW = {};
   
-  // Обработка WoW для сеток
   Object.keys(networkData).forEach(networkKey => {
     const network = networkData[networkKey];
     const weeks = Object.values(network.weeks).sort((a, b) => 
       new Date(a.weekStart) - new Date(b.weekStart)
     );
     
-    // Создаем историю приложений для отслеживания между неделями
     const appHistory = {};
     
     weeks.forEach((week, i) => {
@@ -280,16 +275,13 @@ function calculateIncentTrafficWoWMetrics(networkData) {
         };
       }
       
-      // WoW для приложений внутри недели
       Object.keys(week.apps).forEach(appId => {
         const appData = week.apps[appId];
         const appKey = `${networkKey}_${week.weekStart}_${appId}`;
         const appSpend = appData.campaigns.reduce((s, c) => s + c.spend, 0);
         const appProfit = appData.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
         
-        // Проверяем историю этого приложения
         if (appHistory[appId] && appHistory[appId].length > 0) {
-          // Берем последнюю неделю где было это приложение
           const prevAppData = appHistory[appId][appHistory[appId].length - 1];
           const prevAppSpend = prevAppData.spend;
           const prevAppProfit = prevAppData.profit;
@@ -307,11 +299,9 @@ function calculateIncentTrafficWoWMetrics(networkData) {
             )
           };
         } else {
-          // Первое появление приложения
           appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
         }
         
-        // Добавляем в историю
         if (!appHistory[appId]) {
           appHistory[appId] = [];
         }
@@ -431,6 +421,8 @@ function generateReport(days) {
       return;
     }
     
+    const processed = processApiData(raw);
+    
     if (Object.keys(processed).length === 0) {
       SpreadsheetApp.getUi().alert('No valid data to process.');
       return;
@@ -465,6 +457,8 @@ function generateReportForDateRange(startDate, endDate) {
       ui.alert('No Data', 'No data found for the selected date range.', ui.ButtonSet.OK);
       return;
     }
+    
+    const processed = processApiData(raw);
     
     if (Object.keys(processed).length === 0) {
       ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
@@ -616,7 +610,8 @@ function updateAllDataToCurrent() {
       return;
     }
     
-  
+    const processed = processApiData(raw);
+    
     if (Object.keys(processed).length === 0) {
       ui.alert('No valid data to process.');
       return;

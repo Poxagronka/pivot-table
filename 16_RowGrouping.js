@@ -1,6 +1,6 @@
 function createUnifiedRowGrouping(sheet, tableData, data) {
   try {
-    console.log('Starting two-phase unified row grouping...');
+    console.log('Starting optimized unified row grouping...');
     const startTime = new Date().getTime();
     
     const sheetId = sheet.getSheetId();
@@ -11,15 +11,17 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         data[a].networkName.localeCompare(data[b].networkName)
       );
       
-      let networkIndex = 0;
-      for (const networkKey of sortedNetworks) {
+      console.log(`Processing ${sortedNetworks.length} networks...`);
+      
+      for (let networkIndex = 0; networkIndex < sortedNetworks.length; networkIndex++) {
+        const networkKey = sortedNetworks[networkIndex];
         console.log(`Processing network ${networkIndex + 1}/${sortedNetworks.length}: ${data[networkKey].networkName}`);
         
-        processEntityGroups(spreadsheetId, sheetId, data, networkKey, 'network');
+        processEntityGroupsOptimized(spreadsheetId, sheetId, data, networkKey, 'network');
         
-        networkIndex++;
-        if (networkIndex < sortedNetworks.length) {
-          console.log('Waiting 1 seconds before next network...');
+        if (networkIndex < sortedNetworks.length - 1 && networkIndex % 5 === 4) {
+          console.log('Pausing after batch of 5 networks...');
+          Utilities.sleep(2000);
         }
       }
     } else {
@@ -27,54 +29,91 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         data[a].appName.localeCompare(data[b].appName)
       );
       
-      let appIndex = 0;
-      for (const appKey of sortedApps) {
+      console.log(`Processing ${sortedApps.length} apps...`);
+      
+      for (let appIndex = 0; appIndex < sortedApps.length; appIndex++) {
+        const appKey = sortedApps[appIndex];
         console.log(`Processing app ${appIndex + 1}/${sortedApps.length}: ${data[appKey].appName}`);
         
-        processEntityGroups(spreadsheetId, sheetId, data, appKey, 'app');
+        processEntityGroupsOptimized(spreadsheetId, sheetId, data, appKey, 'app');
         
-        appIndex++;
-        if (appIndex < sortedApps.length) {
-          console.log('Waiting 1 seconds before next app...');
+        if (appIndex < sortedApps.length - 1 && appIndex % 3 === 2) {
+          console.log('Pausing after batch of 3 apps...');
+          Utilities.sleep(2000);
         }
       }
     }
     
     const endTime = new Date().getTime();
-    console.log(`Two-phase unified row grouping completed in ${(endTime - startTime)/1000}s`);
+    console.log(`Optimized unified row grouping completed in ${(endTime - startTime)/1000}s`);
     
   } catch (e) {
     console.error('Error in unified row grouping:', e);
   }
 }
 
-function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType) {
+function processEntityGroupsOptimized(spreadsheetId, sheetId, data, entityKey, entityType) {
   try {
-    console.log(`Phase 1: Creating groups for ${entityType} ${entityKey}`);
+    console.log(`Creating groups for ${entityType} ${entityKey}...`);
     const createRequests = buildCreateGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (createRequests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: createRequests
-      }, spreadsheetId);
+      executeBatchedGroupRequests(spreadsheetId, createRequests, 'CREATE');
       console.log(`Created ${createRequests.length} groups`);
       
       Utilities.sleep(1000);
+      SpreadsheetApp.flush();
     }
     
-    console.log(`Phase 2: Collapsing groups for ${entityType} ${entityKey}`);
+    console.log(`Collapsing groups for ${entityType} ${entityKey}...`);
     const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
     
     if (collapseRequests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: collapseRequests
-      }, spreadsheetId);
+      executeBatchedGroupRequests(spreadsheetId, collapseRequests, 'COLLAPSE');
       console.log(`Collapsed ${collapseRequests.length} groups`);
     }
     
   } catch (e) {
     console.error(`Error processing ${entityType} ${entityKey}:`, e);
   }
+}
+
+function executeBatchedGroupRequests(spreadsheetId, requests, operation) {
+  const BATCH_SIZE = 50;
+  
+  if (requests.length <= BATCH_SIZE) {
+    Sheets.Spreadsheets.batchUpdate({
+      requests: requests
+    }, spreadsheetId);
+    return;
+  }
+  
+  let batchCount = 0;
+  for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+    const batchRequests = requests.slice(i, i + BATCH_SIZE);
+    batchCount++;
+    
+    console.log(`${operation} batch ${batchCount}: ${batchRequests.length} operations`);
+    
+    try {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: batchRequests
+      }, spreadsheetId);
+      
+      if (i + BATCH_SIZE < requests.length) {
+        console.log('Pausing between group batches...');
+        Utilities.sleep(1500);
+      }
+    } catch (e) {
+      console.error(`Error in ${operation} batch ${batchCount}:`, e);
+      if (e.toString().includes('quota')) {
+        console.log('Quota exceeded, waiting longer...');
+        Utilities.sleep(5000);
+      }
+    }
+  }
+  
+  console.log(`Completed ${operation} operation: ${requests.length} requests in ${batchCount} batches`);
 }
 
 function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
@@ -190,19 +229,6 @@ function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
         weekContentRows = campaignCount;
-        
-        if (campaignCount > 0) {
-          groupRequests.push({
-            addDimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + campaignCount
-              }
-            }
-          });
-        }
       }
       
       if (weekContentRows > 0) {
@@ -373,24 +399,6 @@ function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
         weekContentRows = campaignCount;
-        
-        if (campaignCount > 0) {
-          collapseRequests.push({
-            updateDimensionGroup: {
-              dimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: weekStartRow,
-                  endIndex: weekStartRow + campaignCount
-                },
-                depth: 2,
-                collapsed: true
-              },
-              fields: "collapsed"
-            }
-          });
-        }
       }
       
       if (weekContentRows > 0) {
