@@ -1,10 +1,16 @@
 function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
+  const startTime = Date.now();
+  console.log(`🔧 buildUnifiedTable started for ${CURRENT_PROJECT}`);
+
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    console.log(`⏱️ Processing INCENT_TRAFFIC networks... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+    
     const networkKeys = Object.keys(data).sort((a, b) => 
       data[a].networkName.localeCompare(data[b].networkName)
     );
+    console.log(`📊 Found ${networkKeys.length} networks to process`);
     
-    networkKeys.forEach(networkKey => {
+    networkKeys.forEach((networkKey, networkIndex) => {
       const network = data[networkKey];
       
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
@@ -14,6 +20,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
       tableData.push(emptyRow);
       
       const weekKeys = Object.keys(network.weeks).sort();
+      console.log(`  Network ${networkIndex + 1}/${networkKeys.length}: ${network.networkName} (${weekKeys.length} weeks)`);
+      
       weekKeys.forEach(weekKey => {
         const week = network.weeks[weekKey];
         
@@ -58,10 +66,16 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         });
       });
     });
-  } else {
-    const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
+
+    console.log(`✅ INCENT_TRAFFIC processing completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
-    appKeys.forEach(appKey => {
+  } else {
+    console.log(`⏱️ Processing regular projects... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+    
+    const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
+    console.log(`📊 Found ${appKeys.length} apps to process`);
+    
+    appKeys.forEach((appKey, appIndex) => {
       const app = data[appKey];
       
       formatData.push({ row: tableData.length + 1, type: 'APP' });
@@ -71,7 +85,11 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
       tableData.push(emptyRow);
 
       const weekKeys = Object.keys(app.weeks).sort();
-      weekKeys.forEach(weekKey => {
+      console.log(`  App ${appIndex + 1}/${appKeys.length}: ${app.appName} (${weekKeys.length} weeks)`);
+      
+      const appStartTime = Date.now();
+      
+      weekKeys.forEach((weekKey, weekIndex) => {
         const week = app.weeks[weekKey];
         
         formatData.push({ row: tableData.length + 1, type: 'WEEK' });
@@ -100,19 +118,37 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
         tableData.push(weekRow);
         
+        const subRowStartTime = Date.now();
         addUnifiedSubRows(tableData, week, weekKey, wow, formatData, app.appName, initialEROASCache);
+        
+        if (weekIndex === 0 || (Date.now() - subRowStartTime) > 1000) {
+          console.log(`    Week ${weekIndex + 1}/${weekKeys.length}: ${weekKey} processed in ${((Date.now() - subRowStartTime) / 1000).toFixed(1)}s`);
+        }
       });
+      
+      const appProcessTime = (Date.now() - appStartTime) / 1000;
+      if (appProcessTime > 5) {
+        console.log(`  ⚠️  App ${appIndex + 1} (${app.appName}) took ${appProcessTime.toFixed(1)}s - slow!`);
+      }
     });
+
+    console.log(`✅ Regular projects processing completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
   }
+  
+  console.log(`🔧 buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
-function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName, initialEROASCache) {
+function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
+  const startTime = Date.now();
+  
   if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
     const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
       const totalSpendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
       const totalSpendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
       return totalSpendB - totalSpendA;
     });
+    
+    console.log(`      Processing ${sourceAppKeys.length} source apps for TRICKY...`);
     
     sourceAppKeys.forEach(sourceAppKey => {
       const sourceApp = week.sourceApps[sourceAppKey];
@@ -145,7 +181,12 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName, i
       const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
       tableData.push(sourceAppRow);
       
+      const campaignStartTime = Date.now();
       addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
+      
+      if (sourceApp.campaigns.length > 50 || (Date.now() - campaignStartTime) > 500) {
+        console.log(`        Source app ${sourceApp.sourceAppName}: ${sourceApp.campaigns.length} campaigns in ${((Date.now() - campaignStartTime) / 1000).toFixed(1)}s`);
+      }
     });
   } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
     const networkKeys = Object.keys(week.networks).sort((a, b) => {
@@ -171,7 +212,17 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName, i
       tableData.push(networkRow);
     });
   } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
+    const campaignStartTime = Date.now();
     addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData, appName, initialEROASCache);
+    
+    if (week.campaigns && week.campaigns.length > 50 || (Date.now() - campaignStartTime) > 500) {
+      console.log(`        Regular campaigns: ${week.campaigns ? week.campaigns.length : 0} campaigns in ${((Date.now() - campaignStartTime) / 1000).toFixed(1)}s`);
+    }
+  }
+  
+  const elapsed = (Date.now() - startTime) / 1000;
+  if (elapsed > 1) {
+    console.log(`      addUnifiedSubRows took ${elapsed.toFixed(1)}s`);
   }
 }
 

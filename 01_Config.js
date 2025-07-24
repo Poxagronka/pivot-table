@@ -423,15 +423,6 @@ function setCurrentProject(projectName) {
   
   PREVIOUS_PROJECT = CURRENT_PROJECT;
   
-  if (projectName === 'TRICKY' && PREVIOUS_PROJECT !== 'TRICKY') {
-    try {
-      clearTrickyCaches();
-      console.log('TRICKY caches cleared (switching TO TRICKY from ' + PREVIOUS_PROJECT + ')');
-    } catch (e) {
-      console.log('Cache clear function not available');
-    }
-  }
-  
   CURRENT_PROJECT = projectName;
 }
 

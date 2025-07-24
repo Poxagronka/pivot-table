@@ -3,6 +3,9 @@ function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
 function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
 
 function createUnifiedPivotTable(data) {
+  console.log('📊 Starting pivot table creation...');
+  const startTime = Date.now();
+  
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   let sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
@@ -16,26 +19,34 @@ function createUnifiedPivotTable(data) {
     return;
   }
 
+  console.log(`⏱️ Initial eROAS cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const initialEROASCache = new InitialEROASCache();
   initialEROASCache.recordInitialValuesFromData(data);
 
+  console.log(`⏱️ WoW calculations starting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const wow = CURRENT_PROJECT === 'INCENT_TRAFFIC' ? 
     calculateIncentTrafficWoWMetrics(data) : 
     calculateWoWMetrics(data);
   
+  console.log(`⏱️ Building table data... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
-
   buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache);
 
+  console.log(`⏱️ Writing to sheet... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
+  console.log(`⏱️ Applying formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   applyEnhancedFormatting(sheet, tableData.length, headers.length, formatData, data);
+  
+  console.log(`⏱️ Creating row grouping... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   createUnifiedRowGrouping(sheet, tableData, data);
+  
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(2);
+  console.log(`✅ Pivot table completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function applyEnhancedFormatting(sheet, numRows, numCols, formatData, appData) {

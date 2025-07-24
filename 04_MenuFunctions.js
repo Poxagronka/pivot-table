@@ -5,10 +5,8 @@ function onOpen() {
   var menu = ui.createMenu('📊 Campaign Report');
   
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
-      .addItem('🔄 Update All Projects (Safe Mode)', 'updateAllProjectsToCurrent')
-      .addItem('🎯 Update Selected Projects (Safe Mode)', 'updateSelectedProjectsToCurrent')
-      .addItem('🚀 Quick Update Single Project', 'updateSingleProjectQuick')
-      .addItem('⚡ Quick Update All Projects', 'updateAllProjectsQuick')
+      .addItem('🔄 Update All Projects', 'updateAllProjects')
+      .addItem('🎯 Update Selected Projects', 'updateSelectedProjects')
       .addSeparator()
       .addSubMenu(ui.createMenu('⚙️ Settings')
         .addItem('📄 Open Settings Sheet', 'openSettingsSheet')
@@ -26,7 +24,7 @@ function onOpen() {
       .addToUi();
 }
 
-function updateSelectedProjectsToCurrent() {
+function updateSelectedProjects() {
   if (!isBearerTokenConfigured()) {
     openSettingsSheet();
     return;
@@ -62,8 +60,8 @@ function updateSelectedProjectsToCurrent() {
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
-        console.log('Waiting 5 seconds before next project...');
-        Utilities.sleep(5000);
+        console.log('Waiting 3 seconds before next project...');
+        Utilities.sleep(3000);
       }
       
       updateProjectDataWithRetry(projectName);
@@ -71,7 +69,7 @@ function updateSelectedProjectsToCurrent() {
       successfulProjects.push(projectName);
       console.log(`✅ ${projectName} updated successfully`);
       
-      Utilities.sleep(3000);
+      Utilities.sleep(2000);
       
     } catch (e) {
       console.error(`❌ Failed to update ${proj}:`, e);
@@ -80,15 +78,15 @@ function updateSelectedProjectsToCurrent() {
         error: e.toString().substring(0, 80)
       });
       
-      console.log('Error occurred. Waiting 30 seconds before continuing...');
-      Utilities.sleep(30000);
+      console.log('Error occurred. Waiting 10 seconds before continuing...');
+      Utilities.sleep(10000);
     }
   });
   
   if (successfulProjects.length > 0) {
     try {
       console.log('Waiting before sorting sheets...');
-      Utilities.sleep(5000);
+      Utilities.sleep(3000);
       sortProjectSheetsWithRetry();
     } catch (e) {
       console.error('Error sorting sheets:', e);
@@ -98,98 +96,7 @@ function updateSelectedProjectsToCurrent() {
   console.log(`Update completed: ${successfulProjects.length}/${selected.length} projects updated`);
 }
 
-function updateAllProjectsToCurrent() {
-  if (!isBearerTokenConfigured()) {
-    openSettingsSheet();
-    return;
-  }
-  
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  
-  try {
-    preloadSettings();
-    Utilities.sleep(2000);
-  } catch (e) {
-    console.error('Error preloading settings:', e);
-  }
-  
-  var successfulProjects = [];
-  var failedProjects = [];
-  
-  projects.forEach(function(proj, index) {
-    try {
-      console.log(`\n=== UPDATING ${proj} (${index + 1}/${projects.length}) ===`);
-      console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
-      
-      if (index > 0) {
-        console.log('Clearing caches and waiting before project update...');
-        clearSettingsCache();
-        clearAllCommentColumnCaches();
-        SpreadsheetApp.flush();
-        
-        console.log('Waiting 5 seconds before next project...');
-        Utilities.sleep(5000);
-      }
-      
-      updateProjectDataWithRetry(proj);
-      
-      successfulProjects.push(proj);
-      console.log(`✅ ${proj} updated successfully`);
-      
-      Utilities.sleep(3000);
-      
-    } catch (e) {
-      console.error(`❌ Failed to update ${proj}:`, e);
-      failedProjects.push({
-        project: proj,
-        error: e.toString().substring(0, 80)
-      });
-      
-      console.log('Error occurred. Waiting 30 seconds before continuing...');
-      Utilities.sleep(30000);
-    }
-  });
-  
-  if (successfulProjects.length > 0) {
-    try {
-      console.log('Waiting before sorting sheets...');
-      Utilities.sleep(5000);
-      sortProjectSheetsWithRetry();
-      console.log('Sheets sorted successfully');
-    } catch (e) {
-      console.error('Error sorting sheets:', e);
-    }
-  }
-  
-  console.log(`Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
-}
-
-function updateSingleProjectQuick() {
-  if (!isBearerTokenConfigured()) {
-    openSettingsSheet();
-    return;
-  }
-  
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  var choice = showChoice('Select Project to Update (Quick Mode):', projects);
-  
-  if (!choice) return;
-  
-  var projectName = projects[choice - 1].toUpperCase();
-  
-  try {
-    updateProjectDataWithRetry(projectName);
-    
-    Utilities.sleep(2000);
-    sortProjectSheetsWithRetry();
-    
-    console.log(`${projectName} updated successfully`);
-  } catch (e) {
-    console.error(`Failed to update ${projectName}: ${e.toString()}`);
-  }
-}
-
-function updateAllProjectsQuick() {
+function updateAllProjects() {
   if (!isBearerTokenConfigured()) {
     openSettingsSheet();
     return;
@@ -203,10 +110,10 @@ function updateAllProjectsQuick() {
     
     projects.forEach(function(proj, index) {
       try {
-        console.log(`Quick updating ${proj} (${index + 1}/${projects.length})...`);
+        console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
         
         var projectName = proj.toUpperCase();
-        updateProjectDataWithRetry(projectName, 1);
+        updateProjectDataWithRetry(projectName);
         
         successfulProjects.push(proj);
         console.log(`✅ ${proj} updated successfully`);
@@ -237,10 +144,10 @@ function updateAllProjectsQuick() {
       }
     }
     
-    console.log(`Quick Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
+    console.log(`Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
     
   } catch (e) {
-    console.error(`Quick update failed: ${e.toString()}`);
+    console.error(`Update failed: ${e.toString()}`);
   }
 }
 
@@ -429,8 +336,6 @@ function generateProjectReportByWeeks(projectName, weeks) {
   generateReport(days);
 }
 
-
-
 function debugSingleProject() {
   var p = showChoice('Select Project to Debug:', MENU_PROJECTS);
   if (p) debugProjectReportGeneration(MENU_PROJECTS[p-1].toUpperCase());
@@ -466,10 +371,10 @@ function syncTriggersWithSettings() {
   }
 }
 
-function updateProjectDataWithRetry(projectName, maxRetries = 3) {
-  var baseDelay = 5000;
+function updateProjectDataWithRetry(projectName, maxRetries = 1) {
+  var baseDelay = 3000;
   
-  for (var attempt = 1; attempt <= maxRetries; attempt++) {
+  for (var attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       clearSettingsCache();
       SpreadsheetApp.flush();
@@ -480,46 +385,46 @@ function updateProjectDataWithRetry(projectName, maxRetries = 3) {
     } catch (e) {
       console.error(`${projectName} update attempt ${attempt} failed:`, e);
       
+      if (attempt > maxRetries) {
+        throw e;
+      }
+      
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
-        console.log('Timeout detected - waiting longer before retry...');
+        console.log('Timeout detected - waiting before retry...');
         
         clearSettingsCache();
         clearAllCommentColumnCaches();
         
-        var timeoutDelay = baseDelay * Math.pow(2, attempt);
+        var timeoutDelay = baseDelay * 2;
         console.log(`Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
         
         SpreadsheetApp.flush();
         Utilities.sleep(2000);
       } else {
-        var delay = baseDelay * Math.pow(1.5, attempt - 1);
+        var delay = baseDelay;
         console.log(`Waiting ${delay}ms before retry...`);
         Utilities.sleep(delay);
-      }
-      
-      if (attempt === maxRetries) {
-        throw e;
       }
     }
   }
 }
 
-function sortProjectSheetsWithRetry(maxRetries = 2) {
+function sortProjectSheetsWithRetry(maxRetries = 1) {
   var baseDelay = 2000;
   
-  for (var attempt = 1; attempt <= maxRetries; attempt++) {
+  for (var attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       sortProjectSheets();
       return;
     } catch (e) {
       console.error(`Sheet sorting attempt ${attempt} failed:`, e);
       
-      if (attempt === maxRetries) {
+      if (attempt > maxRetries) {
         throw e;
       }
       
-      var delay = baseDelay * attempt;
+      var delay = baseDelay;
       console.log(`Waiting ${delay}ms before retry...`);
       Utilities.sleep(delay);
     }
