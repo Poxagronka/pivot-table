@@ -496,19 +496,20 @@ function updateProjectData(projectName) {
   }
   
   let earliestDate = null;
-  // Читаем только колонки A и B через Sheets API v4
 const range = `${config.SHEET_NAME}!A:B`;
 const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
 const data = response.values || [];
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === 'WEEK') {
-      const weekRange = data[i][1];
+
+for (let i = 1; i < data.length; i++) {
+  if (data[i] && data[i][0] === 'WEEK') {
+    const weekRange = data[i][1];
+    if (weekRange) {
       const [startStr] = weekRange.split(' - ');
       const startDate = new Date(startStr);
       if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
     }
   }
+}
   
   if (!earliestDate) {
     console.log(`${projectName}: No week data found`);
