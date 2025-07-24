@@ -40,8 +40,6 @@ function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType
       Sheets.Spreadsheets.batchUpdate({
         requests: createRequests
       }, spreadsheetId);
-      
-      Utilities.sleep(1000);
     }
     
     const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
