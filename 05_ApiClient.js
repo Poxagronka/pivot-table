@@ -1,7 +1,7 @@
 var BUNDLE_ID_CACHE = new Map();
 var BUNDLE_ID_CACHE_LOADED = false;
 var BUNDLE_ID_CACHE_TIME = null;
-var BUNDLE_ID_CACHE_DURATION = 21600000; // 6 hours
+var BUNDLE_ID_CACHE_DURATION = 21600000;
 var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
 var BUNDLE_ID_CACHE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM/edit?gid=754371211#gid=754371211';
@@ -356,36 +356,18 @@ function saveBundleIdCache(newCache) {
   }
 }
 
-function getOptimizedAppsDb() {
+function getOptimizedAppsDbForTricky() {
   const now = new Date().getTime();
   
   if (APPS_DB_CACHE && APPS_DB_CACHE_TIME && (now - APPS_DB_CACHE_TIME) < BUNDLE_ID_CACHE_DURATION) {
     return APPS_DB_CACHE;
   }
   
-  console.log('Loading Apps Database...');
+  console.log('Loading Apps Database for TRICKY...');
   try {
-    const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
-    let sheet = spreadsheet.getSheetByName('Apps Database');
-    
-    if (!sheet) {
-      sheet = createAppsDbSheet();
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    const cache = {};
-    
-    for (let i = 1; i < data.length; i++) {
-      const [bundleId, publisher, appName, storeLink, lastUpdated] = data[i];
-      if (bundleId) {
-        cache[bundleId] = {
-          publisher: publisher || 'Unknown Publisher',
-          appName: appName || 'Unknown App',
-          storeLink: storeLink || '',
-          lastUpdated: lastUpdated
-        };
-      }
-    }
+    const appsDb = new AppsDatabase('TRICKY');
+    appsDb.ensureCacheUpToDate();
+    const cache = appsDb.loadFromCache();
     
     APPS_DB_CACHE = cache;
     APPS_DB_CACHE_TIME = now;
@@ -398,28 +380,6 @@ function getOptimizedAppsDb() {
   }
 }
 
-function createAppsDbSheet() {
-  try {
-    const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
-    const sheet = spreadsheet.insertSheet('Apps Database');
-    
-    sheet.getRange(1, 1, 1, 5).setValues([['Bundle ID', 'Publisher', 'App Name', 'Store Link', 'Last Updated']]);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#f0f0f0');
-    
-    sheet.setColumnWidth(1, 200);
-    sheet.setColumnWidth(2, 200);
-    sheet.setColumnWidth(3, 200);
-    sheet.setColumnWidth(4, 300);
-    sheet.setColumnWidth(5, 150);
-    
-    console.log('Apps Database sheet created');
-    return sheet;
-  } catch (e) {
-    console.error('Error creating Apps Database sheet:', e);
-    throw e;
-  }
-}
-
 function getCachedBundleId(campaignName, campaignId = '') {
   if (BUNDLE_ID_CACHE.has(campaignName)) {
     return BUNDLE_ID_CACHE.get(campaignName).bundleId;
@@ -429,14 +389,26 @@ function getCachedBundleId(campaignName, campaignId = '') {
   return bundleId;
 }
 
-// Заменить функцию полностью:
 function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
-  if (!bundleId || CURRENT_PROJECT !== 'TRICKY') {
+  if (!bundleId || CURRENT_PROJECT !== 'TRICKY' || !appsDbCache) {
     return bundleId || 'Unknown';
   }
   
-  const appsDb = new AppsDatabase('TRICKY');
-  return appsDb.getSourceAppDisplayName(bundleId);
+  const appInfo = appsDbCache[bundleId];
+  if (appInfo && appInfo.publisher !== bundleId) {
+    const publisher = appInfo.publisher || '';
+    const appName = appInfo.appName || '';
+    
+    if (publisher && appName && publisher !== appName) {
+      return `${publisher} ${appName}`;
+    } else if (publisher) {
+      return publisher;
+    } else if (appName) {
+      return appName;
+    }
+  }
+  
+  return bundleId;
 }
 
 function processApiData(rawData, includeLastWeek = null) {
@@ -457,11 +429,6 @@ function processApiData(rawData, includeLastWeek = null) {
 
   if (CURRENT_PROJECT === 'TRICKY') {
     return processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
-  }
-
-  let appsDbCache = null;
-  if (CURRENT_PROJECT === 'TRICKY') {
-    appsDbCache = getOptimizedAppsDb();
   }
 
   const BATCH_SIZE = 500;
@@ -683,14 +650,17 @@ function processApiData(rawData, includeLastWeek = null) {
 function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
   const startTime = Date.now();
   
+  console.log('TRICKY optimization: Pre-loading all caches...');
   ensureBundleIdCacheLoaded();
-  const appsDb = new AppsDatabase('TRICKY');
+  const appsDbCache = getOptimizedAppsDbForTricky();
+  console.log(`TRICKY optimization: Caches loaded - Bundle IDs: ${BUNDLE_ID_CACHE.size}, Apps DB: ${Object.keys(appsDbCache).length}`);
   
   const appData = {};
   const newBundleIds = new Map();
+  const bundleIdToDisplayName = new Map();
   let processedCount = 0;
 
-  const BATCH_SIZE = 500;
+  const BATCH_SIZE = 1000;
   for (let batchStart = 0; batchStart < stats.length; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, stats.length);
     const batch = stats.slice(batchStart, batchEnd);
@@ -730,8 +700,6 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
         };
 
-    
-
         let campaignName = 'Unknown';
         let campaignId = 'Unknown';
         
@@ -748,6 +716,14 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
         const bundleId = getCachedBundleId(campaignName, campaignId);
         if (bundleId && !BUNDLE_ID_CACHE.has(campaignName)) {
           newBundleIds.set(campaignName, { campaignId, bundleId });
+        }
+
+        let sourceAppDisplayName;
+        if (bundleIdToDisplayName.has(bundleId)) {
+          sourceAppDisplayName = bundleIdToDisplayName.get(bundleId);
+        } else {
+          sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
+          bundleIdToDisplayName.set(bundleId, sourceAppDisplayName);
         }
 
         const geo = extractGeoFromCampaign(campaignName);
@@ -785,27 +761,16 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           };
         }
 
-        if (!bundleId || bundleId === 'unknown') {
-          if (!appData[appKey].weeks[weekKey].sourceApps['unknown']) {
-            appData[appKey].weeks[weekKey].sourceApps['unknown'] = {
-              sourceAppId: 'unknown',
-              sourceAppName: 'Unknown Source',
-              campaigns: []
-            };
-          }
-          appData[appKey].weeks[weekKey].sourceApps['unknown'].campaigns.push(campaignData);
-        } else {
-          if (!appData[appKey].weeks[weekKey].sourceApps[bundleId]) {
-            const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId);
-            appData[appKey].weeks[weekKey].sourceApps[bundleId] = {
-              sourceAppId: bundleId,
-              sourceAppName: sourceAppDisplayName,
-              campaigns: []
-            };
-          }
-          appData[appKey].weeks[weekKey].sourceApps[bundleId].campaigns.push(campaignData);
+        const finalBundleId = bundleId || 'unknown';
+        if (!appData[appKey].weeks[weekKey].sourceApps[finalBundleId]) {
+          appData[appKey].weeks[weekKey].sourceApps[finalBundleId] = {
+            sourceAppId: finalBundleId,
+            sourceAppName: sourceAppDisplayName,
+            campaigns: []
+          };
         }
-
+        
+        appData[appKey].weeks[weekKey].sourceApps[finalBundleId].campaigns.push(campaignData);
         processedCount++;
 
       } catch (error) {
@@ -833,6 +798,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
 
   const endTime = Date.now();
   console.log(`TRICKY: Optimized processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
+  console.log(`TRICKY optimization: Cached ${bundleIdToDisplayName.size} display name lookups`);
   return appData;
 }
 
