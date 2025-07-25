@@ -1,10 +1,31 @@
 const WEEK_TOTALS_CACHE = new Map();
+const WOW_METRICS_CACHE = new Map();
+const PRECOMPUTED_TOTALS = new Map();
 
 function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
   const startTime = Date.now();
   console.log(`🔧 buildUnifiedTable started for ${CURRENT_PROJECT}`);
 
   clearTableBuilderCaches();
+  
+  console.log(`⏱️ Precomputing totals... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+  precomputeAllTotals(data);
+  
+  console.log(`⏱️ Precomputing WoW cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+  precomputeWoWCache(wow);
+  
+  let appsDbCache = null;
+  if (CURRENT_PROJECT === 'TRICKY') {
+    console.log(`⏱️ Loading AppsDatabase cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+    try {
+      const appsDb = new AppsDatabase('TRICKY');
+      appsDbCache = appsDb.loadFromCache();
+      console.log(`📱 AppsDatabase loaded: ${Object.keys(appsDbCache).length} apps`);
+    } catch (e) {
+      console.error('Error loading AppsDatabase:', e);
+      appsDbCache = {};
+    }
+  }
   
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     console.log(`⏱️ Processing INCENT_TRAFFIC networks... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
@@ -34,9 +55,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           allCampaigns.push(...app.campaigns);
         });
         
-        const weekTotals = getCachedWeekTotals(allCampaigns);
+        const weekTotals = getPrecomputedTotals(allCampaigns, `network_${networkKey}_${weekKey}`);
         const weekWoWKey = `${networkKey}_${weekKey}`;
-        const weekWoW = wow.weekWoW[weekWoWKey] || {};
+        const weekWoW = getCachedWoW(weekWoWKey, 'weekWoW', wow);
         
         const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -54,10 +75,10 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         
         appKeys.forEach(appKey => {
           const app = week.apps[appKey];
-          const appTotals = getCachedWeekTotals(app.campaigns);
+          const appTotals = getPrecomputedTotals(app.campaigns, `incent_app_${networkKey}_${weekKey}_${appKey}`);
           
           const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
-          const appWoW = wow.appWoW[appWoWKey] || {};
+          const appWoW = getCachedWoW(appWoWKey, 'appWoW', wow);
           
           const spendWoW = appWoW.spendChangePercent !== undefined ? `${appWoW.spendChangePercent.toFixed(0)}%` : '';
           const profitWoW = appWoW.eProfitChangePercent !== undefined ? `${appWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -111,9 +132,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           allCampaigns = week.campaigns || [];
         }
         
-        const weekTotals = getCachedWeekTotals(allCampaigns);
+        const weekTotals = getPrecomputedTotals(allCampaigns, `app_${appKey}_${weekKey}`);
         const appWeekKey = `${app.appName}_${weekKey}`;
-        const weekWoW = wow.appWeekWoW[appWeekKey] || {};
+        const weekWoW = getCachedWoW(appWeekKey, 'appWeekWoW', wow);
         
         const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -123,7 +144,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         tableData.push(weekRow);
         
         const subRowStartTime = Date.now();
-        addUnifiedSubRows(tableData, week, weekKey, wow, formatData, app.appName, initialEROASCache);
+        addUnifiedSubRows(tableData, week, weekKey, wow, formatData, app.appName, initialEROASCache, appsDbCache);
         
         if (weekIndex === 0 || (Date.now() - subRowStartTime) > 1000) {
           console.log(`    Week ${weekIndex + 1}/${weekKeys.length}: ${weekKey} processed in ${((Date.now() - subRowStartTime) / 1000).toFixed(1)}s`);
@@ -142,6 +163,130 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
   console.log(`🔧 buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
+function precomputeAllTotals(data) {
+  const startTime = Date.now();
+  let computedCount = 0;
+  
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    Object.keys(data).forEach(networkKey => {
+      const network = data[networkKey];
+      Object.keys(network.weeks).forEach(weekKey => {
+        const week = network.weeks[weekKey];
+        
+        const allCampaigns = [];
+        Object.values(week.apps).forEach(app => {
+          allCampaigns.push(...app.campaigns);
+        });
+        
+        const cacheKey = `network_${networkKey}_${weekKey}`;
+        const totals = calculateWeekTotals(allCampaigns);
+        PRECOMPUTED_TOTALS.set(cacheKey, totals);
+        computedCount++;
+        
+        Object.keys(week.apps).forEach(appKey => {
+          const app = week.apps[appKey];
+          const appCacheKey = `incent_app_${networkKey}_${weekKey}_${appKey}`;
+          const appTotals = calculateWeekTotals(app.campaigns);
+          PRECOMPUTED_TOTALS.set(appCacheKey, appTotals);
+          computedCount++;
+        });
+      });
+    });
+  } else {
+    Object.keys(data).forEach(appKey => {
+      const app = data[appKey];
+      Object.keys(app.weeks).forEach(weekKey => {
+        const week = app.weeks[weekKey];
+        
+        let allCampaigns = [];
+        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          Object.values(week.sourceApps).forEach(sourceApp => {
+            allCampaigns.push(...sourceApp.campaigns);
+            
+            const sourceAppCacheKey = `sourceapp_${appKey}_${weekKey}_${sourceApp.sourceAppId}`;
+            const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
+            PRECOMPUTED_TOTALS.set(sourceAppCacheKey, sourceAppTotals);
+            computedCount++;
+          });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          Object.values(week.networks).forEach(network => {
+            allCampaigns.push(...network.campaigns);
+            
+            const networkCacheKey = `overall_network_${appKey}_${weekKey}_${network.networkId}`;
+            const networkTotals = calculateWeekTotals(network.campaigns);
+            PRECOMPUTED_TOTALS.set(networkCacheKey, networkTotals);
+            computedCount++;
+          });
+        } else {
+          allCampaigns = week.campaigns || [];
+        }
+        
+        const cacheKey = `app_${appKey}_${weekKey}`;
+        const totals = calculateWeekTotals(allCampaigns);
+        PRECOMPUTED_TOTALS.set(cacheKey, totals);
+        computedCount++;
+      });
+    });
+  }
+  
+  console.log(`🚀 Precomputed ${computedCount} totals in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+}
+
+function precomputeWoWCache(wow) {
+  const startTime = Date.now();
+  
+  if (wow.campaignWoW) {
+    Object.keys(wow.campaignWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`campaignWoW_${key}`, wow.campaignWoW[key]);
+    });
+  }
+  
+  if (wow.appWeekWoW) {
+    Object.keys(wow.appWeekWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`appWeekWoW_${key}`, wow.appWeekWoW[key]);
+    });
+  }
+  
+  if (wow.sourceAppWoW) {
+    Object.keys(wow.sourceAppWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`sourceAppWoW_${key}`, wow.sourceAppWoW[key]);
+    });
+  }
+  
+  if (wow.weekWoW) {
+    Object.keys(wow.weekWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`weekWoW_${key}`, wow.weekWoW[key]);
+    });
+  }
+  
+  if (wow.appWoW) {
+    Object.keys(wow.appWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`appWoW_${key}`, wow.appWoW[key]);
+    });
+  }
+  
+  console.log(`🚀 Precomputed WoW cache in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+}
+
+function getCachedWoW(key, type, fallbackWow) {
+  const cacheKey = `${type}_${key}`;
+  const cached = WOW_METRICS_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  return fallbackWow[type] && fallbackWow[type][key] ? fallbackWow[type][key] : {};
+}
+
+function getPrecomputedTotals(campaigns, cacheKey) {
+  const cached = PRECOMPUTED_TOTALS.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  return getCachedWeekTotals(campaigns);
+}
+
 function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
   const startTime = Date.now();
   
@@ -156,10 +301,10 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
     
     sourceAppKeys.forEach(sourceAppKey => {
       const sourceApp = week.sourceApps[sourceAppKey];
-      const sourceAppTotals = getCachedWeekTotals(sourceApp.campaigns);
+      const sourceAppTotals = getPrecomputedTotals(sourceApp.campaigns, `sourceapp_${appName}_${weekKey}_${sourceApp.sourceAppId}`);
       
       const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
-      const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
+      const sourceAppWoW = getCachedWoW(sourceAppWoWKey, 'sourceAppWoW', wow);
       
       const spendWoW = sourceAppWoW.spendChangePercent !== undefined ? `${sourceAppWoW.spendChangePercent.toFixed(0)}%` : '';
       const profitWoW = sourceAppWoW.eProfitChangePercent !== undefined ? `${sourceAppWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -201,10 +346,10 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
     
     networkKeys.forEach(networkKey => {
       const network = week.networks[networkKey];
-      const networkTotals = getCachedWeekTotals(network.campaigns);
+      const networkTotals = getPrecomputedTotals(network.campaigns, `overall_network_${appName}_${weekKey}_${network.networkId}`);
       
       const networkWoWKey = `${networkKey}_${weekKey}`;
-      const networkWoW = wow.campaignWoW[networkWoWKey] || {};
+      const networkWoW = getCachedWoW(networkWoWKey, 'campaignWoW', wow);
       
       const spendWoW = networkWoW.spendChangePercent !== undefined ? `${networkWoW.spendChangePercent.toFixed(0)}%` : '';
       const profitWoW = networkWoW.eProfitChangePercent !== undefined ? `${networkWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -236,7 +381,7 @@ function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, format
   }
   
   const sortedCampaigns = campaigns.sort((a, b) => b.spend - a.spend);
-  const batchSize = 100;
+  const batchSize = 500;
   
   for (let i = 0; i < sortedCampaigns.length; i += batchSize) {
     const batch = sortedCampaigns.slice(i, i + batchSize);
@@ -250,7 +395,7 @@ function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, format
       }
       
       const key = `${campaign.campaignId}_${weekKey}`;
-      const campaignWoW = wow.campaignWoW[key] || {};
+      const campaignWoW = getCachedWoW(key, 'campaignWoW', wow);
       
       const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
       const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
@@ -391,6 +536,8 @@ function calculateWeekTotals(campaigns) {
 
 function clearTableBuilderCaches() {
   WEEK_TOTALS_CACHE.clear();
+  WOW_METRICS_CACHE.clear();
+  PRECOMPUTED_TOTALS.clear();
 }
 
 function getUnifiedHeaders() {
