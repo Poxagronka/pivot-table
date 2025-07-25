@@ -330,19 +330,13 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
       
       let sourceAppDisplayName = sourceApp.sourceAppName;
-      if (CURRENT_PROJECT === 'TRICKY') {
-        try {
-          const appsDb = new AppsDatabase('TRICKY');
-          const cache = appsDb.loadFromCache();
-          const appInfo = cache[sourceApp.sourceAppId];
-          if (appInfo && appInfo.linkApp) {
-            sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
-            formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
-          }
-        } catch (e) {
-          console.log('Error getting store link for source app:', e);
-        }
+      if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
+      const appInfo = appsDbCache[sourceApp.sourceAppId];
+      if (appInfo && appInfo.linkApp) {
+        sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+        formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
       }
+}
       
       const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
       tableData.push(sourceAppRow);
