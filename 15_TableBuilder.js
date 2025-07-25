@@ -1,7 +1,13 @@
+const WEEK_TOTALS_CACHE = new Map();
+const TABLE_APPS_DB_CACHE = new Map();
+const TABLE_DISPLAY_NAME_CACHE = new Map();
+
 function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
   const startTime = Date.now();
   console.log(`🔧 buildUnifiedTable started for ${CURRENT_PROJECT}`);
 
+  clearTableBuilderCaches();
+  
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     console.log(`⏱️ Processing INCENT_TRAFFIC networks... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     
@@ -30,7 +36,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           allCampaigns.push(...app.campaigns);
         });
         
-        const weekTotals = calculateWeekTotals(allCampaigns);
+        const weekTotals = getCachedWeekTotals(allCampaigns);
         const weekWoWKey = `${networkKey}_${weekKey}`;
         const weekWoW = wow.weekWoW[weekWoWKey] || {};
         
@@ -50,7 +56,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         
         appKeys.forEach(appKey => {
           const app = week.apps[appKey];
-          const appTotals = calculateWeekTotals(app.campaigns);
+          const appTotals = getCachedWeekTotals(app.campaigns);
           
           const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
           const appWoW = wow.appWoW[appWoWKey] || {};
@@ -71,6 +77,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
     
   } else {
     console.log(`⏱️ Processing regular projects... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+    
+    preloadAppsDbCache();
     
     const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     console.log(`📊 Found ${appKeys.length} apps to process`);
@@ -107,7 +115,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           allCampaigns = week.campaigns || [];
         }
         
-        const weekTotals = calculateWeekTotals(allCampaigns);
+        const weekTotals = getCachedWeekTotals(allCampaigns);
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = wow.appWeekWoW[appWeekKey] || {};
         
@@ -152,7 +160,7 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
     
     sourceAppKeys.forEach(sourceAppKey => {
       const sourceApp = week.sourceApps[sourceAppKey];
-      const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
+      const sourceAppTotals = getCachedWeekTotals(sourceApp.campaigns);
       
       const sourceAppWoWKey = `${sourceApp.sourceAppId}_${weekKey}`;
       const sourceAppWoW = wow.sourceAppWoW[sourceAppWoWKey] || {};
@@ -163,26 +171,17 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
       
       formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
       
-      let sourceAppDisplayName = sourceApp.sourceAppName;
-      if (CURRENT_PROJECT === 'TRICKY') {
-        try {
-          const appsDb = new AppsDatabase('TRICKY');
-          const cache = appsDb.loadFromCache();
-          const appInfo = cache[sourceApp.sourceAppId];
-          if (appInfo && appInfo.linkApp) {
-            sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
-            formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
-          }
-        } catch (e) {
-          console.log('Error getting store link for source app:', e);
-        }
+      const sourceAppDisplayInfo = getCachedDisplayName(sourceApp.sourceAppId, sourceApp.sourceAppName);
+      
+      if (sourceAppDisplayInfo.isHyperlink) {
+        formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
       }
       
-      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
+      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayInfo.displayName);
       tableData.push(sourceAppRow);
       
       const campaignStartTime = Date.now();
-      addCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
+      addCampaignRowsBatched(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, wow, formatData, appName, initialEROASCache);
       
       if (sourceApp.campaigns.length > 50 || (Date.now() - campaignStartTime) > 500) {
         console.log(`        Source app ${sourceApp.sourceAppName}: ${sourceApp.campaigns.length} campaigns in ${((Date.now() - campaignStartTime) / 1000).toFixed(1)}s`);
@@ -197,7 +196,7 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
     
     networkKeys.forEach(networkKey => {
       const network = week.networks[networkKey];
-      const networkTotals = calculateWeekTotals(network.campaigns);
+      const networkTotals = getCachedWeekTotals(network.campaigns);
       
       const networkWoWKey = `${networkKey}_${weekKey}`;
       const networkWoW = wow.campaignWoW[networkWoWKey] || {};
@@ -213,7 +212,7 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
     });
   } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
     const campaignStartTime = Date.now();
-    addCampaignRows(tableData, week.campaigns, week, weekKey, wow, formatData, appName, initialEROASCache);
+    addCampaignRowsBatched(tableData, week.campaigns, week, weekKey, wow, formatData, appName, initialEROASCache);
     
     if (week.campaigns && week.campaigns.length > 50 || (Date.now() - campaignStartTime) > 500) {
       console.log(`        Regular campaigns: ${week.campaigns ? week.campaigns.length : 0} campaigns in ${((Date.now() - campaignStartTime) / 1000).toFixed(1)}s`);
@@ -226,31 +225,38 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
   }
 }
 
-function addCampaignRows(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
+function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
   if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return;
   }
   
-  campaigns.sort((a, b) => b.spend - a.spend).forEach(campaign => {
-    let campaignIdValue;
-    if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
-      campaignIdValue = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
-    } else {
-      campaignIdValue = campaign.campaignId;
-    }
+  const sortedCampaigns = campaigns.sort((a, b) => b.spend - a.spend);
+  const batchSize = 100;
+  
+  for (let i = 0; i < sortedCampaigns.length; i += batchSize) {
+    const batch = sortedCampaigns.slice(i, i + batchSize);
     
-    const key = `${campaign.campaignId}_${weekKey}`;
-    const campaignWoW = wow.campaignWoW[key] || {};
-    
-    const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
-    const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
-    const growthStatus = campaignWoW.growthStatus || '';
-    
-    formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
-    
-    const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialEROASCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
-    tableData.push(campaignRow);
-  });
+    batch.forEach(campaign => {
+      let campaignIdValue;
+      if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
+        campaignIdValue = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
+      } else {
+        campaignIdValue = campaign.campaignId;
+      }
+      
+      const key = `${campaign.campaignId}_${weekKey}`;
+      const campaignWoW = wow.campaignWoW[key] || {};
+      
+      const spendPct = campaignWoW.spendChangePercent !== undefined ? `${campaignWoW.spendChangePercent.toFixed(0)}%` : '';
+      const profitPct = campaignWoW.eProfitChangePercent !== undefined ? `${campaignWoW.eProfitChangePercent.toFixed(0)}%` : '';
+      const growthStatus = campaignWoW.growthStatus || '';
+      
+      formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
+      
+      const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialEROASCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
+      tableData.push(campaignRow);
+    });
+  }
 }
 
 function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appName = '', initialEROASCache = null, identifier = '', displayName = '', campaignIdValue = '') {
@@ -259,7 +265,10 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   
   row[0] = level;
   
-  if (level === 'WEEK') {
+  if (level === 'APP') {
+    row[1] = displayName || identifier;
+    return row;
+  } else if (level === 'WEEK') {
     row[1] = `${week.weekStart} - ${week.weekEnd}`;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
@@ -305,6 +314,25 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   
   row[18] = '';
   return row;
+}
+
+function getCachedWeekTotals(campaigns) {
+  if (!campaigns || campaigns.length === 0) {
+    return {
+      totalSpend: 0, totalInstalls: 0, avgCpi: 0, avgRoasD1: 0, avgRoasD3: 0, avgRoasD7: 0, avgRoasD30: 0,
+      avgIpm: 0, avgRrD1: 0, avgRrD7: 0, avgArpu: 0, avgERoas: 0, avgEROASD730: 0, totalProfit: 0
+    };
+  }
+  
+  const cacheKey = campaigns.map(c => `${c.campaignId}_${c.spend}_${c.installs}`).join('|');
+  
+  if (WEEK_TOTALS_CACHE.has(cacheKey)) {
+    return WEEK_TOTALS_CACHE.get(cacheKey);
+  }
+  
+  const result = calculateWeekTotals(campaigns);
+  WEEK_TOTALS_CACHE.set(cacheKey, result);
+  return result;
 }
 
 function calculateWeekTotals(campaigns) {
@@ -354,6 +382,73 @@ function calculateWeekTotals(campaigns) {
     totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD30, avgIpm, avgRrD1, avgRrD7,
     avgArpu, avgERoas, avgEROASD730, totalProfit
   };
+}
+
+function preloadAppsDbCache() {
+  if (CURRENT_PROJECT !== 'TRICKY') return;
+  
+  if (TABLE_APPS_DB_CACHE.size > 0) return;
+  
+  try {
+    const appsDb = new AppsDatabase('TRICKY');
+    const cache = appsDb.loadFromCache();
+    
+    Object.keys(cache).forEach(bundleId => {
+      const appInfo = cache[bundleId];
+      let displayName = bundleId;
+      
+      if (appInfo && appInfo.publisher !== bundleId) {
+        const publisher = appInfo.publisher || '';
+        const appName = appInfo.appName || '';
+        
+        if (publisher && appName && publisher !== appName) {
+          displayName = `${publisher} ${appName}`;
+        } else if (publisher) {
+          displayName = publisher;
+        } else if (appName) {
+          displayName = appName;
+        }
+      }
+      
+      TABLE_APPS_DB_CACHE.set(bundleId, {
+        displayName: displayName,
+        linkApp: appInfo ? appInfo.linkApp : ''
+      });
+    });
+    
+    console.log(`Apps Database preloaded: ${TABLE_APPS_DB_CACHE.size} entries`);
+  } catch (e) {
+    console.error('Error preloading Apps Database:', e);
+  }
+}
+
+function getCachedDisplayName(bundleId, defaultName) {
+  if (CURRENT_PROJECT !== 'TRICKY') {
+    return { displayName: defaultName, isHyperlink: false };
+  }
+  
+  if (TABLE_DISPLAY_NAME_CACHE.has(bundleId)) {
+    return TABLE_DISPLAY_NAME_CACHE.get(bundleId);
+  }
+  
+  let displayName = defaultName;
+  let isHyperlink = false;
+  const appsInfo = TABLE_APPS_DB_CACHE.get(bundleId);
+  
+  if (appsInfo && appsInfo.linkApp) {
+    displayName = `=HYPERLINK("${appsInfo.linkApp}", "${defaultName}")`;
+    isHyperlink = true;
+  }
+  
+  const result = { displayName: displayName, isHyperlink: isHyperlink };
+  TABLE_DISPLAY_NAME_CACHE.set(bundleId, result);
+  return result;
+}
+
+function clearTableBuilderCaches() {
+  WEEK_TOTALS_CACHE.clear();
+  TABLE_APPS_DB_CACHE.clear();
+  TABLE_DISPLAY_NAME_CACHE.clear();
 }
 
 function getUnifiedHeaders() {
