@@ -106,7 +106,7 @@ function clearAllDataSilent() {
         }
       }
       
-      Utilities.sleep(1000);
+      
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
@@ -162,13 +162,13 @@ function clearProjectDataSilent(projectName) {
         }
       }
       
-      Utilities.sleep(2000);
+  
       SpreadsheetApp.flush();
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      Utilities.sleep(1000);
+      
       SpreadsheetApp.flush();
       
       if (oldSheet) {
@@ -178,7 +178,7 @@ function clearProjectDataSilent(projectName) {
           console.error(`${projectName}: Error deleting old sheet, will try to continue:`, deleteError);
           const uniqueName = config.SHEET_NAME + '_' + Date.now();
           newSheet.setName(uniqueName);
-          Utilities.sleep(1000);
+         
           try {
             spreadsheet.deleteSheet(oldSheet);
             newSheet.setName(config.SHEET_NAME);
@@ -191,7 +191,7 @@ function clearProjectDataSilent(projectName) {
         }
       }
       
-      Utilities.sleep(1000);
+     
       SpreadsheetApp.flush();
       
       newSheet.setName(config.SHEET_NAME);
@@ -207,7 +207,7 @@ function clearProjectDataSilent(projectName) {
         Utilities.sleep(timeoutDelay);
         
         SpreadsheetApp.flush();
-        Utilities.sleep(2000);
+      
       } else if (attempt === maxRetries) {
         throw e;
       } else {
@@ -337,7 +337,7 @@ function formatSmartCurrency(amount) {
   if (Math.abs(amount) >= 1) {
     return amount.toFixed(0);
   } else {
-    return amount.toFixed(2);
+    return amount.toFixed(1);
   }
 }
 
@@ -401,9 +401,7 @@ function batchOperation(items, batchSize, operation) {
     const batchResults = operation(batch, i);
     results.push(...batchResults);
     
-    if (i + batchSize < items.length) {
-      Utilities.sleep(100);
-    }
+  
   }
   return results;
 }

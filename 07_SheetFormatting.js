@@ -210,8 +210,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS rich text... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    applyEROASRichTextFormatting(sheet, numRows);
+    console.log(`⏱️ eROAS rich text optimized... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows);
     
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
@@ -225,33 +225,127 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
   }
 }
 
-function createOptimizedRanges(sheet, rowNumbers, numCols) {
-  if (rowNumbers.length === 0) return [];
-  
-  const ranges = [];
-  const sortedRows = [...rowNumbers].sort((a, b) => a - b);
-  
-  let start = sortedRows[0];
-  let end = start;
-  
-  for (let i = 1; i < sortedRows.length; i++) {
-    if (sortedRows[i] === end + 1) {
-      end = sortedRows[i];
-    } else {
-      ranges.push(sheet.getRange(start, 1, end - start + 1, numCols));
-      start = sortedRows[i];
-      end = start;
-    }
-  }
-  
-  ranges.push(sheet.getRange(start, 1, end - start + 1, numCols));
-  return ranges;
-}
-
-function applyEROASRichTextFormatting(sheet, numRows) {
+function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) {
   if (numRows <= 1) return;
   
   try {
+    const eroasColumn = 15;
+    
+    // Получаем и значения и форматирование
+    const valuesResponse = Sheets.Spreadsheets.Values.get(spreadsheetId, `R2C${eroasColumn}:R${numRows}C${eroasColumn}`, {
+      valueRenderOption: 'UNFORMATTED_VALUE'
+    });
+    
+    const formatResponse = Sheets.Spreadsheets.get(spreadsheetId, {
+      ranges: [`R2C${eroasColumn}:R${numRows}C${eroasColumn}`],
+      fields: 'sheets.data.rowData.values.textFormatRuns,sheets.data.rowData.values.userEnteredFormat.textFormat.fontSize'
+    });
+    
+    const values = valuesResponse.values || [];
+    const formatData = formatResponse.sheets[0].data[0].rowData || [];
+    
+    if (values.length === 0) return;
+    
+    const cellsToFormat = [];
+    
+    for (let i = 0; i < values.length; i++) {
+      const cellValue = values[i][0];
+      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
+        continue;
+      }
+      
+      const arrowIndex = cellValue.indexOf('→');
+      if (arrowIndex === -1) continue;
+      
+      // Получаем текущий размер шрифта ячейки
+      let currentFontSize = 10; // дефолт
+      if (formatData[i] && formatData[i].values && formatData[i].values[0]) {
+        const cellFormat = formatData[i].values[0];
+        if (cellFormat.userEnteredFormat && cellFormat.userEnteredFormat.textFormat && cellFormat.userEnteredFormat.textFormat.fontSize) {
+          currentFontSize = cellFormat.userEnteredFormat.textFormat.fontSize;
+        }
+      }
+      
+      const smallerFontSize = Math.max(currentFontSize - 1, 6); // минимум 6pt
+      
+      cellsToFormat.push({
+        rowIndex: i + 1,
+        cellValue: cellValue,
+        arrowIndex: arrowIndex,
+        currentFontSize: currentFontSize,
+        smallerFontSize: smallerFontSize
+      });
+    }
+    
+    if (cellsToFormat.length === 0) return;
+    
+    const BATCH_SIZE = 100;
+    const batches = [];
+    
+    for (let i = 0; i < cellsToFormat.length; i += BATCH_SIZE) {
+      batches.push(cellsToFormat.slice(i, i + BATCH_SIZE));
+    }
+    
+    for (const batch of batches) {
+      const requests = [];
+      
+      for (const cell of batch) {
+        const textFormatRuns = [
+          {
+            startIndex: 0,
+            endIndex: cell.arrowIndex,
+            format: {
+              foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
+              fontSize: cell.smallerFontSize  // На 1 меньше текущего
+            }
+          },
+          {
+            startIndex: cell.arrowIndex,
+            format: {
+              fontSize: cell.currentFontSize  // Текущий размер для стрелки и далее
+            }
+          }
+        ];
+        
+        requests.push({
+          updateCells: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: cell.rowIndex,
+              endRowIndex: cell.rowIndex + 1,
+              startColumnIndex: eroasColumn - 1,
+              endColumnIndex: eroasColumn
+            },
+            rows: [{
+              values: [{
+                userEnteredValue: { stringValue: cell.cellValue },
+                textFormatRuns: textFormatRuns
+              }]
+            }],
+            fields: 'userEnteredValue,textFormatRuns'
+          }
+        });
+      }
+      
+      if (requests.length > 0) {
+        Sheets.Spreadsheets.batchUpdate({
+          requests: requests
+        }, spreadsheetId);
+      }
+    }
+    
+    console.log(`Applied eROAS rich text formatting to ${cellsToFormat.length} cells with dynamic font sizes`);
+    
+  } catch (e) {
+    console.error('Error applying optimized eROAS rich text formatting:', e);
+    console.log('Falling back to standard rich text formatting...');
+    applyEROASRichTextFormattingFallback(spreadsheetId, sheetId, numRows);
+  }
+}
+
+function applyEROASRichTextFormattingFallback(spreadsheetId, sheetId, numRows) {
+  try {
+    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(getCurrentConfig().SHEET_NAME);
     const eroasColumn = 15;
     const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
     const values = range.getValues();
@@ -280,9 +374,34 @@ function applyEROASRichTextFormatting(sheet, numRows) {
     });
     
     range.setRichTextValues(richTextValues.map(rtv => [rtv]));
+    console.log('Applied fallback eROAS rich text formatting');
+    
   } catch (e) {
-    console.error('Error applying eROAS rich text formatting:', e);
+    console.error('Error in fallback eROAS rich text formatting:', e);
   }
+}
+
+function createOptimizedRanges(sheet, rowNumbers, numCols) {
+  if (rowNumbers.length === 0) return [];
+  
+  const ranges = [];
+  const sortedRows = [...rowNumbers].sort((a, b) => a - b);
+  
+  let start = sortedRows[0];
+  let end = start;
+  
+  for (let i = 1; i < sortedRows.length; i++) {
+    if (sortedRows[i] === end + 1) {
+      end = sortedRows[i];
+    } else {
+      ranges.push(sheet.getRange(start, 1, end - start + 1, numCols));
+      start = sortedRows[i];
+      end = start;
+    }
+  }
+  
+  ranges.push(sheet.getRange(start, 1, end - start + 1, numCols));
+  return ranges;
 }
 
 function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
