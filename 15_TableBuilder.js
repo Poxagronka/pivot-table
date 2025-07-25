@@ -38,10 +38,12 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
     networkKeys.forEach((networkKey, networkIndex) => {
       const network = data[networkKey];
       
+      console.log(`🌐 Creating NETWORK header for: ${network.networkName}`);
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
       const emptyRow = new Array(getUnifiedHeaders().length).fill('');
       emptyRow[0] = 'NETWORK';
       emptyRow[1] = network.networkName;
+      console.log(`📝 NETWORK row added at index ${tableData.length}, data:`, emptyRow.slice(0, 5));
       tableData.push(emptyRow);
       
       const weekKeys = Object.keys(network.weeks).sort();
@@ -56,6 +58,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         });
         
         const weekTotals = getPrecomputedTotals(allCampaigns, `network_${networkKey}_${weekKey}`);
+        console.log(`📊 WEEK totals for ${weekKey}, eROAS: ${weekTotals.avgEROASD730}`);
+        
         const weekWoWKey = `${networkKey}_${weekKey}`;
         const weekWoW = getOptimizedWoW(weekWoWKey, 'weekWoW');
         
@@ -64,7 +68,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         const status = weekWoW.growthStatus || '';
         
         formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+        console.log(`📅 Creating WEEK row for ${weekKey} at index ${tableData.length}`);
         const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache);
+        console.log(`📅 WEEK row created, eROAS column (14): ${weekRow[14]}`);
         tableData.push(weekRow);
         
         const appKeys = Object.keys(week.apps).sort((a, b) => {
@@ -76,6 +82,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         appKeys.forEach(appKey => {
           const app = week.apps[appKey];
           const appTotals = getPrecomputedTotals(app.campaigns, `incent_app_${networkKey}_${weekKey}_${appKey}`);
+          console.log(`📱 APP totals for ${app.appName}, eROAS: ${appTotals.avgEROASD730}`);
           
           const appWoWKey = `${networkKey}_${weekKey}_${appKey}`;
           const appWoW = getOptimizedWoW(appWoWKey, 'appWoW');
@@ -85,8 +92,10 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           const status = appWoW.growthStatus || '';
           
           formatData.push({ row: tableData.length + 1, type: 'APP' });
+          console.log(`📱 Creating APP row for ${app.appName} at index ${tableData.length}`);
           
           const appRow = createUnifiedRow('APP', { weekStart: week.weekStart, weekEnd: week.weekEnd }, appTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache, app.appId, app.appName);
+          console.log(`📱 APP row created, eROAS column (14): ${appRow[14]}`);
           tableData.push(appRow);
         });
       });
@@ -103,10 +112,12 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
     appKeys.forEach((appKey, appIndex) => {
       const app = data[appKey];
       
+      console.log(`📱 Creating APP header for: ${app.appName} (project: ${CURRENT_PROJECT})`);
       formatData.push({ row: tableData.length + 1, type: 'APP' });
       const emptyRow = new Array(getUnifiedHeaders().length).fill('');
       emptyRow[0] = 'APP';
       emptyRow[1] = app.appName;
+      console.log(`📝 Empty APP row created at index ${tableData.length}, eROAS column (14): ${emptyRow[14]}`);
       tableData.push(emptyRow);
 
       const weekKeys = Object.keys(app.weeks).sort();
@@ -131,6 +142,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         }
         
         const weekTotals = getPrecomputedTotals(allCampaigns, `app_${appKey}_${weekKey}`);
+        console.log(`📊 WEEK totals for ${app.appName} ${weekKey}, eROAS: ${weekTotals.avgEROASD730}`);
+        
         const appWeekKey = `${app.appName}_${weekKey}`;
         const weekWoW = getOptimizedWoW(appWeekKey, 'appWeekWoW');
         
@@ -138,7 +151,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
         const status = weekWoW.growthStatus || '';
         
+        console.log(`📅 Creating WEEK row for ${app.appName} ${weekKey} at index ${tableData.length}`);
         const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
+        console.log(`📅 WEEK row created, eROAS column (14): ${weekRow[14]}`);
         tableData.push(weekRow);
         
         addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialEROASCache, appsDbCache);
@@ -155,6 +170,8 @@ function precomputeAllTotals(data) {
   const startTime = Date.now();
   let computedCount = 0;
   
+  console.log(`🔄 precomputeAllTotals started for ${CURRENT_PROJECT}`);
+  
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     Object.keys(data).forEach(networkKey => {
       const network = data[networkKey];
@@ -168,6 +185,7 @@ function precomputeAllTotals(data) {
         
         const cacheKey = `network_${networkKey}_${weekKey}`;
         const totals = calculateWeekTotals(allCampaigns);
+        console.log(`💾 Caching NETWORK ${networkKey} ${weekKey}, eROAS: ${totals.avgEROASD730}`);
         PRECOMPUTED_TOTALS.set(cacheKey, totals);
         computedCount++;
         
@@ -175,6 +193,7 @@ function precomputeAllTotals(data) {
           const app = week.apps[appKey];
           const appCacheKey = `incent_app_${networkKey}_${weekKey}_${appKey}`;
           const appTotals = calculateWeekTotals(app.campaigns);
+          console.log(`💾 Caching INCENT APP ${appKey} ${weekKey}, eROAS: ${appTotals.avgEROASD730}`);
           PRECOMPUTED_TOTALS.set(appCacheKey, appTotals);
           computedCount++;
         });
@@ -193,6 +212,7 @@ function precomputeAllTotals(data) {
             
             const sourceAppCacheKey = `sourceapp_${appKey}_${weekKey}_${sourceApp.sourceAppId}`;
             const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
+            console.log(`💾 Caching SOURCE_APP ${sourceApp.sourceAppId} ${weekKey}, eROAS: ${sourceAppTotals.avgEROASD730}`);
             PRECOMPUTED_TOTALS.set(sourceAppCacheKey, sourceAppTotals);
             computedCount++;
             
@@ -209,6 +229,7 @@ function precomputeAllTotals(data) {
             
             const networkCacheKey = `overall_network_${appKey}_${weekKey}_${network.networkId}`;
             const networkTotals = calculateWeekTotals(network.campaigns);
+            console.log(`💾 Caching OVERALL NETWORK ${network.networkId} ${weekKey}, eROAS: ${networkTotals.avgEROASD730}`);
             PRECOMPUTED_TOTALS.set(networkCacheKey, networkTotals);
             computedCount++;
             
@@ -226,6 +247,7 @@ function precomputeAllTotals(data) {
         
         const cacheKey = `app_${appKey}_${weekKey}`;
         const totals = calculateWeekTotals(allCampaigns);
+        console.log(`💾 Caching APP ${appKey} ${weekKey}, eROAS: ${totals.avgEROASD730}`);
         PRECOMPUTED_TOTALS.set(cacheKey, totals);
         computedCount++;
         
@@ -296,17 +318,16 @@ function getOptimizedWoW(key, type) {
   return { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
 }
 
-function getCachedWoW(key, type, fallbackWow) {
-  return getOptimizedWoW(key, type);
-}
-
 function getPrecomputedTotals(campaigns, cacheKey) {
   const cached = PRECOMPUTED_TOTALS.get(cacheKey);
   if (cached) {
+    console.log(`🔍 Cache hit for ${cacheKey}, eROAS: ${cached.avgEROASD730}`);
     return cached;
   }
   
-  return getCachedWeekTotals(campaigns);
+  const computed = getCachedWeekTotals(campaigns);
+  console.log(`🔍 Cache miss for ${cacheKey}, computed eROAS: ${computed.avgEROASD730}`);
+  return computed;
 }
 
 function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '', initialEROASCache = null, appsDbCache = null) {
@@ -338,7 +359,9 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       }
 }
       
+      console.log(`📦 Creating SOURCE_APP row for ${sourceApp.sourceAppName} at index ${tableData.length}`);
       const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
+      console.log(`📦 SOURCE_APP row created, eROAS column (14): ${sourceAppRow[14]}`);
       tableData.push(sourceAppRow);
       
       addOptimizedCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, formatData, appName, initialEROASCache);
@@ -362,7 +385,9 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
       
+      console.log(`🌐 Creating NETWORK row for ${network.networkName} at index ${tableData.length}`);
       const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialEROASCache, network.networkId, network.networkName);
+      console.log(`🌐 NETWORK row created, eROAS column (14): ${networkRow[14]}`);
       tableData.push(networkRow);
     });
   } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
@@ -397,21 +422,17 @@ function addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatDat
       
       formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
       
+      console.log(`🎯 Creating CAMPAIGN row for ${campaign.campaignId} at index ${tableData.length}`);
       const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialEROASCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
+      console.log(`🎯 CAMPAIGN row created, eROAS column (14): ${campaignRow[14]}`);
       tableData.push(campaignRow);
     });
   }
 }
 
-function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = '', initialEROASCache = null, appsDbCache = null) {
-  return addOptimizedSubRows(tableData, week, weekKey, formatData, appName, initialEROASCache, appsDbCache);
-}
-
-function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
-  return addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatData, appName, initialEROASCache);
-}
-
 function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appName = '', initialEROASCache = null, identifier = '', displayName = '', campaignIdValue = '') {
+  console.log(`🏗️ createUnifiedRow called: level=${level}, appName=${appName}, eROAS=${data.avgEROASD730 || data.eRoasForecastD730 || 'N/A'}`);
+  
   const headers = getUnifiedHeaders();
   const row = new Array(headers.length).fill('');
   
@@ -420,7 +441,6 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   if (level === 'APP') {
     row[1] = displayName || identifier;
     
-    // INCENT_TRAFFIC: eROAS пишется для APP внутри недель  
     if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
       
@@ -444,6 +464,10 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       row[15] = formatSmartCurrency(data.totalProfit); 
       row[16] = profitWoW; 
       row[17] = status;
+      
+      console.log(`🏗️ APP row for INCENT_TRAFFIC: eROAS column (14) = ${eROAS730Display}`);
+    } else {
+      console.log(`🏗️ APP row for regular project: leaving empty (should have no eROAS)`);
     }
     
     return row;
@@ -461,6 +485,8 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
+    
+    console.log(`🏗️ WEEK row: eROAS column (14) = ${eROAS730Display}`);
   } else if (level === 'CAMPAIGN') {
     row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
     const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
@@ -475,6 +501,8 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[8] = combinedRoas; row[9] = data.ipm.toFixed(1); row[10] = `${data.rrD1.toFixed(0)}%`; row[11] = `${data.rrD7.toFixed(0)}%`;
     row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.eProfitForecast); row[16] = profitWoW; row[17] = status;
+    
+    console.log(`🏗️ CAMPAIGN row: eROAS column (14) = ${eROAS730Display}`);
   } else {
     // SOURCE_APP или NETWORK
     row[1] = displayName || identifier;
@@ -482,9 +510,9 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
     
-    // INCENT_TRAFFIC: НЕ пишем eROAS для верхнего уровня NETWORK  
     if (level === 'NETWORK' && CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       eROAS730Display = '';
+      console.log(`🏗️ NETWORK row for INCENT_TRAFFIC: eROAS cleared`);
     } else if (initialEROASCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
       eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
@@ -494,6 +522,8 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
+    
+    console.log(`🏗️ ${level} row: eROAS column (14) = ${eROAS730Display}`);
   }
   
   row[18] = '';
