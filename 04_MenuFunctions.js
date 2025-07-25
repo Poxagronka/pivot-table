@@ -39,7 +39,7 @@ function updateSelectedProjects() {
   
   try {
     preloadSettings();
-
+    Utilities.sleep(2000);
   } catch (e) {
     console.error('Error preloading settings:', e);
   }
@@ -60,6 +60,8 @@ function updateSelectedProjects() {
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
         
+        console.log('Waiting 3 seconds before next project...');
+        Utilities.sleep(3000);
       }
       
       updateProjectDataWithRetry(projectName);
@@ -67,7 +69,7 @@ function updateSelectedProjects() {
       successfulProjects.push(projectName);
       console.log(`✅ ${projectName} updated successfully`);
       
-     
+      Utilities.sleep(2000);
       
     } catch (e) {
       console.error(`❌ Failed to update ${proj}:`, e);
@@ -84,7 +86,7 @@ function updateSelectedProjects() {
   if (successfulProjects.length > 0) {
     try {
       console.log('Waiting before sorting sheets...');
-     
+      Utilities.sleep(3000);
       sortProjectSheetsWithRetry();
     } catch (e) {
       console.error('Error sorting sheets:', e);
@@ -117,7 +119,7 @@ function updateAllProjects() {
         console.log(`✅ ${proj} updated successfully`);
         
         if (index < projects.length - 1) {
-          
+          Utilities.sleep(2000);
         }
         
       } catch (e) {
@@ -128,14 +130,14 @@ function updateAllProjects() {
         });
         
         if (index < projects.length - 1) {
-          
+          Utilities.sleep(3000);
         }
       }
     });
     
     if (successfulProjects.length > 0) {
       try {
-       
+        Utilities.sleep(1000);
         sortProjectSheetsWithRetry();
       } catch (e) {
         console.error('Error sorting sheets:', e);
@@ -376,7 +378,7 @@ function updateProjectDataWithRetry(projectName, maxRetries = 1) {
     try {
       clearSettingsCache();
       SpreadsheetApp.flush();
-      
+      Utilities.sleep(1000);
       
       updateProjectData(projectName);
       return;

@@ -210,8 +210,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS rich text formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    applyEROASRichTextFormatting(spreadsheetId, sheetId, numRows);
+    console.log(`⏱️ eROAS rich text... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    applyEROASRichTextFormatting(sheet, numRows);
     
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
@@ -222,119 +222,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
   } catch (e) {
     console.error('Error in applyOptimizedFormatting:', e);
     throw e;
-  }
-}
-
-function applyEROASRichTextFormatting(spreadsheetId, sheetId, numRows) {
-  if (numRows <= 1) return;
-  
-  try {
-    const eroasColumn = 15;
-    
-    const valuesResponse = Sheets.Spreadsheets.Values.get(spreadsheetId, `R2C${eroasColumn}:R${numRows}C${eroasColumn}`, {
-      valueRenderOption: 'UNFORMATTED_VALUE'
-    });
-    
-    const formatResponse = Sheets.Spreadsheets.get(spreadsheetId, {
-      ranges: [`R2C${eroasColumn}:R${numRows}C${eroasColumn}`],
-      fields: 'sheets.data.rowData.values.textFormatRuns,sheets.data.rowData.values.userEnteredFormat.textFormat.fontSize'
-    });
-    
-    const values = valuesResponse.values || [];
-    const formatData = formatResponse.sheets[0].data[0].rowData || [];
-    
-    if (values.length === 0) return;
-    
-    const cellsToFormat = [];
-    
-    for (let i = 0; i < values.length; i++) {
-      const cellValue = values[i][0];
-      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
-        continue;
-      }
-      
-      const arrowIndex = cellValue.indexOf('→');
-      if (arrowIndex === -1) continue;
-      
-      let currentFontSize = 10;
-      if (formatData[i] && formatData[i].values && formatData[i].values[0]) {
-        const cellFormat = formatData[i].values[0];
-        if (cellFormat.userEnteredFormat && cellFormat.userEnteredFormat.textFormat && cellFormat.userEnteredFormat.textFormat.fontSize) {
-          currentFontSize = cellFormat.userEnteredFormat.textFormat.fontSize;
-        }
-      }
-      
-      const smallerFontSize = Math.max(currentFontSize - 1, 6);
-      
-      cellsToFormat.push({
-        rowIndex: i + 1,
-        cellValue: cellValue,
-        arrowIndex: arrowIndex,
-        currentFontSize: currentFontSize,
-        smallerFontSize: smallerFontSize
-      });
-    }
-    
-    if (cellsToFormat.length === 0) return;
-    
-    const BATCH_SIZE = 5000;
-    const batches = [];
-    
-    for (let i = 0; i < cellsToFormat.length; i += BATCH_SIZE) {
-      batches.push(cellsToFormat.slice(i, i + BATCH_SIZE));
-    }
-    
-    for (const batch of batches) {
-      const requests = [];
-      
-      for (const cell of batch) {
-        const textFormatRuns = [
-          {
-            startIndex: 0,
-            format: {
-              foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
-              fontSize: cell.smallerFontSize
-            }
-          },
-          {
-            startIndex: cell.arrowIndex,
-            format: {
-              fontSize: cell.currentFontSize
-            }
-          }
-        ];
-        
-        requests.push({
-          updateCells: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: cell.rowIndex,
-              endRowIndex: cell.rowIndex + 1,
-              startColumnIndex: eroasColumn - 1,
-              endColumnIndex: eroasColumn
-            },
-            rows: [{
-              values: [{
-                userEnteredValue: { stringValue: cell.cellValue },
-                textFormatRuns: textFormatRuns
-              }]
-            }],
-            fields: 'userEnteredValue,textFormatRuns'
-          }
-        });
-      }
-      
-      if (requests.length > 0) {
-        Sheets.Spreadsheets.batchUpdate({
-          requests: requests
-        }, spreadsheetId);
-      }
-    }
-    
-    console.log(`Applied eROAS rich text formatting to ${cellsToFormat.length} cells with dynamic font sizes`);
-    
-  } catch (e) {
-    console.error('Error applying eROAS rich text formatting:', e);
   }
 }
 
@@ -359,6 +246,43 @@ function createOptimizedRanges(sheet, rowNumbers, numCols) {
   
   ranges.push(sheet.getRange(start, 1, end - start + 1, numCols));
   return ranges;
+}
+
+function applyEROASRichTextFormatting(sheet, numRows) {
+  if (numRows <= 1) return;
+  
+  try {
+    const eroasColumn = 15;
+    const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
+    const values = range.getValues();
+    
+    const richTextValues = values.map(row => {
+      const cellValue = row[0];
+      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
+        return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
+      }
+      
+      const arrowIndex = cellValue.indexOf('→');
+      if (arrowIndex === -1) {
+        return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
+      }
+      
+      const beforeArrow = cellValue.substring(0, arrowIndex);
+      
+      const richTextBuilder = SpreadsheetApp.newRichTextValue()
+      .setText(cellValue)
+      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
+      .setForegroundColor('#808080')
+      .setFontSize(9)
+      .build());
+      
+      return richTextBuilder.build();
+    });
+    
+    range.setRichTextValues(richTextValues.map(rtv => [rtv]));
+  } catch (e) {
+    console.error('Error applying eROAS rich text formatting:', e);
+  }
 }
 
 function applyOptimizedConditionalFormatting(sheet, numRows, appData) {

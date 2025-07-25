@@ -180,17 +180,18 @@ class CommentCache {
   }
 
   getCommentColumn(sheetName) {
-  const headers = this.getSheetHeaders(sheetName);
-  let column = this.findColumnByHeader(headers, 'Comments');
-  if (column === -1) {
-    column = this.findColumnByHeader(headers, 'Comment');
+    const headers = this.getSheetHeaders(sheetName);
+    let column = this.findColumnByHeader(headers, 'Comments');
+    if (column === -1) {
+      column = this.findColumnByHeader(headers, 'Comment');
+    }
+    if (column === -1) {
+      console.error(`Column 'Comments' not found in sheet ${sheetName}`);
+      console.log('Available headers:', headers);
+      throw new Error(`Column 'Comments' not found in sheet ${sheetName}`);
+    }
+    return column;
   }
-  if (column === -1) {
-    console.log(`Column 'Comments' not found in sheet ${sheetName} - sheet may be empty`);
-    return null; // вместо throw new Error
-  }
-  return column;
-}
   
   getLevelColumn(sheetName) {
     const headers = this.getSheetHeaders(sheetName);
@@ -367,38 +368,31 @@ class CommentCache {
   }
 
   syncCommentsFromSheet() {
-  const sheetName = this.config.SHEET_NAME;
-  
-  try {
-    const range = `${sheetName}!A:Z`;
-    const response = this.getCachedSheetData(this.config.SHEET_ID, range);
+    const sheetName = this.config.SHEET_NAME;
     
-    if (!response.values || response.values.length < 2) {
-      console.log(`${this.projectName}: No data found in ${sheetName} - skipping comment sync`);
-      return;
-    }
-    
-    const data = response.values;
-    const headers = data[0];
-    
-    // Добавить проверку на существование заголовков
-    if (!headers || headers.length === 0) {
-      console.log(`${this.projectName}: No headers found in ${sheetName} - skipping comment sync`);
-      return;
-    }
-    
-    const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
-    const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
-    const idCol = this.findColumnByHeader(headers, 'ID') - 1;
-    let commentCol = this.findColumnByHeader(headers, 'Comments') - 1;
-    
-    if (commentCol === -2) {
-      commentCol = this.findColumnByHeader(headers, 'Comment') - 1;
-      if (commentCol === -2) {
-        console.log(`${this.projectName}: Comments column not found in ${sheetName} - skipping comment sync`);
-        return; // вместо throw new Error
+    try {
+      const range = `${sheetName}!A:Z`;
+      const response = this.getCachedSheetData(this.config.SHEET_ID, range);
+      
+      if (!response.values || response.values.length < 2) {
+        console.log(`No data found in ${sheetName}`);
+        return;
       }
-    }
+      
+      const data = response.values;
+      const headers = data[0];
+      
+      const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
+      const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
+      const idCol = this.findColumnByHeader(headers, 'ID') - 1;
+      let commentCol = this.findColumnByHeader(headers, 'Comments') - 1;
+      
+      if (commentCol === -2) {
+        commentCol = this.findColumnByHeader(headers, 'Comment') - 1;
+        if (commentCol === -2) {
+          throw new Error('Comments column not found');
+        }
+      }
       
       const commentsToSave = [];
       let currentApp = '';
@@ -524,39 +518,32 @@ class CommentCache {
   }
 
   applyCommentsToSheet() {
-  const sheetName = this.config.SHEET_NAME;
-  
-  try {
-    const range = `${sheetName}!A:Z`;
-    const response = this.getCachedSheetData(this.config.SHEET_ID, range);
+    const sheetName = this.config.SHEET_NAME;
     
-    if (!response.values || response.values.length < 2) {
-      console.log(`${this.projectName}: No data found in ${sheetName} - skipping comment application`);
-      return;
-    }
-    
-    const data = response.values;
-    const headers = data[0];
-    
-    // Добавить проверку на существование заголовков
-    if (!headers || headers.length === 0) {
-      console.log(`${this.projectName}: No headers found in ${sheetName} - skipping comment application`);
-      return;
-    }
-    
-    const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
-    const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
-    const idCol = this.findColumnByHeader(headers, 'ID') - 1;
-    let commentCol = this.findColumnByHeader(headers, 'Comments');
-    
-    if (commentCol === -1) {
-      commentCol = this.findColumnByHeader(headers, 'Comment');
-    }
-    
-    if (commentCol === -1) {
-      console.log(`${this.projectName}: Comments column not found in ${sheetName} - skipping comment application`);
-      return; // вместо throw new Error
-    }
+    try {
+      const range = `${sheetName}!A:Z`;
+      const response = this.getCachedSheetData(this.config.SHEET_ID, range);
+      
+      if (!response.values || response.values.length < 2) {
+        console.log(`No data found in ${sheetName}`);
+        return;
+      }
+      
+      const data = response.values;
+      const headers = data[0];
+      
+      const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
+      const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
+      const idCol = this.findColumnByHeader(headers, 'ID') - 1;
+      let commentCol = this.findColumnByHeader(headers, 'Comments');
+      
+      if (commentCol === -1) {
+        commentCol = this.findColumnByHeader(headers, 'Comment');
+      }
+      
+      if (commentCol === -1) {
+        throw new Error('Comments column not found');
+      }
       
       const comments = this.loadAllComments();
       
