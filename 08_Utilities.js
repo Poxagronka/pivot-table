@@ -116,6 +116,9 @@ function clearAllDataSilent() {
       }
       
       newSheet.setName(config.SHEET_NAME);
+
+      const cache = new CommentCache();
+      cache.clearCache(); // Очистить весь кеш CommentCache
       
       console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
       return;

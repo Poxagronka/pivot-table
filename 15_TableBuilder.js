@@ -1,6 +1,4 @@
 const WEEK_TOTALS_CACHE = new Map();
-const TABLE_APPS_DB_CACHE = new Map();
-const TABLE_DISPLAY_NAME_CACHE = new Map();
 
 function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
   const startTime = Date.now();
@@ -77,8 +75,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
     
   } else {
     console.log(`⏱️ Processing regular projects... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
-    
-    preloadAppsDbCache();
     
     const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     console.log(`📊 Found ${appKeys.length} apps to process`);
@@ -171,13 +167,22 @@ function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = 
       
       formatData.push({ row: tableData.length + 1, type: 'SOURCE_APP' });
       
-      const sourceAppDisplayInfo = getCachedDisplayName(sourceApp.sourceAppId, sourceApp.sourceAppName);
-      
-      if (sourceAppDisplayInfo.isHyperlink) {
-        formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+      let sourceAppDisplayName = sourceApp.sourceAppName;
+      if (CURRENT_PROJECT === 'TRICKY') {
+        try {
+          const appsDb = new AppsDatabase('TRICKY');
+          const cache = appsDb.loadFromCache();
+          const appInfo = cache[sourceApp.sourceAppId];
+          if (appInfo && appInfo.linkApp) {
+            sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+            formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+          }
+        } catch (e) {
+          console.log('Error getting store link for source app:', e);
+        }
       }
       
-      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayInfo.displayName);
+      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
       tableData.push(sourceAppRow);
       
       const campaignStartTime = Date.now();
@@ -384,71 +389,8 @@ function calculateWeekTotals(campaigns) {
   };
 }
 
-function preloadAppsDbCache() {
-  if (CURRENT_PROJECT !== 'TRICKY') return;
-  
-  if (TABLE_APPS_DB_CACHE.size > 0) return;
-  
-  try {
-    const appsDb = new AppsDatabase('TRICKY');
-    const cache = appsDb.loadFromCache();
-    
-    Object.keys(cache).forEach(bundleId => {
-      const appInfo = cache[bundleId];
-      let displayName = bundleId;
-      
-      if (appInfo && appInfo.publisher !== bundleId) {
-        const publisher = appInfo.publisher || '';
-        const appName = appInfo.appName || '';
-        
-        if (publisher && appName && publisher !== appName) {
-          displayName = `${publisher} ${appName}`;
-        } else if (publisher) {
-          displayName = publisher;
-        } else if (appName) {
-          displayName = appName;
-        }
-      }
-      
-      TABLE_APPS_DB_CACHE.set(bundleId, {
-        displayName: displayName,
-        linkApp: appInfo ? appInfo.linkApp : ''
-      });
-    });
-    
-    console.log(`Apps Database preloaded: ${TABLE_APPS_DB_CACHE.size} entries`);
-  } catch (e) {
-    console.error('Error preloading Apps Database:', e);
-  }
-}
-
-function getCachedDisplayName(bundleId, defaultName) {
-  if (CURRENT_PROJECT !== 'TRICKY') {
-    return { displayName: defaultName, isHyperlink: false };
-  }
-  
-  if (TABLE_DISPLAY_NAME_CACHE.has(bundleId)) {
-    return TABLE_DISPLAY_NAME_CACHE.get(bundleId);
-  }
-  
-  let displayName = defaultName;
-  let isHyperlink = false;
-  const appsInfo = TABLE_APPS_DB_CACHE.get(bundleId);
-  
-  if (appsInfo && appsInfo.linkApp) {
-    displayName = `=HYPERLINK("${appsInfo.linkApp}", "${defaultName}")`;
-    isHyperlink = true;
-  }
-  
-  const result = { displayName: displayName, isHyperlink: isHyperlink };
-  TABLE_DISPLAY_NAME_CACHE.set(bundleId, result);
-  return result;
-}
-
 function clearTableBuilderCaches() {
   WEEK_TOTALS_CACHE.clear();
-  TABLE_APPS_DB_CACHE.clear();
-  TABLE_DISPLAY_NAME_CACHE.clear();
 }
 
 function getUnifiedHeaders() {
