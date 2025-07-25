@@ -277,7 +277,7 @@ function applyEROASRichTextFormatting(spreadsheetId, sheetId, numRows) {
     
     if (cellsToFormat.length === 0) return;
     
-    const BATCH_SIZE = 1000;
+    const BATCH_SIZE = 5000;
     const batches = [];
     
     for (let i = 0; i < cellsToFormat.length; i += BATCH_SIZE) {

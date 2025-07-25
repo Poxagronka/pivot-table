@@ -419,6 +419,33 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   
   if (level === 'APP') {
     row[1] = displayName || identifier;
+    
+    // INCENT_TRAFFIC: eROAS пишется для APP внутри недель  
+    if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
+      
+      let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
+      if (initialEROASCache && appName) {
+        const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+        eROAS730Display = initialEROASCache.formatEROASWithInitial('APP', appName, weekRange, data.avgEROASD730, identifier, displayName);
+      }
+      
+      row[4] = formatSmartCurrency(data.totalSpend); 
+      row[5] = spendWoW; 
+      row[6] = data.totalInstalls; 
+      row[7] = data.avgCpi.toFixed(3);
+      row[8] = combinedRoas; 
+      row[9] = data.avgIpm.toFixed(1); 
+      row[10] = `${data.avgRrD1.toFixed(0)}%`; 
+      row[11] = `${data.avgRrD7.toFixed(0)}%`;
+      row[12] = data.avgArpu.toFixed(3); 
+      row[13] = `${data.avgERoas.toFixed(0)}%`; 
+      row[14] = eROAS730Display;
+      row[15] = formatSmartCurrency(data.totalProfit); 
+      row[16] = profitWoW; 
+      row[17] = status;
+    }
+    
     return row;
   } else if (level === 'WEEK') {
     row[1] = `${week.weekStart} - ${week.weekEnd}`;
@@ -449,11 +476,16 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.eProfitForecast); row[16] = profitWoW; row[17] = status;
   } else {
+    // SOURCE_APP или NETWORK
     row[1] = displayName || identifier;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
-    if (initialEROASCache && appName) {
+    
+    // INCENT_TRAFFIC: НЕ пишем eROAS для верхнего уровня NETWORK  
+    if (level === 'NETWORK' && CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      eROAS730Display = '';
+    } else if (initialEROASCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
       eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
     }
