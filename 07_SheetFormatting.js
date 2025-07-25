@@ -210,8 +210,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS rich text optimized... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows);
+    console.log(`⏱️ eROAS rich text formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    applyEROASRichTextFormatting(spreadsheetId, sheetId, numRows);
     
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
@@ -225,13 +225,12 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
   }
 }
 
-function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) {
+function applyEROASRichTextFormatting(spreadsheetId, sheetId, numRows) {
   if (numRows <= 1) return;
   
   try {
     const eroasColumn = 15;
     
-    // Получаем и значения и форматирование
     const valuesResponse = Sheets.Spreadsheets.Values.get(spreadsheetId, `R2C${eroasColumn}:R${numRows}C${eroasColumn}`, {
       valueRenderOption: 'UNFORMATTED_VALUE'
     });
@@ -257,8 +256,7 @@ function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) 
       const arrowIndex = cellValue.indexOf('→');
       if (arrowIndex === -1) continue;
       
-      // Получаем текущий размер шрифта ячейки
-      let currentFontSize = 10; // дефолт
+      let currentFontSize = 10;
       if (formatData[i] && formatData[i].values && formatData[i].values[0]) {
         const cellFormat = formatData[i].values[0];
         if (cellFormat.userEnteredFormat && cellFormat.userEnteredFormat.textFormat && cellFormat.userEnteredFormat.textFormat.fontSize) {
@@ -266,7 +264,7 @@ function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) 
         }
       }
       
-      const smallerFontSize = Math.max(currentFontSize - 1, 6); // минимум 6pt
+      const smallerFontSize = Math.max(currentFontSize - 1, 6);
       
       cellsToFormat.push({
         rowIndex: i + 1,
@@ -293,16 +291,15 @@ function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) 
         const textFormatRuns = [
           {
             startIndex: 0,
-            endIndex: cell.arrowIndex,
             format: {
               foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
-              fontSize: cell.smallerFontSize  // На 1 меньше текущего
+              fontSize: cell.smallerFontSize
             }
           },
           {
             startIndex: cell.arrowIndex,
             format: {
-              fontSize: cell.currentFontSize  // Текущий размер для стрелки и далее
+              fontSize: cell.currentFontSize
             }
           }
         ];
@@ -337,47 +334,7 @@ function applyEROASRichTextFormattingOptimized(spreadsheetId, sheetId, numRows) 
     console.log(`Applied eROAS rich text formatting to ${cellsToFormat.length} cells with dynamic font sizes`);
     
   } catch (e) {
-    console.error('Error applying optimized eROAS rich text formatting:', e);
-    console.log('Falling back to standard rich text formatting...');
-    applyEROASRichTextFormattingFallback(spreadsheetId, sheetId, numRows);
-  }
-}
-
-function applyEROASRichTextFormattingFallback(spreadsheetId, sheetId, numRows) {
-  try {
-    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(getCurrentConfig().SHEET_NAME);
-    const eroasColumn = 15;
-    const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
-    const values = range.getValues();
-    
-    const richTextValues = values.map(row => {
-      const cellValue = row[0];
-      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
-      }
-      
-      const arrowIndex = cellValue.indexOf('→');
-      if (arrowIndex === -1) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
-      }
-      
-      const beforeArrow = cellValue.substring(0, arrowIndex);
-      
-      const richTextBuilder = SpreadsheetApp.newRichTextValue()
-      .setText(cellValue)
-      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
-      .setForegroundColor('#808080')
-      .setFontSize(9)
-      .build());
-      
-      return richTextBuilder.build();
-    });
-    
-    range.setRichTextValues(richTextValues.map(rtv => [rtv]));
-    console.log('Applied fallback eROAS rich text formatting');
-    
-  } catch (e) {
-    console.error('Error in fallback eROAS rich text formatting:', e);
+    console.error('Error applying eROAS rich text formatting:', e);
   }
 }
 
