@@ -19,9 +19,9 @@ function createUnifiedPivotTable(data) {
     return;
   }
 
-  console.log(`⏱️ Initial eROAS cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-  const initialEROASCache = new InitialEROASCache();
-  initialEROASCache.recordInitialValuesFromData(data);
+  console.log(`⏱️ Initial metrics cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+  const initialMetricsCache = new InitialMetricsCache();
+  initialMetricsCache.recordInitialValuesFromData(data);
 
   console.log(`⏱️ WoW calculations starting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const wow = CURRENT_PROJECT === 'INCENT_TRAFFIC' ? 
@@ -32,7 +32,7 @@ function createUnifiedPivotTable(data) {
   const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
-  buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache);
+  buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache);
 
   console.log(`⏱️ Writing to sheet... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
@@ -100,6 +100,9 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
 
       const eroasRange = sheet.getRange(2, 15, numRows - 1, 1);
       eroasRange.setHorizontalAlignment('right');
+
+      const eprofitRange = sheet.getRange(2, 16, numRows - 1, 1);
+      eprofitRange.setHorizontalAlignment('right');
     }
 
     console.log(`⏱️ Row type formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
@@ -210,7 +213,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS rich text (optimized)... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    console.log(`⏱️ eROAS/eProfit rich text (optimized)... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedEROASFormatting(sheet, numRows);
     
     sheet.hideColumns(1);
@@ -252,14 +255,15 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
   if (numRows <= 1) return;
   
   const startTime = Date.now();
-  console.log('🚀 Starting optimized eROAS formatting...');
+  console.log('🚀 Starting optimized eROAS/eProfit formatting...');
   
   try {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     const eroasColumn = 14;
+    const eprofitColumn = 15;
     
-    const range = sheet.getRange(2, 1, numRows - 1, eroasColumn + 1);
+    const range = sheet.getRange(2, 1, numRows - 1, eprofitColumn + 2);
     const allData = range.getValues();
     
     const requests = [];
@@ -267,13 +271,7 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
     allData.forEach((row, index) => {
       const level = row[0];
       const eroasValue = row[eroasColumn];
-      
-      if (!eroasValue || typeof eroasValue !== 'string' || !eroasValue.includes('→')) {
-        return;
-      }
-      
-      const arrowIndex = eroasValue.indexOf('→');
-      if (arrowIndex === -1) return;
+      const eprofitValue = row[eprofitColumn];
       
       const rowIndex = index + 1;
       
@@ -316,38 +314,83 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
       
       const smallerFontSize = baseFontSize - 1;
       
-      requests.push({
-        updateCells: {
-          range: {
-            sheetId: sheetId,
-            startRowIndex: rowIndex,
-            endRowIndex: rowIndex + 1,
-            startColumnIndex: eroasColumn,
-            endColumnIndex: eroasColumn + 1
-          },
-          rows: [{
-            values: [{
-              userEnteredValue: { stringValue: eroasValue },
-              textFormatRuns: [
-                {
-                  startIndex: 0,
-                  format: {
-                    foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
-                    fontSize: smallerFontSize
-                  }
-                },
-                {
-                  startIndex: arrowIndex,
-                  format: {
-                    fontSize: baseFontSize
-                  }
-                }
-              ]
-            }]
-          }],
-          fields: 'userEnteredValue,textFormatRuns'
+      // Format eROAS column
+      if (eroasValue && typeof eroasValue === 'string' && eroasValue.includes('→')) {
+        const arrowIndex = eroasValue.indexOf('→');
+        if (arrowIndex !== -1) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: rowIndex,
+                endRowIndex: rowIndex + 1,
+                startColumnIndex: eroasColumn,
+                endColumnIndex: eroasColumn + 1
+              },
+              rows: [{
+                values: [{
+                  userEnteredValue: { stringValue: eroasValue },
+                  textFormatRuns: [
+                    {
+                      startIndex: 0,
+                      format: {
+                        foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
+                        fontSize: smallerFontSize
+                      }
+                    },
+                    {
+                      startIndex: arrowIndex,
+                      format: {
+                        fontSize: baseFontSize
+                      }
+                    }
+                  ]
+                }]
+              }],
+              fields: 'userEnteredValue,textFormatRuns'
+            }
+          });
         }
-      });
+      }
+      
+      // Format eProfit column
+      if (eprofitValue && typeof eprofitValue === 'string' && eprofitValue.includes('→')) {
+        const arrowIndex = eprofitValue.indexOf('→');
+        if (arrowIndex !== -1) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: rowIndex,
+                endRowIndex: rowIndex + 1,
+                startColumnIndex: eprofitColumn,
+                endColumnIndex: eprofitColumn + 1
+              },
+              rows: [{
+                values: [{
+                  userEnteredValue: { stringValue: eprofitValue },
+                  textFormatRuns: [
+                    {
+                      startIndex: 0,
+                      format: {
+                        foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
+                        fontSize: smallerFontSize
+                      }
+                    },
+                    {
+                      startIndex: arrowIndex,
+                      format: {
+                        fontSize: baseFontSize
+                      }
+                    }
+                  ]
+                }]
+              }],
+              fields: 'userEnteredValue,textFormatRuns'
+            }
+          });
+        }
+      }
     });
     
     if (requests.length > 0) {
@@ -364,10 +407,10 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
       }
     }
     
-    console.log(`✅ eROAS formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
+    console.log(`✅ eROAS/eProfit formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
     
   } catch (e) {
-    console.error('Error applying optimized eROAS formatting:', e);
+    console.error('Error applying optimized eROAS/eProfit formatting:', e);
   }
 }
 
