@@ -65,6 +65,8 @@ function fetchCampaignData(dateRange) {
     query: getGraphQLQuery()
   };
 
+  console.log(`${CURRENT_PROJECT}: API request payload size: ${JSON.stringify(payload).length} chars`);
+
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -80,17 +82,11 @@ function fetchCampaignData(dateRange) {
       'x-requested-with': 'XMLHttpRequest',
       'Trace-Id': Utilities.getUuid()
     },
-    payload: JSON.stringify(payload)
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   };
 
-  const resp = UrlFetchApp.fetch(config.API_URL, options);
-  if (resp.getResponseCode() !== 200) {
-    throw new Error('API request failed: ' + resp.getContentText());
-  }
-  
-  const endTime = Date.now();
-  console.log(`${CURRENT_PROJECT}: API request completed in ${(endTime - startTime) / 1000}s`);
-  return JSON.parse(resp.getContentText());
+  return executeApiRequestWithRetry(config.API_URL, options, CURRENT_PROJECT, startTime);
 }
 
 function fetchProjectCampaignData(projectName, dateRange) {
@@ -159,6 +155,8 @@ function fetchProjectCampaignData(projectName, dateRange) {
     query: getGraphQLQuery()
   };
 
+  console.log(`${projectName}: API request payload size: ${JSON.stringify(payload).length} chars`);
+
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -174,17 +172,102 @@ function fetchProjectCampaignData(projectName, dateRange) {
       'x-requested-with': 'XMLHttpRequest',
       'Trace-Id': Utilities.getUuid()
     },
-    payload: JSON.stringify(payload)
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   };
 
-  const resp = UrlFetchApp.fetch(config.API_URL, options);
-  if (resp.getResponseCode() !== 200) {
-    throw new Error(`${projectName} API request failed: ` + resp.getContentText());
+  return executeApiRequestWithRetry(config.API_URL, options, projectName, startTime);
+}
+
+function executeApiRequestWithRetry(url, options, projectName, startTime, maxRetries = 3) {
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`${projectName}: API request attempt ${attempt}/${maxRetries}`);
+      
+      const resp = UrlFetchApp.fetch(url, options);
+      const responseCode = resp.getResponseCode();
+      const responseText = resp.getContentText();
+      
+      console.log(`${projectName}: HTTP ${responseCode}, response size: ${responseText.length} chars`);
+      
+      if (responseCode === 200) {
+        try {
+          const parsedResponse = JSON.parse(responseText);
+          
+          if (parsedResponse.errors && parsedResponse.errors.length > 0) {
+            console.error(`${projectName}: GraphQL errors:`, parsedResponse.errors);
+            throw new Error(`GraphQL errors: ${JSON.stringify(parsedResponse.errors)}`);
+          }
+          
+          const endTime = Date.now();
+          console.log(`${projectName}: API request completed successfully in ${(endTime - startTime) / 1000}s`);
+          return parsedResponse;
+          
+        } catch (parseError) {
+          console.error(`${projectName}: JSON parse error:`, parseError);
+          console.log(`${projectName}: Response preview:`, responseText.substring(0, 500));
+          throw new Error(`JSON parse error: ${parseError.toString()}`);
+        }
+      }
+      
+      // Handle non-200 responses
+      if (responseCode >= 400 && responseCode < 500) {
+        // Client errors - don't retry
+        console.error(`${projectName}: Client error ${responseCode}`);
+        console.log(`${projectName}: Error response:`, responseText.substring(0, 1000));
+        
+        if (responseCode === 401) {
+          throw new Error('Unauthorized: Bearer token may be expired or invalid');
+        } else if (responseCode === 403) {
+          throw new Error('Forbidden: Insufficient permissions');
+        } else if (responseCode === 429) {
+          throw new Error('Rate limited: Too many requests');
+        } else {
+          throw new Error(`Client error ${responseCode}: ${responseText.substring(0, 200)}`);
+        }
+      }
+      
+      if (responseCode >= 500) {
+        // Server errors - retry
+        const errorMsg = `Server error ${responseCode}`;
+        console.error(`${projectName}: ${errorMsg}, attempt ${attempt}/${maxRetries}`);
+        
+        if (responseText.includes('<!DOCTYPE html>')) {
+          console.log(`${projectName}: Server returned HTML error page`);
+          console.log(`${projectName}: HTML preview:`, responseText.substring(0, 500));
+        } else {
+          console.log(`${projectName}: Server response:`, responseText.substring(0, 500));
+        }
+        
+        lastError = new Error(`${errorMsg}: Server returned HTML error page`);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          console.log(`${projectName}: Retrying in ${delay}ms...`);
+          Utilities.sleep(delay);
+          continue;
+        }
+      }
+      
+      // Other response codes
+      lastError = new Error(`Unexpected response code ${responseCode}: ${responseText.substring(0, 200)}`);
+      
+    } catch (e) {
+      console.error(`${projectName}: Request attempt ${attempt} failed:`, e);
+      lastError = e;
+      
+      if (attempt < maxRetries) {
+        const delay = Math.min(2000 * attempt, 10000);
+        console.log(`${projectName}: Retrying in ${delay}ms...`);
+        Utilities.sleep(delay);
+      }
+    }
   }
   
-  const endTime = Date.now();
-  console.log(`${projectName}: API request completed in ${(endTime - startTime) / 1000}s`);
-  return JSON.parse(resp.getContentText());
+  console.error(`${projectName}: All API request attempts failed`);
+  throw lastError || new Error('API request failed after all retries');
 }
 
 function getGraphQLQuery() {
