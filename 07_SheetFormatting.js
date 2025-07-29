@@ -210,8 +210,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS rich text... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    applyEROASRichTextFormatting(sheet, numRows);
+    console.log(`⏱️ eROAS rich text (optimized)... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    applyOptimizedEROASFormatting(sheet, numRows);
     
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
@@ -248,40 +248,131 @@ function createOptimizedRanges(sheet, rowNumbers, numCols) {
   return ranges;
 }
 
-function applyEROASRichTextFormatting(sheet, numRows) {
+function applyOptimizedEROASFormatting(sheet, numRows) {
   if (numRows <= 1) return;
   
+  const startTime = Date.now();
+  console.log('🚀 Starting optimized eROAS formatting...');
+  
   try {
-    const eroasColumn = 15;
-    const range = sheet.getRange(2, eroasColumn, numRows - 1, 1);
-    const values = range.getValues();
+    const spreadsheetId = sheet.getParent().getId();
+    const sheetId = sheet.getSheetId();
+    const eroasColumn = 14;
     
-    const richTextValues = values.map(row => {
-      const cellValue = row[0];
-      if (!cellValue || typeof cellValue !== 'string' || !cellValue.includes('→')) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue || '').build();
+    // Получаем все данные для анализа
+    const range = sheet.getRange(2, 1, numRows - 1, eroasColumn + 1);
+    const allData = range.getValues();
+    
+    const requests = [];
+    
+    allData.forEach((row, index) => {
+      const level = row[0]; // Level column
+      const eroasValue = row[eroasColumn];
+      
+      // Пропускаем если нет значения или нет стрелки
+      if (!eroasValue || typeof eroasValue !== 'string' || !eroasValue.includes('→')) {
+        return;
       }
       
-      const arrowIndex = cellValue.indexOf('→');
-      if (arrowIndex === -1) {
-        return SpreadsheetApp.newRichTextValue().setText(cellValue).build();
+      const arrowIndex = eroasValue.indexOf('→');
+      if (arrowIndex === -1) return;
+      
+      const rowIndex = index + 1;
+      
+      // Определяем базовый размер шрифта на основе уровня и проекта
+      let baseFontSize = 10; // по умолчанию
+      
+      switch (level) {
+        case 'APP':
+          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+            baseFontSize = 9;
+          } else {
+            baseFontSize = 10;
+          }
+          break;
+          
+        case 'WEEK':
+          baseFontSize = 10;
+          break;
+          
+        case 'SOURCE_APP':
+          baseFontSize = 10;
+          break;
+          
+        case 'CAMPAIGN':
+          baseFontSize = 9;
+          break;
+          
+        case 'NETWORK':
+          if (CURRENT_PROJECT === 'OVERALL') {
+            baseFontSize = 9;
+          } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+            baseFontSize = 10;
+          } else {
+            baseFontSize = 10;
+          }
+          break;
+          
+        default:
+          baseFontSize = 10;
       }
       
-      const beforeArrow = cellValue.substring(0, arrowIndex);
+      const smallerFontSize = baseFontSize - 1;
       
-      const richTextBuilder = SpreadsheetApp.newRichTextValue()
-      .setText(cellValue)
-      .setTextStyle(0, beforeArrow.length, SpreadsheetApp.newTextStyle()
-      .setForegroundColor('#808080')
-      .setFontSize(9)
-      .build());
-      
-      return richTextBuilder.build();
+      requests.push({
+        updateCells: {
+          range: {
+            sheetId: sheetId,
+            startRowIndex: rowIndex,
+            endRowIndex: rowIndex + 1,
+            startColumnIndex: eroasColumn,
+            endColumnIndex: eroasColumn + 1
+          },
+          rows: [{
+            values: [{
+              userEnteredValue: { stringValue: eroasValue },
+              textFormatRuns: [
+                {
+                  startIndex: 0,
+                  format: {
+                    foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
+                    fontSize: smallerFontSize
+                  }
+                },
+                {
+                  startIndex: arrowIndex,
+                  format: {
+                    // НЕ устанавливаем foregroundColor, чтобы условное форматирование работало!
+                    fontSize: baseFontSize
+                  }
+                }
+              ]
+            }]
+          }],
+          fields: 'userEnteredValue,textFormatRuns'
+        }
+      });
     });
     
-    range.setRichTextValues(richTextValues.map(rtv => [rtv]));
+    if (requests.length > 0) {
+      const batchSize = 500;
+      for (let i = 0; i < requests.length; i += batchSize) {
+        const batch = requests.slice(i, i + batchSize);
+        Sheets.Spreadsheets.batchUpdate({
+          requests: batch
+        }, spreadsheetId);
+        
+        // Небольшая задержка между батчами для избежания rate limits
+        if (i + batchSize < requests.length) {
+          Utilities.sleep(50);
+        }
+      }
+    }
+    
+    console.log(`✅ eROAS formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
+    
   } catch (e) {
-    console.error('Error applying eROAS rich text formatting:', e);
+    console.error('Error applying optimized eROAS formatting:', e);
   }
 }
 
