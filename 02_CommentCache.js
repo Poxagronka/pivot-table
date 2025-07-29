@@ -368,133 +368,149 @@ class CommentCache {
   }
 
   syncCommentsFromSheet() {
-    const sheetName = this.config.SHEET_NAME;
+  const sheetName = this.config.SHEET_NAME;
+  
+  try {
+    const spreadsheet = SpreadsheetApp.openById(this.config.SHEET_ID);
+    const sheet = spreadsheet.getSheetByName(sheetName);
     
-    try {
-      const range = `${sheetName}!A:Z`;
-      const response = this.getCachedSheetData(this.config.SHEET_ID, range);
-      
-      if (!response.values || response.values.length < 2) {
-        console.log(`No data found in ${sheetName}`);
+    if (!sheet) {
+      console.log(`${this.projectName}: Sheet ${sheetName} not found`);
+      return;
+    }
+    
+    if (sheet.getLastRow() < 1) {
+      console.log(`${this.projectName}: Sheet ${sheetName} is empty`);
+      return;
+    }
+    
+    const range = `${sheetName}!A:Z`;
+    const response = this.getCachedSheetData(this.config.SHEET_ID, range);
+    
+    if (!response.values || response.values.length < 2) {
+      console.log(`No data found in ${sheetName}`);
+      return;
+    }
+    
+    const data = response.values;
+    const headers = data[0];
+    
+    console.log(`${this.projectName}: Headers found:`, headers.filter(h => h).join(', '));
+    
+    const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
+    const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
+    const idCol = this.findColumnByHeader(headers, 'ID') - 1;
+    let commentCol = this.findColumnByHeader(headers, 'Comments') - 1;
+    
+    if (commentCol === -2) {
+      commentCol = this.findColumnByHeader(headers, 'Comment') - 1;
+      if (commentCol === -2) {
+        console.log(`${this.projectName}: Comments column not found. Available headers:`, headers);
         return;
       }
-      
-      const data = response.values;
-      const headers = data[0];
-      
-      const levelCol = this.findColumnByHeader(headers, 'Level') - 1;
-      const nameCol = this.findColumnByHeader(headers, 'Week Range / Source App') - 1;
-      const idCol = this.findColumnByHeader(headers, 'ID') - 1;
-      let commentCol = this.findColumnByHeader(headers, 'Comments') - 1;
-      
-      if (commentCol === -2) {
-        commentCol = this.findColumnByHeader(headers, 'Comment') - 1;
-        if (commentCol === -2) {
-          throw new Error('Comments column not found');
-        }
-      }
-      
-      const commentsToSave = [];
-      let currentApp = '';
-      let currentWeek = '';
-      let weekComments = 0;
-      let sourceAppComments = 0;
-      let campaignComments = 0;
-      let networkComments = 0;
-      
-      for (let i = 1; i < data.length; i++) {
-        try {
-          const row = data[i];
-          if (!row || row.length === 0) continue;
-          
-          const level = row[levelCol] || '';
-          const nameOrRange = row[nameCol] || '';
-          const idOrEmpty = row[idCol] || '';
-          const comment = row[commentCol] || '';
-          
-          if (level === 'APP') {
-            currentApp = nameOrRange;
-            currentWeek = '';
-          } else if (level === 'WEEK' && currentApp) {
-            currentWeek = nameOrRange;
-            if (comment) {
-              commentsToSave.push({
-                appName: currentApp,
-                weekRange: currentWeek,
-                level: 'WEEK',
-                comment: comment,
-                identifier: 'N/A',
-                sourceApp: 'N/A',
-                campaign: 'N/A'
-              });
-              weekComments++;
-            }
-          } else if (level === 'NETWORK' && currentApp && currentWeek) {
-            if (comment) {
-              commentsToSave.push({
-                appName: currentApp,
-                weekRange: currentWeek,
-                level: 'NETWORK',
-                comment: comment,
-                identifier: idOrEmpty || 'N/A',
-                sourceApp: 'N/A',
-                campaign: nameOrRange || 'N/A'
-              });
-              networkComments++;
-            }
-          } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
-            if (comment) {
-              commentsToSave.push({
-                appName: currentApp,
-                weekRange: currentWeek,
-                level: 'SOURCE_APP',
-                comment: comment,
-                identifier: nameOrRange || 'N/A',
-                sourceApp: nameOrRange || 'N/A',
-                campaign: 'N/A'
-              });
-              sourceAppComments++;
-            }
-          } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
-            const sourceAppName = nameOrRange;
-            const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
-              ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
-              : idOrEmpty;
-            
-            let campaignName = '';
-            if (this.projectName === 'TRICKY') {
-              campaignName = this.extractCampaignNameFromHyperlink(campaignIdValue) || campaignIdValue || 'Unknown';
-            } else {
-              campaignName = sourceAppName || 'Unknown';
-            }
-            
+    }
+    
+    const commentsToSave = [];
+    let currentApp = '';
+    let currentWeek = '';
+    let weekComments = 0;
+    let sourceAppComments = 0;
+    let campaignComments = 0;
+    let networkComments = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      try {
+        const row = data[i];
+        if (!row || row.length === 0) continue;
+        
+        const level = row[levelCol] || '';
+        const nameOrRange = row[nameCol] || '';
+        const idOrEmpty = row[idCol] || '';
+        const comment = row[commentCol] || '';
+        
+        if (level === 'APP') {
+          currentApp = nameOrRange;
+          currentWeek = '';
+        } else if (level === 'WEEK' && currentApp) {
+          currentWeek = nameOrRange;
+          if (comment) {
             commentsToSave.push({
               appName: currentApp,
               weekRange: currentWeek,
-              level: 'CAMPAIGN',
+              level: 'WEEK',
               comment: comment,
-              identifier: this.projectName === 'TRICKY' ? campaignIdValue : 'N/A',
-              sourceApp: sourceAppName || 'N/A',
-              campaign: campaignName
+              identifier: 'N/A',
+              sourceApp: 'N/A',
+              campaign: 'N/A'
             });
-            campaignComments++;
+            weekComments++;
           }
-        } catch (e) {
-          console.error(`Error processing row ${i + 1} in ${this.projectName}:`, e);
+        } else if (level === 'NETWORK' && currentApp && currentWeek) {
+          if (comment) {
+            commentsToSave.push({
+              appName: currentApp,
+              weekRange: currentWeek,
+              level: 'NETWORK',
+              comment: comment,
+              identifier: idOrEmpty || 'N/A',
+              sourceApp: 'N/A',
+              campaign: nameOrRange || 'N/A'
+            });
+            networkComments++;
+          }
+        } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
+          if (comment) {
+            commentsToSave.push({
+              appName: currentApp,
+              weekRange: currentWeek,
+              level: 'SOURCE_APP',
+              comment: comment,
+              identifier: nameOrRange || 'N/A',
+              sourceApp: nameOrRange || 'N/A',
+              campaign: 'N/A'
+            });
+            sourceAppComments++;
+          }
+        } else if (level === 'CAMPAIGN' && currentApp && currentWeek && comment) {
+          const sourceAppName = nameOrRange;
+          const campaignIdValue = idOrEmpty && typeof idOrEmpty === 'string' && idOrEmpty.includes('HYPERLINK') 
+            ? this.extractCampaignIdFromHyperlink(idOrEmpty) 
+            : idOrEmpty;
+          
+          let campaignName = '';
+          if (this.projectName === 'TRICKY') {
+            campaignName = this.extractCampaignNameFromHyperlink(campaignIdValue) || campaignIdValue || 'Unknown';
+          } else {
+            campaignName = sourceAppName || 'Unknown';
+          }
+          
+          commentsToSave.push({
+            appName: currentApp,
+            weekRange: currentWeek,
+            level: 'CAMPAIGN',
+            comment: comment,
+            identifier: this.projectName === 'TRICKY' ? campaignIdValue : 'N/A',
+            sourceApp: sourceAppName || 'N/A',
+            campaign: campaignName
+          });
+          campaignComments++;
         }
+      } catch (e) {
+        console.error(`Error processing row ${i + 1} in ${this.projectName}:`, e);
       }
-      
-      if (commentsToSave.length > 0) {
-        this.batchSaveComments(commentsToSave);
-        console.log(`${this.projectName}: Synced ${commentsToSave.length} comments (${weekComments} weeks, ${sourceAppComments} source apps, ${campaignComments} campaigns, ${networkComments} networks)`);
-      } else {
-        console.log(`${this.projectName}: No comments to sync`);
-      }
-    } catch (e) {
-      console.error(`Error syncing comments for ${this.projectName}:`, e);
-      throw e;
     }
+    
+    if (commentsToSave.length > 0) {
+      this.batchSaveComments(commentsToSave);
+      console.log(`${this.projectName}: Synced ${commentsToSave.length} comments (${weekComments} weeks, ${sourceAppComments} source apps, ${campaignComments} campaigns, ${networkComments} networks)`);
+    } else {
+      console.log(`${this.projectName}: No comments to sync`);
+    }
+  } catch (e) {
+    console.error(`Error syncing comments for ${this.projectName}:`, e);
+    throw e;
   }
+}
 
   extractCampaignIdFromHyperlink(hyperlinkFormula) {
     try {

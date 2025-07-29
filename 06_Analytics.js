@@ -495,21 +495,30 @@ function updateProjectData(projectName) {
     return;
   }
   
+  console.log(`${projectName}: Saving comments before update...`);
+  try {
+    const cache = new CommentCache(projectName);
+    cache.syncCommentsFromSheet();
+    console.log(`${projectName}: Comments saved successfully`);
+  } catch (e) {
+    console.error(`${projectName}: Failed to save comments:`, e);
+  }
+  
   let earliestDate = null;
-const range = `${config.SHEET_NAME}!A:B`;
-const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
-const data = response.values || [];
+  const range = `${config.SHEET_NAME}!A:B`;
+  const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
+  const data = response.values || [];
 
-for (let i = 1; i < data.length; i++) {
-  if (data[i] && data[i][0] === 'WEEK') {
-    const weekRange = data[i][1];
-    if (weekRange) {
-      const [startStr] = weekRange.split(' - ');
-      const startDate = new Date(startStr);
-      if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i] && data[i][0] === 'WEEK') {
+      const weekRange = data[i][1];
+      if (weekRange) {
+        const [startStr] = weekRange.split(' - ');
+        const startDate = new Date(startStr);
+        if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
+      }
     }
   }
-}
   
   if (!earliestDate) {
     console.log(`${projectName}: No week data found`);

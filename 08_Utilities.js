@@ -150,14 +150,25 @@ function clearProjectDataSilent(projectName) {
       
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
-          const cache = new CommentCache(projectName);
-          cache.syncCommentsFromSheet();
-          console.log(`${projectName}: Comments cached before clearing sheet`);
+          const headers = oldSheet.getRange(1, 1, 1, oldSheet.getLastColumn()).getValues()[0];
+          const hasCommentColumn = headers.some(h => 
+            h && (h.toString().toLowerCase() === 'comments' || h.toString().toLowerCase() === 'comment')
+          );
+          
+          if (hasCommentColumn) {
+            console.log(`${projectName}: Found comment column, syncing comments...`);
+            const cache = new CommentCache(projectName);
+            cache.syncCommentsFromSheet();
+            console.log(`${projectName}: Comments cached successfully`);
+          } else {
+            console.log(`${projectName}: No comment column found in headers:`, headers);
+          }
         } catch (e) {
           if (e.toString().includes('timed out')) {
             console.log(`${projectName}: Timeout while caching comments, continuing anyway`);
           } else {
             console.error(`${projectName}: Error caching comments:`, e);
+            console.log(`${projectName}: Continuing without comment cache`);
           }
         }
       }
@@ -166,6 +177,7 @@ function clearProjectDataSilent(projectName) {
       SpreadsheetApp.flush();
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      console.log(`${projectName}: Creating temporary sheet: ${tempSheetName}`);
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
       Utilities.sleep(1000);
@@ -173,28 +185,84 @@ function clearProjectDataSilent(projectName) {
       
       if (oldSheet) {
         try {
+          console.log(`${projectName}: Attempting to delete old sheet...`);
           spreadsheet.deleteSheet(oldSheet);
-        } catch (deleteError) {
-          console.error(`${projectName}: Error deleting old sheet, will try to continue:`, deleteError);
-          const uniqueName = config.SHEET_NAME + '_' + Date.now();
-          newSheet.setName(uniqueName);
+          console.log(`${projectName}: Old sheet deleted successfully`);
+          
           Utilities.sleep(1000);
-          try {
-            spreadsheet.deleteSheet(oldSheet);
-            newSheet.setName(config.SHEET_NAME);
-          } catch (e) {
-            console.error(`${projectName}: Failed to handle sheet deletion:`, e);
-            throw e;
+          SpreadsheetApp.flush();
+          
+          const checkSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+          if (checkSheet) {
+            throw new Error(`Sheet ${config.SHEET_NAME} still exists after deletion`);
           }
-          console.log(`${projectName}: Sheet recreated with workaround`);
-          return;
+        } catch (deleteError) {
+          console.error(`${projectName}: Error deleting old sheet:`, deleteError);
+          
+          const allSheets = spreadsheet.getSheets();
+          const existingNames = allSheets.map(s => s.getName());
+          console.log(`${projectName}: Existing sheets:`, existingNames);
+          
+          const tempSheets = allSheets.filter(s => s.getName().startsWith(config.SHEET_NAME + '_temp_'));
+          if (tempSheets.length > 1) {
+            console.log(`${projectName}: Found ${tempSheets.length} temporary sheets, cleaning up...`);
+            tempSheets.slice(1).forEach(sheet => {
+              try {
+                spreadsheet.deleteSheet(sheet);
+                console.log(`${projectName}: Deleted temp sheet: ${sheet.getName()}`);
+              } catch (e) {
+                console.error(`${projectName}: Failed to delete temp sheet: ${sheet.getName()}`);
+              }
+            });
+          }
+          
+          if (existingNames.includes(config.SHEET_NAME)) {
+            const backupName = config.SHEET_NAME + '_backup_' + Date.now();
+            console.log(`${projectName}: Renaming existing sheet to ${backupName}`);
+            const existingSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+            existingSheet.setName(backupName);
+            
+            Utilities.sleep(1000);
+            SpreadsheetApp.flush();
+          }
         }
       }
       
       Utilities.sleep(1000);
       SpreadsheetApp.flush();
       
+      console.log(`${projectName}: Renaming temp sheet to ${config.SHEET_NAME}`);
+      const finalCheck = spreadsheet.getSheetByName(config.SHEET_NAME);
+      if (finalCheck) {
+        const backupName = config.SHEET_NAME + '_old_' + Date.now();
+        console.log(`${projectName}: Sheet still exists, renaming to ${backupName}`);
+        finalCheck.setName(backupName);
+        Utilities.sleep(1000);
+        SpreadsheetApp.flush();
+      }
+      
       newSheet.setName(config.SHEET_NAME);
+      
+      const allSheetsAfter = spreadsheet.getSheets();
+      const tempSheetsAfter = allSheetsAfter.filter(s => 
+        s.getName().startsWith(config.SHEET_NAME + '_temp_') || 
+        s.getName().startsWith(config.SHEET_NAME + '_backup_') ||
+        s.getName().startsWith(config.SHEET_NAME + '_old_')
+      );
+      
+      if (tempSheetsAfter.length > 0) {
+        console.log(`${projectName}: Cleaning up ${tempSheetsAfter.length} temporary/backup sheets...`);
+        tempSheetsAfter.forEach(sheet => {
+          try {
+            if (spreadsheet.getSheets().length > 1) {
+              spreadsheet.deleteSheet(sheet);
+              console.log(`${projectName}: Deleted: ${sheet.getName()}`);
+            }
+          } catch (e) {
+            console.error(`${projectName}: Failed to delete: ${sheet.getName()}`);
+          }
+        });
+      }
       
       console.log(`${projectName}: Sheet recreated successfully`);
       return;
