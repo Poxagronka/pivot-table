@@ -259,17 +259,15 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
     const sheetId = sheet.getSheetId();
     const eroasColumn = 14;
     
-    // Получаем все данные для анализа
     const range = sheet.getRange(2, 1, numRows - 1, eroasColumn + 1);
     const allData = range.getValues();
     
     const requests = [];
     
     allData.forEach((row, index) => {
-      const level = row[0]; // Level column
+      const level = row[0];
       const eroasValue = row[eroasColumn];
       
-      // Пропускаем если нет значения или нет стрелки
       if (!eroasValue || typeof eroasValue !== 'string' || !eroasValue.includes('→')) {
         return;
       }
@@ -279,8 +277,7 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
       
       const rowIndex = index + 1;
       
-      // Определяем базовый размер шрифта на основе уровня и проекта
-      let baseFontSize = 10; // по умолчанию
+      let baseFontSize = 10;
       
       switch (level) {
         case 'APP':
@@ -342,7 +339,6 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
                 {
                   startIndex: arrowIndex,
                   format: {
-                    // НЕ устанавливаем foregroundColor, чтобы условное форматирование работало!
                     fontSize: baseFontSize
                   }
                 }
@@ -362,7 +358,6 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
           requests: batch
         }, spreadsheetId);
         
-        // Небольшая задержка между батчами для избежания rate limits
         if (i + batchSize < requests.length) {
           Utilities.sleep(50);
         }
@@ -386,36 +381,12 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
-    // Собираем все правила в массив для batch операции
     const conditionalFormatRequests = [];
     
-    // 1. Правила для Spend WoW колонки
+    // 1. Правила для Spend WoW колонки (исправлен порядок и формулы)
     const spendColumn = 6;
     conditionalFormatRequests.push(
-      {
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: spendColumn - 1,
-              endColumnIndex: spendColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'TEXT_CONTAINS',
-                values: [{ userEnteredValue: '%' }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#d1f2eb'),
-                textFormat: { foregroundColor: hexToRgb('#0c5460') }
-              }
-            }
-          },
-          index: 0
-        }
-      },
+      // ПЕРВОЕ правило: отрицательные значения → красный
       {
         addConditionalFormatRule: {
           rule: {
@@ -429,11 +400,36 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
             booleanRule: {
               condition: {
                 type: 'CUSTOM_FORMULA',
-                values: [{ userEnteredValue: '=AND(ISNUMBER($F2), $F2<0)' }]
+                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), LEFT($F2,1)="-")' }]
               },
               format: {
                 backgroundColor: hexToRgb('#f8d7da'),
                 textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
+            }
+          },
+          index: 0
+        }
+      },
+      // ВТОРОЕ правило: положительные значения → зеленый
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: spendColumn - 1,
+              endColumnIndex: spendColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), $F2<>"", LEFT($F2,1)<>"-")' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
               }
             }
           },
@@ -446,7 +442,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
     const eroasColumn = 15;
     const data = sheet.getDataRange().getValues();
     
-    // Группируем строки по target eROAS для batch правил
     const targetGroups = new Map();
     
     for (let i = 1; i < data.length; i++) {
@@ -470,14 +465,12 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
       if (!targetGroups.has(targetEROAS)) {
         targetGroups.set(targetEROAS, []);
       }
-      targetGroups.get(targetEROAS).push(i + 1); // строка в 1-based индексации
+      targetGroups.get(targetEROAS).push(i + 1);
     }
     
-    // Создаем batch правила для каждой группы target eROAS
     let ruleIndex = conditionalFormatRequests.length;
     
     targetGroups.forEach((rows, targetEROAS) => {
-      // Создаем ranges для всех строк с одинаковым target
       const ranges = rows.map(row => ({
         sheetId: sheetId,
         startRowIndex: row - 1,
@@ -486,7 +479,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
         endColumnIndex: eroasColumn
       }));
       
-      // Правило для >= targetEROAS (зеленый)
       conditionalFormatRequests.push({
         addConditionalFormatRule: {
           rule: {
@@ -508,7 +500,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
         }
       });
       
-      // Правило для 120 <= value < targetEROAS (желтый)
       conditionalFormatRequests.push({
         addConditionalFormatRule: {
           rule: {
@@ -530,7 +521,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
         }
       });
       
-      // Правило для < 120 (красный)
       conditionalFormatRequests.push({
         addConditionalFormatRule: {
           rule: {
@@ -655,7 +645,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
       });
     });
     
-    // Применяем все правила одним batch запросом
     console.log(`Applying ${conditionalFormatRequests.length} conditional format rules in batch...`);
     
     const batchUpdateRequest = {

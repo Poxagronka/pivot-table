@@ -4,7 +4,7 @@ const PRECOMPUTED_TOTALS = new Map();
 const PRECOMPUTED_ROWS = new Map();
 const WOW_KEYS_CACHE = new Map();
 
-function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) {
+function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache) {
   const startTime = Date.now();
   console.log(`🔧 buildUnifiedTable started for ${CURRENT_PROJECT}`);
 
@@ -64,7 +64,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         const status = weekWoW.growthStatus || '';
         
         formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache);
+        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, network.networkName, initialMetricsCache);
         tableData.push(weekRow);
         
         const appKeys = Object.keys(week.apps).sort((a, b) => {
@@ -86,7 +86,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
           
           formatData.push({ row: tableData.length + 1, type: 'APP' });
           
-          const appRow = createUnifiedRow('APP', { weekStart: week.weekStart, weekEnd: week.weekEnd }, appTotals, spendWoW, profitWoW, status, network.networkName, initialEROASCache, app.appId, app.appName);
+          const appRow = createUnifiedRow('APP', { weekStart: week.weekStart, weekEnd: week.weekEnd }, appTotals, spendWoW, profitWoW, status, network.networkName, initialMetricsCache, app.appId, app.appName);
           tableData.push(appRow);
         });
       });
@@ -138,10 +138,10 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialEROASCache) 
         const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
         const status = weekWoW.growthStatus || '';
         
-        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialEROASCache);
+        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialMetricsCache);
         tableData.push(weekRow);
         
-        addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialEROASCache, appsDbCache);
+        addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialMetricsCache, appsDbCache);
       });
     });
 
@@ -309,7 +309,7 @@ function getPrecomputedTotals(campaigns, cacheKey) {
   return getCachedWeekTotals(campaigns);
 }
 
-function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '', initialEROASCache = null, appsDbCache = null) {
+function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '', initialMetricsCache = null, appsDbCache = null) {
   if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
     const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
       const totalSpendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -338,10 +338,10 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       }
 }
       
-      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
+      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialMetricsCache, sourceApp.sourceAppId, sourceAppDisplayName);
       tableData.push(sourceAppRow);
       
-      addOptimizedCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, formatData, appName, initialEROASCache);
+      addOptimizedCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, formatData, appName, initialMetricsCache);
     });
   } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
     const networkKeys = Object.keys(week.networks).sort((a, b) => {
@@ -362,15 +362,15 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
       
-      const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialEROASCache, network.networkId, network.networkName);
+      const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialMetricsCache, network.networkId, network.networkName);
       tableData.push(networkRow);
     });
   } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-    addOptimizedCampaignRows(tableData, week.campaigns, week, weekKey, formatData, appName, initialEROASCache);
+    addOptimizedCampaignRows(tableData, week.campaigns, week, weekKey, formatData, appName, initialMetricsCache);
   }
 }
 
-function addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatData, appName = '', initialEROASCache = null) {
+function addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatData, appName = '', initialMetricsCache = null) {
   if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     return;
   }
@@ -397,21 +397,21 @@ function addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatDat
       
       formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
       
-      const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialEROASCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
+      const campaignRow = createUnifiedRow('CAMPAIGN', week, campaign, spendPct, profitPct, growthStatus, appName, initialMetricsCache, campaign.campaignId, campaign.sourceApp, campaignIdValue);
       tableData.push(campaignRow);
     });
   }
 }
 
-function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = '', initialEROASCache = null, appsDbCache = null) {
-  return addOptimizedSubRows(tableData, week, weekKey, formatData, appName, initialEROASCache, appsDbCache);
+function addUnifiedSubRows(tableData, week, weekKey, wow, formatData, appName = '', initialMetricsCache = null, appsDbCache = null) {
+  return addOptimizedSubRows(tableData, week, weekKey, formatData, appName, initialMetricsCache, appsDbCache);
 }
 
-function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialEROASCache = null) {
-  return addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatData, appName, initialEROASCache);
+function addCampaignRowsBatched(tableData, campaigns, week, weekKey, wow, formatData, appName = '', initialMetricsCache = null) {
+  return addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatData, appName, initialMetricsCache);
 }
 
-function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appName = '', initialEROASCache = null, identifier = '', displayName = '', campaignIdValue = '') {
+function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appName = '', initialMetricsCache = null, identifier = '', displayName = '', campaignIdValue = '') {
   const headers = getUnifiedHeaders();
   const row = new Array(headers.length).fill('');
   
@@ -425,43 +425,52 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
-    if (initialEROASCache && appName) {
+    let eProfit730Display = formatSmartCurrency(data.totalProfit);
+    
+    if (initialMetricsCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-      eROAS730Display = initialEROASCache.formatEROASWithInitial('WEEK', appName, weekRange, data.avgEROASD730);
+      eROAS730Display = initialMetricsCache.formatEROASWithInitial('WEEK', appName, weekRange, data.avgEROASD730);
+      eProfit730Display = initialMetricsCache.formatProfitWithInitial('WEEK', appName, weekRange, data.totalProfit);
     }
     
     row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
+    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
   } else if (level === 'CAMPAIGN') {
     row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
     const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.eRoasForecastD730.toFixed(0)}%`;
-    if (initialEROASCache && appName) {
+    let eProfit730Display = formatSmartCurrency(data.eProfitForecast);
+    
+    if (initialMetricsCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-      eROAS730Display = initialEROASCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, data.eRoasForecastD730, data.campaignId, data.sourceApp);
+      eROAS730Display = initialMetricsCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, data.eRoasForecastD730, data.campaignId, data.sourceApp);
+      eProfit730Display = initialMetricsCache.formatProfitWithInitial('CAMPAIGN', appName, weekRange, data.eProfitForecast, data.campaignId, data.sourceApp);
     }
     
     row[4] = formatSmartCurrency(data.spend); row[5] = spendWoW; row[6] = data.installs; row[7] = data.cpi ? data.cpi.toFixed(3) : '0.000';
     row[8] = combinedRoas; row[9] = data.ipm.toFixed(1); row[10] = `${data.rrD1.toFixed(0)}%`; row[11] = `${data.rrD7.toFixed(0)}%`;
     row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = formatSmartCurrency(data.eProfitForecast); row[16] = profitWoW; row[17] = status;
+    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
   } else {
     row[1] = displayName || identifier;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
-    if (initialEROASCache && appName) {
+    let eProfit730Display = formatSmartCurrency(data.totalProfit);
+    
+    if (initialMetricsCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-      eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
+      eROAS730Display = initialMetricsCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
+      eProfit730Display = initialMetricsCache.formatProfitWithInitial(level, appName, weekRange, data.totalProfit, identifier, displayName);
     }
     
     row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
     row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
+    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
   }
   
   row[18] = '';
