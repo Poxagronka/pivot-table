@@ -378,128 +378,295 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
 
 function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
   try {
-    const rules = [];
+    const startTime = Date.now();
+    console.log(`Starting batch conditional formatting for ${numRows} rows...`);
     
-    if (numRows > 1) {
-      const spendRange = sheet.getRange(2, 6, numRows - 1, 1);
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenTextContains('%').whenNumberGreaterThan(0)
-          .setBackground('#d1f2eb')
-          .setFontColor('#0c5460')
-          .setRanges([spendRange]).build()
-      );
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenTextContains('%').whenNumberLessThan(0)
-          .setBackground('#f8d7da')
-          .setFontColor('#721c24')
-          .setRanges([spendRange]).build()
-      );
-
-      const eroasColumn = 15;
-      const data = sheet.getDataRange().getValues();
-      
-      for (let i = 1; i < data.length; i++) {
-        const level = data[i][0];
-        let appName = '';
-        let targetEROAS = 150;
-        
-        if (level === 'APP') {
-          appName = data[i][1];
-          targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-        } else {
-          for (let j = i - 1; j >= 1; j--) {
-            if (data[j][0] === 'APP') {
-              appName = data[j][1];
-              targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-              break;
+    if (numRows <= 1) return;
+    
+    const spreadsheetId = sheet.getParent().getId();
+    const sheetId = sheet.getSheetId();
+    
+    // Собираем все правила в массив для batch операции
+    const conditionalFormatRequests = [];
+    
+    // 1. Правила для Spend WoW колонки
+    const spendColumn = 6;
+    conditionalFormatRequests.push(
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: spendColumn - 1,
+              endColumnIndex: spendColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'TEXT_CONTAINS',
+                values: [{ userEnteredValue: '%' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
             }
+          },
+          index: 0
+        }
+      },
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: spendColumn - 1,
+              endColumnIndex: spendColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(ISNUMBER($F2), $F2<0)' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
+            }
+          },
+          index: 1
+        }
+      }
+    );
+    
+    // 2. Правила для eROAS колонки - оптимизированный подход
+    const eroasColumn = 15;
+    const data = sheet.getDataRange().getValues();
+    
+    // Группируем строки по target eROAS для batch правил
+    const targetGroups = new Map();
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      let appName = '';
+      let targetEROAS = 150;
+      
+      if (level === 'APP') {
+        appName = data[i][1];
+        targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+      } else {
+        for (let j = i - 1; j >= 1; j--) {
+          if (data[j][0] === 'APP') {
+            appName = data[j][1];
+            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+            break;
           }
         }
-        
-        const cellRange = sheet.getRange(i + 1, eroasColumn, 1, 1);
-        const columnLetter = String.fromCharCode(64 + eroasColumn);
-        const cellAddress = `${columnLetter}${i + 1}`;
-        
-        const extractValueFormula = `IF(ISERROR(SEARCH("→",${cellAddress})), VALUE(SUBSTITUTE(${cellAddress},"%","")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(${cellAddress},"→",REPT(" ",100)),100)),"%","")))`;
-        
-        rules.push(
-          SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= ${targetEROAS})`)
-            .setBackground('#d1f2eb')
-            .setFontColor('#0c5460')
-            .setRanges([cellRange]).build()
-        );
-        
-        rules.push(
-          SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} >= 120, ${extractValueFormula} < ${targetEROAS})`)
-            .setBackground('#fff3cd')
-            .setFontColor('#856404')
-            .setRanges([cellRange]).build()
-        );
-        
-        rules.push(
-          SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied(`=AND(NOT(ISBLANK(${cellAddress})), ${extractValueFormula} < 120)`)
-            .setBackground('#f8d7da')
-            .setFontColor('#721c24')
-            .setRanges([cellRange]).build()
-        );
       }
-
-      const profitColumn = 17;
-      const profitRange = sheet.getRange(2, profitColumn, numRows - 1, 1);
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenTextContains('%').whenNumberGreaterThan(0)
-          .setBackground('#d1f2eb')
-          .setFontColor('#0c5460')
-          .setRanges([profitRange]).build()
-      );
-      rules.push(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenTextContains('%').whenNumberLessThan(0)
-          .setBackground('#f8d7da')
-          .setFontColor('#721c24')
-          .setRanges([profitRange]).build()
-      );
-
-      const growthColumn = 18;
-      const growthRange = sheet.getRange(2, growthColumn, numRows - 1, 1);
-      const statusColors = {
-        "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
-        "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
-        "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
-        "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
-        "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
-        "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
-        "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
-        "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
-        "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
-        "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
-        "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
-        "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
-        "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
-        "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
-        "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
-        "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" },
-        "First Week": { background: "#e0e0e0", fontColor: "#757575" }
-      };
-
-      Object.entries(statusColors).forEach(([status, colors]) => {
-        rules.push(
-          SpreadsheetApp.newConditionalFormatRule()
-            .whenTextContains(status)
-            .setBackground(colors.background)
-            .setFontColor(colors.fontColor)
-            .setRanges([growthRange]).build()
-        );
-      });
+      
+      if (!targetGroups.has(targetEROAS)) {
+        targetGroups.set(targetEROAS, []);
+      }
+      targetGroups.get(targetEROAS).push(i + 1); // строка в 1-based индексации
     }
     
-    sheet.setConditionalFormatRules(rules);
+    // Создаем batch правила для каждой группы target eROAS
+    let ruleIndex = conditionalFormatRequests.length;
+    
+    targetGroups.forEach((rows, targetEROAS) => {
+      // Создаем ranges для всех строк с одинаковым target
+      const ranges = rows.map(row => ({
+        sheetId: sheetId,
+        startRowIndex: row - 1,
+        endRowIndex: row,
+        startColumnIndex: eroasColumn - 1,
+        endColumnIndex: eroasColumn
+      }));
+      
+      // Правило для >= targetEROAS (зеленый)
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= ${targetEROAS})`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+      
+      // Правило для 120 <= value < targetEROAS (желтый)
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= 120, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < ${targetEROAS})`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#fff3cd'),
+                textFormat: { foregroundColor: hexToRgb('#856404') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+      
+      // Правило для < 120 (красный)
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < 120)`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+    });
+    
+    // 3. Правила для Profit WoW колонки
+    const profitColumn = 17;
+    conditionalFormatRequests.push(
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: profitColumn - 1,
+              endColumnIndex: profitColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2>0)' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      },
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: profitColumn - 1,
+              endColumnIndex: profitColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2<0)' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      }
+    );
+    
+    // 4. Правила для Growth Status колонки
+    const growthColumn = 18;
+    const statusColors = {
+      "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
+      "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
+      "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
+      "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
+      "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
+      "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
+      "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
+      "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
+      "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
+      "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
+      "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
+      "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
+      "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
+      "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
+      "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
+      "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" },
+      "First Week": { background: "#e0e0e0", fontColor: "#757575" }
+    };
+    
+    Object.entries(statusColors).forEach(([status, colors]) => {
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: growthColumn - 1,
+              endColumnIndex: growthColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'TEXT_CONTAINS',
+                values: [{ userEnteredValue: status }]
+              },
+              format: {
+                backgroundColor: hexToRgb(colors.background),
+                textFormat: { foregroundColor: hexToRgb(colors.fontColor) }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+    });
+    
+    // Применяем все правила одним batch запросом
+    console.log(`Applying ${conditionalFormatRequests.length} conditional format rules in batch...`);
+    
+    const batchUpdateRequest = {
+      requests: conditionalFormatRequests
+    };
+    
+    Sheets.Spreadsheets.batchUpdate(batchUpdateRequest, spreadsheetId);
+    
+    const endTime = Date.now();
+    console.log(`Conditional formatting completed in ${(endTime - startTime) / 1000}s (${conditionalFormatRequests.length} rules applied)`);
+    
   } catch (e) {
     console.error('Error applying conditional formatting:', e);
   }
