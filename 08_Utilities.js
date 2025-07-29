@@ -548,16 +548,13 @@ function clearAllCommentColumnCaches() {
   });
 }
 
-// Comment Hash Generation
 function generateCommentHash(level, appName, weekRange, projectName = null) {
   const project = projectName || CURRENT_PROJECT;
   
-  // Нормализуем данные
   const normalizedLevel = (level || '').toString().toUpperCase().trim();
   const normalizedApp = (appName || '').toString().trim();
   const normalizedWeek = (weekRange || '').toString().trim();
   
-  // Базовые компоненты для всех проектов
   let hashComponents = [
     project,
     normalizedLevel,
@@ -565,10 +562,8 @@ function generateCommentHash(level, appName, weekRange, projectName = null) {
     normalizedWeek
   ];
   
-  // Создаем строку для хеширования
   const hashInput = hashComponents.join('|||');
   
-  // Простая хеш функция
   let hash = 0;
   for (let i = 0; i < hashInput.length; i++) {
     const char = hashInput.charCodeAt(i);
@@ -576,8 +571,8 @@ function generateCommentHash(level, appName, weekRange, projectName = null) {
     hash = hash & hash;
   }
   
-  // Возвращаем хеш с префиксом проекта для уникальности
-  return `${project.substring(0, 3)}_${Math.abs(hash).toString(36)}`;
+  const prefix = normalizedLevel === 'WEEK' ? 'W' : normalizedLevel.substring(0, 1);
+  return `${project.substring(0, 3)}_${prefix}_${Math.abs(hash).toString(36)}`;
 }
 
 function generateDetailedCommentHash(level, appName, weekRange, identifier, sourceApp, campaignOrNetwork, projectName = null) {
@@ -598,24 +593,26 @@ function generateDetailedCommentHash(level, appName, weekRange, identifier, sour
   
   switch (normalizedLevel) {
     case 'CAMPAIGN':
-    // Для TRICKY добавляем identifier (campaign ID), для остальных - только sourceApp
-    if (project === 'TRICKY' || project === 'TRI') {
+      if (project === 'TRICKY' || project === 'TRI') {
         hashComponents.push(normalizedId || 'NO_ID');
-    }
-    hashComponents.push(normalizedSource || 'NO_SOURCE');
-    hashComponents.push(normalizedCampaign || 'NO_CAMPAIGN');
-    break;
+      }
+      hashComponents.push(normalizedSource || 'NO_SOURCE');
+      hashComponents.push(normalizedCampaign || 'NO_CAMPAIGN');
+      break;
       
     case 'SOURCE_APP':
       hashComponents.push(normalizedId || normalizedSource || 'NO_SOURCE');
+      hashComponents.push(normalizedSource || 'NO_SOURCE');
       break;
       
     case 'NETWORK':
       hashComponents.push(normalizedId || 'NO_NETWORK_ID');
+      hashComponents.push(normalizedCampaign || 'NO_NETWORK');
       break;
       
     case 'APP':
       hashComponents.push(normalizedId || normalizedApp);
+      hashComponents.push(normalizedApp);
       break;
       
     default:
@@ -641,145 +638,86 @@ function generateDetailedCommentHash(level, appName, weekRange, identifier, sour
 
 function migrateCampaignHashes() {
   const ui = SpreadsheetApp.getUi();
-  const projects = ['MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
   
   const result = ui.alert(
-    '🔄 Migrate Campaign Hashes', 
-    `This will fix campaign comment hashes in BOTH main sheets and cache.\n\nProjects: ${projects.join(', ')}\n\nContinue?`, 
+    '🔄 Migrate Comment Hashes', 
+    `This will regenerate ALL comment hashes in both cache and main sheets for all projects.\n\nThis is necessary to fix hash mismatches.\n\nContinue?`, 
     ui.ButtonSet.YES_NO
   );
   
   if (result !== ui.Button.YES) return;
   
-  let totalMigrated = 0;
-  let totalFixed = 0;
+  let totalCacheMigrated = 0;
+  let totalSheetMigrated = 0;
+  let totalProjects = 0;
   
   projects.forEach(projectName => {
     try {
-      console.log(`\n🔄 Migrating campaign hashes for ${projectName}...`);
+      console.log(`\n🔄 Migrating hashes for ${projectName}...`);
       
-      const config = getProjectConfig(projectName);
       const cache = new CommentCache(projectName);
-      
-      // Migrate main sheet hashes
-      const mainRange = `${config.SHEET_NAME}!A:T`;
-      const mainResponse = Sheets.Spreadsheets.Values.get(config.SHEET_ID, mainRange);
-      
-      if (mainResponse.values && mainResponse.values.length > 1) {
-        const mainData = mainResponse.values;
-        const headers = mainData[0];
-        const hashCol = headers.findIndex(h => h === 'RowHash');
-        const idCol = headers.findIndex(h => h === 'ID');
-        
-        if (hashCol !== -1) {
-          const mainUpdateRequests = [];
-          let currentApp = '';
-          let currentWeek = '';
-          
-          for (let i = 1; i < mainData.length; i++) {
-            const row = mainData[i];
-            const level = row[0];
-            const nameOrRange = row[1];
-            
-            if (level === 'APP') {
-              currentApp = nameOrRange;
-            } else if (level === 'WEEK') {
-              currentWeek = nameOrRange;
-            } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
-              const sourceApp = nameOrRange;
-              const idValue = row[idCol] || '';
-              
-              // Extract campaign ID from hyperlink if present
-              let campaignId = 'N/A';
-              if (projectName === 'TRICKY' && idValue.includes('HYPERLINK')) {
-                const match = idValue.match(/campaigns\/([^"]+)/);
-                campaignId = match ? match[1] : 'N/A';
-              }
-              
-              // For non-TRICKY projects, campaign name is sourceApp
-              const campaignName = projectName === 'TRICKY' ? 
-                (campaignId !== 'N/A' ? campaignId : 'Unknown') : 
-                sourceApp;
-              
-              const newHash = generateDetailedCommentHash(
-                'CAMPAIGN', 
-                currentApp, 
-                currentWeek, 
-                projectName === 'TRICKY' ? campaignId : 'N/A',
-                sourceApp, 
-                campaignName, 
-                projectName
-              );
-              
-              mainUpdateRequests.push({
-                range: `${config.SHEET_NAME}!${cache.columnNumberToLetter(hashCol + 1)}${i + 1}`,
-                values: [[newHash]]
-              });
-            }
-          }
-          
-          if (mainUpdateRequests.length > 0) {
-            const batchUpdateRequest = {
-              valueInputOption: 'RAW',
-              data: mainUpdateRequests
-            };
-            
-            Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, config.SHEET_ID);
-            console.log(`✅ ${projectName}: Updated ${mainUpdateRequests.length} hashes in main sheet`);
-            totalFixed += mainUpdateRequests.length;
-          }
-        }
-      }
-      
-      // Migrate cache sheet hashes
       cache.getOrCreateCacheSheet();
       
+      // 1. Обновляем хеши в кеше
       const cacheRange = `${cache.cacheSheetName}!A:I`;
       const cacheResponse = cache.getCachedSheetData(cache.cacheSpreadsheetId, cacheRange);
       
       if (cacheResponse.values && cacheResponse.values.length > 1) {
         const cacheData = cacheResponse.values;
         const cacheUpdateRequests = [];
-        let projectCount = 0;
+        let cacheCount = 0;
         
         for (let i = 1; i < cacheData.length; i++) {
           const row = cacheData[i];
-          if (row.length >= 6 && row[2] === 'CAMPAIGN') {
+          if (row.length >= 6) {
             const [appName, weekRange, level, identifier, sourceApp, campaign] = row;
             
-            // Determine correct identifier based on project
-            let correctIdentifier = identifier;
-            if (projectName === 'TRICKY') {
-              // Keep existing identifier (campaign ID)
-              correctIdentifier = identifier || 'N/A';
-            } else {
-              // Non-TRICKY projects don't use identifier for campaigns
-              correctIdentifier = 'N/A';
+            let newHash = '';
+            
+            if (level === 'WEEK') {
+              newHash = generateDetailedCommentHash('WEEK', appName, weekRange, '', '', '', projectName);
+            } else if (level === 'CAMPAIGN') {
+              let correctIdentifier = '';
+              let correctCampaign = '';
+              
+              if (projectName === 'TRICKY') {
+                correctIdentifier = (identifier && identifier !== 'N/A') ? identifier : '';
+                correctCampaign = correctIdentifier || 'Unknown';
+              } else {
+                correctIdentifier = '';
+                correctCampaign = sourceApp || campaign || 'Unknown';
+              }
+              
+              newHash = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, 
+                correctIdentifier, sourceApp || '', correctCampaign, projectName);
+            } else if (level === 'SOURCE_APP') {
+              const correctIdentifier = (identifier && identifier !== 'N/A') ? identifier : sourceApp;
+              const correctSourceApp = sourceApp || correctIdentifier || '';
+              
+              newHash = generateDetailedCommentHash('SOURCE_APP', appName, weekRange, 
+                correctIdentifier, correctSourceApp, '', projectName);
+            } else if (level === 'NETWORK') {
+              const correctIdentifier = (identifier && identifier !== 'N/A') ? identifier : '';
+              const correctNetwork = campaign || 'Unknown Network';
+              
+              newHash = generateDetailedCommentHash('NETWORK', appName, weekRange, 
+                correctIdentifier, '', correctNetwork, projectName);
+            } else if (level === 'APP') {
+              const correctIdentifier = (identifier && identifier !== 'N/A') ? identifier : appName;
+              const correctAppName = appName || 'Unknown App';
+              
+              newHash = generateDetailedCommentHash('APP', appName, weekRange, 
+                correctIdentifier, correctAppName, '', projectName);
             }
             
-            // Determine correct campaign name
-            let correctCampaign = campaign;
-            if (projectName !== 'TRICKY') {
-              // For non-TRICKY, campaign name should be sourceApp
-              correctCampaign = sourceApp || campaign || 'Unknown';
+            if (newHash) {
+              cacheUpdateRequests.push({
+                range: `${cache.cacheSheetName}!I${i + 1}`,
+                values: [[newHash]]
+              });
+              cacheCount++;
             }
-            
-            const newHash = generateDetailedCommentHash(
-              'CAMPAIGN', 
-              appName, 
-              weekRange, 
-              correctIdentifier,
-              sourceApp || 'N/A', 
-              correctCampaign, 
-              projectName
-            );
-            
-            cacheUpdateRequests.push({
-              range: `${cache.cacheSheetName}!I${i + 1}`,
-              values: [[newHash]]
-            });
-            
-            projectCount++;
           }
         }
         
@@ -795,15 +733,121 @@ function migrateCampaignHashes() {
           delete COMMENT_CACHE_GLOBAL.sheetData[cacheKey];
           delete COMMENT_CACHE_GLOBAL.sheetDataTime[cacheKey];
           
-          console.log(`✅ ${projectName}: Updated ${projectCount} hashes in cache`);
-          totalMigrated += projectCount;
+          console.log(`✅ ${projectName}: Migrated ${cacheCount} hashes in cache`);
+          totalCacheMigrated += cacheCount;
         }
       }
+      
+      // 2. Обновляем хеши в основном листе
+      const config = getProjectConfig(projectName);
+      const mainRange = `${config.SHEET_NAME}!A:T`;
+      const mainResponse = Sheets.Spreadsheets.Values.get(config.SHEET_ID, mainRange);
+      
+      if (mainResponse.values && mainResponse.values.length > 1) {
+        const mainData = mainResponse.values;
+        const headers = mainData[0];
+        const hashCol = headers.findIndex(h => h === 'RowHash');
+        const levelCol = headers.findIndex(h => h === 'Level');
+        const nameCol = headers.findIndex(h => h === 'Week Range / Source App');
+        const idCol = headers.findIndex(h => h === 'ID');
+        
+        if (hashCol !== -1) {
+          const mainUpdateRequests = [];
+          let currentApp = '';
+          let currentWeek = '';
+          let sheetCount = 0;
+          
+          for (let i = 1; i < mainData.length; i++) {
+            const row = mainData[i];
+            const level = row[levelCol];
+            const nameOrRange = row[nameCol];
+            const idValue = row[idCol] || '';
+            
+            if (level === 'APP') {
+              currentApp = nameOrRange;
+              continue;
+            } else if (level === 'WEEK') {
+              currentWeek = nameOrRange;
+            }
+            
+            let newHash = '';
+            
+            if (level === 'WEEK') {
+              newHash = generateDetailedCommentHash('WEEK', currentApp, currentWeek, '', '', '', projectName);
+            } else if (level === 'SOURCE_APP') {
+              newHash = generateDetailedCommentHash('SOURCE_APP', currentApp, currentWeek, 
+                nameOrRange, nameOrRange, '', projectName);
+            } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
+              const sourceApp = nameOrRange;
+              let campaignId = '';
+              let campaignName = '';
+              
+              if (projectName === 'TRICKY' && idValue.includes('HYPERLINK')) {
+                const match = idValue.match(/campaigns\/([^"]+)/);
+                campaignId = match ? match[1] : '';
+              }
+              
+              if (projectName === 'TRICKY') {
+                campaignName = campaignId || 'Unknown';
+              } else {
+                campaignId = '';
+                campaignName = sourceApp;
+              }
+              
+              newHash = generateDetailedCommentHash('CAMPAIGN', currentApp, currentWeek, 
+                campaignId, sourceApp, campaignName, projectName);
+            } else if (level === 'NETWORK' && currentApp && currentWeek) {
+              const networkName = nameOrRange;
+              const networkId = idValue || '';
+              
+              newHash = generateDetailedCommentHash('NETWORK', currentApp, currentWeek, 
+                networkId, '', networkName, projectName);
+            } else if (level === 'APP' && CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+              const appId = idValue || nameOrRange;
+              const appName = nameOrRange;
+              
+              newHash = generateDetailedCommentHash('APP', currentApp, currentWeek, 
+                appId, appName, '', projectName);
+            }
+            
+            if (newHash) {
+              mainUpdateRequests.push({
+                range: `${config.SHEET_NAME}!${cache.columnNumberToLetter(hashCol + 1)}${i + 1}`,
+                values: [[newHash]]
+              });
+              sheetCount++;
+            }
+          }
+          
+          if (mainUpdateRequests.length > 0) {
+            const batchUpdateRequest = {
+              valueInputOption: 'RAW',
+              data: mainUpdateRequests
+            };
+            
+            Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, config.SHEET_ID);
+            
+            const sheetCacheKey = `${config.SHEET_ID}_${mainRange}`;
+            delete COMMENT_CACHE_GLOBAL.sheetData[sheetCacheKey];
+            delete COMMENT_CACHE_GLOBAL.sheetDataTime[sheetCacheKey];
+            
+            console.log(`✅ ${projectName}: Migrated ${sheetCount} hashes in main sheet`);
+            totalSheetMigrated += sheetCount;
+          }
+        }
+      }
+      
+      cache.clearCache();
+      totalProjects++;
       
     } catch (e) {
       console.error(`❌ Error migrating ${projectName}:`, e);
     }
   });
   
-  ui.alert('Migration Complete', `✅ Migration completed!\n\nFixed ${totalFixed} hashes in main sheets\nFixed ${totalMigrated} hashes in cache sheets`, ui.ButtonSet.OK);
+  ui.alert(
+    'Migration Complete', 
+    `✅ Migration completed!\n\nCache: ${totalCacheMigrated} hashes migrated\nSheets: ${totalSheetMigrated} hashes migrated\nProjects: ${totalProjects} processed\n\nComment hashes are now synchronized!`, 
+    ui.ButtonSet.OK
+  );
 }

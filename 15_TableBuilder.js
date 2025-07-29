@@ -485,36 +485,37 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   const weekRange = `${week.weekStart} - ${week.weekEnd}`;
   
   if (level === 'WEEK') {
-    row[19] = generateCommentHash('WEEK', appName, weekRange);
+    row[19] = generateDetailedCommentHash('WEEK', appName, weekRange, '', '', '');
   } else if (level === 'CAMPAIGN') {
-    const cleanSourceApp = (data.sourceApp && data.sourceApp !== 'Unknown') ? data.sourceApp : 'N/A';
-    const cleanCampaignId = (data.campaignId && data.campaignId !== 'Unknown') ? data.campaignId : 'N/A';
+    const cleanSourceApp = (data.sourceApp && data.sourceApp !== 'Unknown') ? data.sourceApp : '';
+    let cleanCampaignId = '';
+    let cleanCampaignName = '';
     
-    // Для TRICKY используем campaignId как identifier, для остальных - 'N/A'
-    const identifier = CURRENT_PROJECT === 'TRICKY' ? cleanCampaignId : 'N/A';
-    
-    // Для TRICKY campaignName это campaignId, для остальных - sourceApp
-    const cleanCampaignName = CURRENT_PROJECT === 'TRICKY' ? 
-      (cleanCampaignId !== 'N/A' ? cleanCampaignId : 'Unknown') : 
-      cleanSourceApp;
+    if (CURRENT_PROJECT === 'TRICKY') {
+      cleanCampaignId = (data.campaignId && data.campaignId !== 'Unknown' && data.campaignId !== 'N/A') ? data.campaignId : '';
+      cleanCampaignName = cleanCampaignId || 'Unknown';
+    } else {
+      cleanCampaignId = '';
+      cleanCampaignName = cleanSourceApp;
+    }
     
     row[19] = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, 
-      identifier, cleanSourceApp, cleanCampaignName);
-} else if (level === 'SOURCE_APP') {
-    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
-    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+      cleanCampaignId, cleanSourceApp, cleanCampaignName);
+  } else if (level === 'SOURCE_APP') {
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : '';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : '';
     
     row[19] = generateDetailedCommentHash('SOURCE_APP', appName, weekRange, 
       cleanIdentifier, cleanDisplayName, '');
   } else if (level === 'NETWORK') {
-    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
-    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : '';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : '';
     
     row[19] = generateDetailedCommentHash('NETWORK', appName, weekRange, 
       cleanIdentifier, '', cleanDisplayName);
   } else if (level === 'APP') {
-    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
-    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : '';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : '';
     
     row[19] = generateDetailedCommentHash('APP', appName, weekRange, 
       cleanIdentifier, cleanDisplayName, '');

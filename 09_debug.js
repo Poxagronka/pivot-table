@@ -736,271 +736,282 @@ function quickAPICheck() {
   }
 }
 
-function debugCommentHashes() {
-  const ui = SpreadsheetApp.getUi();
+function debugHashGeneration() {
   const projectName = CURRENT_PROJECT;
-  
-  console.log(`\n=== Debugging comment hashes for ${projectName} ===`);
+  console.log(`\n=== ПОЛНЫЙ ДЕБАГ ГЕНЕРАЦИИ ХЕШЕЙ ДЛЯ ${projectName} ===\n`);
   
   try {
-    const config = getCurrentConfig();
+    // 1. Анализ кеша
+    console.log('1. АНАЛИЗ КЕША КОММЕНТОВ');
+    console.log('========================');
+    
     const cache = new CommentCache(projectName);
+    cache.getOrCreateCacheSheet();
     
-    // Load cached comments
-    const { comments, commentsByHash } = cache.loadAllComments();
-    console.log(`Loaded ${Object.keys(commentsByHash).length} comments from cache`);
+    const cacheRange = `${cache.cacheSheetName}!A:I`;
+    const cacheResponse = cache.getCachedSheetData(cache.cacheSpreadsheetId, cacheRange);
     
-    // Get sheet data
+    if (!cacheResponse.values || cacheResponse.values.length <= 1) {
+      console.log('Кеш пуст');
+      return;
+    }
+    
+    const cacheData = cacheResponse.values;
+    console.log(`Всего записей в кеше: ${cacheData.length - 1}`);
+    
+    // Анализируем структуру хешей в кеше
+    const hashAnalysis = {
+      byLevel: {},
+      byPrefix: {},
+      samples: {}
+    };
+    
+    for (let i = 1; i < Math.min(cacheData.length, 20); i++) {
+      const row = cacheData[i];
+      const [appName, weekRange, level, identifier, sourceApp, campaign, comment, lastUpdated, hash] = row;
+      
+      if (!hashAnalysis.byLevel[level]) {
+        hashAnalysis.byLevel[level] = [];
+        hashAnalysis.samples[level] = [];
+      }
+      
+      hashAnalysis.byLevel[level].push(hash);
+      
+      if (hashAnalysis.samples[level].length < 3) {
+        hashAnalysis.samples[level].push({
+          appName, weekRange, identifier, sourceApp, campaign, hash,
+          generated: cache.generateRowHash(level, appName, weekRange, identifier, sourceApp, campaign)
+        });
+      }
+      
+      // Анализ префиксов
+      if (hash) {
+        const prefix = hash.substring(0, 5);
+        hashAnalysis.byPrefix[prefix] = (hashAnalysis.byPrefix[prefix] || 0) + 1;
+      }
+    }
+    
+    console.log('\nКоличество по уровням:');
+    Object.entries(hashAnalysis.byLevel).forEach(([level, hashes]) => {
+      console.log(`  ${level}: ${hashes.length}`);
+    });
+    
+    console.log('\nПримеры хешей из кеша:');
+    Object.entries(hashAnalysis.samples).forEach(([level, samples]) => {
+      console.log(`\n  ${level}:`);
+      samples.forEach((s, idx) => {
+        console.log(`    Пример ${idx + 1}:`);
+        console.log(`      App: ${s.appName}`);
+        console.log(`      Week: ${s.weekRange}`);
+        console.log(`      Identifier: ${s.identifier}`);
+        console.log(`      SourceApp: ${s.sourceApp}`);
+        console.log(`      Campaign: ${s.campaign}`);
+        console.log(`      Хеш в кеше: ${s.hash}`);
+        console.log(`      Сгенерированный: ${s.generated}`);
+        console.log(`      Совпадает: ${s.hash === s.generated ? 'ДА' : 'НЕТ'}`);
+      });
+    });
+    
+    // 2. Анализ листа
+    console.log('\n\n2. АНАЛИЗ ОСНОВНОГО ЛИСТА');
+    console.log('==========================');
+    
+    const config = getCurrentConfig();
     const range = `${config.SHEET_NAME}!A:T`;
     const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
     
     if (!response.values || response.values.length < 2) {
-      console.log('No data in sheet');
+      console.log('Лист пуст');
       return;
     }
     
-    const data = response.values;
-    const headers = data[0];
+    const sheetData = response.values;
+    const headers = sheetData[0];
     const hashCol = headers.findIndex(h => h === 'RowHash');
+    const levelCol = headers.findIndex(h => h === 'Level');
+    const nameCol = headers.findIndex(h => h === 'Week Range / Source App');
     const idCol = headers.findIndex(h => h === 'ID');
     
-    if (hashCol === -1) {
-      console.log('RowHash column not found');
-      return;
-    }
+    console.log(`Найденные колонки: Level=${levelCol}, Name=${nameCol}, ID=${idCol}, Hash=${hashCol}`);
     
     let currentApp = '';
     let currentWeek = '';
-    let totalRows = 0;
-    let rowsWithHash = 0;
-    let matchingHashes = 0;
-    let mismatchDetails = [];
-    
-    // Проходим по всем строкам и собираем хеши из кеша для анализа
-    const cacheHashesByLevel = {
-      WEEK: [],
-      SOURCE_APP: [],
-      CAMPAIGN: [],
-      NETWORK: []
+    const sheetHashAnalysis = {
+      total: 0,
+      byLevel: {},
+      mismatches: []
     };
     
-    // Анализируем структуру кеша
-    Object.keys(commentsByHash).forEach(hash => {
-      if (hash.startsWith('TRI_W_')) cacheHashesByLevel.WEEK.push(hash);
-      else if (hash.startsWith('TRI_S_')) cacheHashesByLevel.SOURCE_APP.push(hash);
-      else if (hash.startsWith('TRI_C_')) cacheHashesByLevel.CAMPAIGN.push(hash);
-      else if (hash.startsWith('TRI_N_')) cacheHashesByLevel.NETWORK.push(hash);
-    });
-    
-    console.log('\nCache analysis:');
-    console.log(`WEEK hashes: ${cacheHashesByLevel.WEEK.length}`);
-    console.log(`SOURCE_APP hashes: ${cacheHashesByLevel.SOURCE_APP.length}`);
-    console.log(`CAMPAIGN hashes: ${cacheHashesByLevel.CAMPAIGN.length}`);
-    console.log(`NETWORK hashes: ${cacheHashesByLevel.NETWORK.length}`);
-    
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const level = row[0];
-      const nameOrRange = row[1];
-      const hash = row[hashCol];
+    // Анализируем первые 50 строк с данными
+    for (let i = 1; i < Math.min(sheetData.length, 50); i++) {
+      const row = sheetData[i];
+      const level = row[levelCol];
+      const nameOrRange = row[nameCol];
+      const idValue = row[idCol] || '';
+      const sheetHash = row[hashCol];
       
       if (level === 'APP') {
         currentApp = nameOrRange;
+        continue;
       } else if (level === 'WEEK') {
         currentWeek = nameOrRange;
-        if (hash) {
-          totalRows++;
-          rowsWithHash++;
-          
-          if (commentsByHash[hash]) {
-            matchingHashes++;
-          } else {
-            const expectedHash = generateCommentHash('WEEK', currentApp, currentWeek, projectName);
-            mismatchDetails.push({
-              row: i + 1,
-              level: level,
-              app: currentApp,
-              week: currentWeek,
-              hash: hash,
-              expectedHash: expectedHash,
-              inCache: false
-            });
-          }
+      }
+      
+      if (!sheetHash) continue;
+      
+      sheetHashAnalysis.total++;
+      sheetHashAnalysis.byLevel[level] = (sheetHashAnalysis.byLevel[level] || 0) + 1;
+      
+      // Генерируем ожидаемый хеш
+      let expectedHash = '';
+      let debugInfo = {
+        row: i + 1,
+        level,
+        app: currentApp,
+        week: currentWeek,
+        nameOrRange,
+        idValue
+      };
+      
+      if (level === 'WEEK') {
+        expectedHash = generateCommentHash('WEEK', currentApp, currentWeek, projectName);
+      } else if (level === 'SOURCE_APP') {
+        expectedHash = generateDetailedCommentHash('SOURCE_APP', currentApp, currentWeek, 
+          nameOrRange, nameOrRange, '', projectName);
+        debugInfo.identifier = nameOrRange;
+      } else if (level === 'CAMPAIGN') {
+        let campaignId = 'N/A';
+        if (projectName === 'TRICKY' && idValue.includes('HYPERLINK')) {
+          const match = idValue.match(/campaigns\/([^"]+)/);
+          campaignId = match ? match[1] : 'N/A';
         }
-      } else if ((level === 'CAMPAIGN' || level === 'SOURCE_APP' || level === 'NETWORK') && hash) {
-        totalRows++;
-        rowsWithHash++;
         
-        if (commentsByHash[hash]) {
-          matchingHashes++;
-        } else {
-          // Calculate expected hash based on level
-          let expectedHash = '';
-          let debugInfo = {};
-          
-          if (level === 'SOURCE_APP') {
-            const sourceAppName = nameOrRange;
-            expectedHash = generateDetailedCommentHash('SOURCE_APP', currentApp, currentWeek, 
-              sourceAppName, sourceAppName, '', projectName);
-            debugInfo = {
-              sourceApp: sourceAppName,
-              identifier: sourceAppName
-            };
-          } else if (level === 'CAMPAIGN') {
-            const sourceApp = nameOrRange;
-            const idValue = row[idCol] || '';
-            
-            let campaignId = 'N/A';
-            if (projectName === 'TRICKY' && idValue.includes('HYPERLINK')) {
-              const match = idValue.match(/campaigns\/([^"]+)/);
-              campaignId = match ? match[1] : 'N/A';
-            }
-            
-            const identifier = projectName === 'TRICKY' ? campaignId : 'N/A';
-            const campaignName = projectName === 'TRICKY' ? 
-              (campaignId !== 'N/A' ? campaignId : 'Unknown') : 
-              sourceApp;
-            
-            expectedHash = generateDetailedCommentHash('CAMPAIGN', currentApp, currentWeek, 
-              identifier, sourceApp, campaignName, projectName);
-            debugInfo = {
-              sourceApp: sourceApp,
-              campaignId: campaignId,
-              identifier: identifier,
-              campaignName: campaignName
-            };
-          } else if (level === 'NETWORK') {
-            const networkName = nameOrRange;
-            const networkId = row[idCol] || 'N/A';
-            expectedHash = generateDetailedCommentHash('NETWORK', currentApp, currentWeek, 
-              networkId, 'N/A', networkName, projectName);
-            debugInfo = {
-              networkName: networkName,
-              networkId: networkId
-            };
-          }
-          
-          mismatchDetails.push({
-            row: i + 1,
-            level: level,
-            app: currentApp,
-            week: currentWeek,
-            hash: hash,
-            expectedHash: expectedHash,
-            inCache: false,
-            debugInfo: debugInfo
-          });
-        }
+        const identifier = projectName === 'TRICKY' ? campaignId : 'N/A';
+        const campaignName = projectName === 'TRICKY' ? 
+          (campaignId !== 'N/A' ? campaignId : 'Unknown') : 
+          nameOrRange;
+        
+        expectedHash = generateDetailedCommentHash('CAMPAIGN', currentApp, currentWeek, 
+          identifier, nameOrRange, campaignName, projectName);
+        
+        debugInfo.campaignId = campaignId;
+        debugInfo.identifier = identifier;
+        debugInfo.campaignName = campaignName;
+      }
+      
+      if (sheetHash !== expectedHash && sheetHashAnalysis.mismatches.length < 10) {
+        sheetHashAnalysis.mismatches.push({
+          ...debugInfo,
+          sheetHash,
+          expectedHash
+        });
       }
     }
     
-    console.log(`\nSummary:`);
-    console.log(`Total data rows: ${totalRows}`);
-    console.log(`Rows with hash: ${rowsWithHash}`);
-    console.log(`Matching hashes in cache: ${matchingHashes}`);
-    console.log(`Mismatches: ${rowsWithHash - matchingHashes}`);
-    
-    if (mismatchDetails.length > 0) {
-      console.log(`\nFirst 10 mismatches:`);
-      mismatchDetails.slice(0, 10).forEach(detail => {
-        console.log(`\n  Row ${detail.row}: ${detail.level}`);
-        console.log(`    App: ${detail.app}`);
-        console.log(`    Week: ${detail.week}`);
-        console.log(`    Sheet hash: ${detail.hash}`);
-        console.log(`    Expected: ${detail.expectedHash}`);
-        console.log(`    Hash match: ${detail.hash === detail.expectedHash}`);
-        if (detail.debugInfo) {
-          console.log(`    Debug info:`, JSON.stringify(detail.debugInfo, null, 2));
-        }
-      });
-      
-      // Попробуем найти похожие хеши в кеше
-      console.log(`\nSearching for similar hashes in cache...`);
-      const firstMismatch = mismatchDetails[0];
-      if (firstMismatch) {
-        const prefix = firstMismatch.hash.substring(0, 5);
-        const similarInCache = Object.keys(commentsByHash).filter(h => h.startsWith(prefix));
-        console.log(`Hashes starting with ${prefix}: ${similarInCache.length}`);
-        if (similarInCache.length > 0 && similarInCache.length < 10) {
-          console.log(`Similar hashes:`, similarInCache);
-        }
-      }
-    }
-    
-  } catch (e) {
-    console.error('Error debugging hashes:', e);
-  }
-}
-
-function analyzeCommentCache() {
-  const projectName = CURRENT_PROJECT;
-  console.log(`\n=== Analyzing comment cache for ${projectName} ===`);
-  
-  try {
-    const cache = new CommentCache(projectName);
-    // Сначала нужно получить или создать лист кеша
-    cache.getOrCreateCacheSheet();
-    
-    if (!cache.cacheSheetName) {
-      console.log('Error: Cache sheet name is null');
-      return;
-    }
-    
-    const cacheRange = `${cache.cacheSheetName}!A:I`;
-    const response = cache.getCachedSheetData(cache.cacheSpreadsheetId, cacheRange);
-    
-    if (!response.values || response.values.length <= 1) {
-      console.log('Cache is empty');
-      return;
-    }
-    
-    console.log(`Total rows in cache: ${response.values.length - 1}`);
-    
-    // Анализируем первые 10 строк
-    console.log('\nFirst 10 entries in cache:');
-    for (let i = 1; i <= Math.min(10, response.values.length - 1); i++) {
-      const row = response.values[i];
-      const [appName, weekRange, level, identifier, sourceApp, campaign, comment, lastUpdated, hash] = row;
-      
-      console.log(`\nRow ${i}:`);
-      console.log(`  Level: ${level}`);
-      console.log(`  App: ${appName}`);
-      console.log(`  Week: ${weekRange}`);
-      console.log(`  Identifier: ${identifier}`);
-      console.log(`  SourceApp: ${sourceApp}`);
-      console.log(`  Campaign: ${campaign}`);
-      console.log(`  Hash: ${hash}`);
-      console.log(`  Comment: ${comment ? comment.substring(0, 50) + '...' : 'No comment'}`);
-    }
-    
-    // Считаем по уровням
-    const levelCounts = {};
-    for (let i = 1; i < response.values.length; i++) {
-      const level = response.values[i][2];
-      levelCounts[level] = (levelCounts[level] || 0) + 1;
-    }
-    
-    console.log('\nComment counts by level:');
-    Object.entries(levelCounts).forEach(([level, count]) => {
+    console.log('\nСтатистика хешей в листе:');
+    console.log(`  Всего: ${sheetHashAnalysis.total}`);
+    Object.entries(sheetHashAnalysis.byLevel).forEach(([level, count]) => {
       console.log(`  ${level}: ${count}`);
     });
     
-    // Анализируем хеши
-    console.log('\nHash analysis:');
-    const hashPrefixes = {};
-    for (let i = 1; i < response.values.length; i++) {
-      const hash = response.values[i][8];
-      if (hash) {
-        const prefix = hash.substring(0, 7);
-        hashPrefixes[prefix] = (hashPrefixes[prefix] || 0) + 1;
-      }
+    if (sheetHashAnalysis.mismatches.length > 0) {
+      console.log('\nПримеры несовпадений хешей:');
+      sheetHashAnalysis.mismatches.forEach(m => {
+        console.log(`\n  Строка ${m.row} (${m.level}):`);
+        console.log(`    App: ${m.app}`);
+        console.log(`    Week: ${m.week}`);
+        console.log(`    NameOrRange: ${m.nameOrRange}`);
+        if (m.campaignId) console.log(`    CampaignId: ${m.campaignId}`);
+        if (m.identifier) console.log(`    Identifier: ${m.identifier}`);
+        if (m.campaignName) console.log(`    CampaignName: ${m.campaignName}`);
+        console.log(`    Хеш в листе: ${m.sheetHash}`);
+        console.log(`    Ожидаемый: ${m.expectedHash}`);
+      });
     }
     
-    Object.entries(hashPrefixes).forEach(([prefix, count]) => {
+    // 3. Тестирование функций генерации хешей
+    console.log('\n\n3. ТЕСТИРОВАНИЕ ФУНКЦИЙ ГЕНЕРАЦИИ');
+    console.log('===================================');
+    
+    const testCases = [
+      {
+        level: 'WEEK',
+        app: 'Test App',
+        week: '2025-01-01 - 2025-01-07',
+        identifier: '',
+        sourceApp: '',
+        campaign: ''
+      },
+      {
+        level: 'SOURCE_APP',
+        app: 'Test App', 
+        week: '2025-01-01 - 2025-01-07',
+        identifier: 'com.test.app',
+        sourceApp: 'com.test.app',
+        campaign: ''
+      },
+      {
+        level: 'CAMPAIGN',
+        app: 'Test App',
+        week: '2025-01-01 - 2025-01-07',
+        identifier: projectName === 'TRICKY' ? '12345' : 'N/A',
+        sourceApp: 'Test Campaign',
+        campaign: projectName === 'TRICKY' ? '12345' : 'Test Campaign'
+      }
+    ];
+    
+    testCases.forEach(test => {
+      console.log(`\nТест ${test.level}:`);
+      
+      let hash1, hash2, hash3;
+      
+      if (test.level === 'WEEK') {
+        hash1 = generateCommentHash(test.level, test.app, test.week, projectName);
+        hash2 = cache.generateRowHash(test.level, test.app, test.week, test.identifier, test.sourceApp, test.campaign);
+        hash3 = generateDetailedCommentHash(test.level, test.app, test.week, test.identifier, test.sourceApp, test.campaign, projectName);
+      } else {
+        hash1 = generateDetailedCommentHash(test.level, test.app, test.week, test.identifier, test.sourceApp, test.campaign, projectName);
+        hash2 = cache.generateRowHash(test.level, test.app, test.week, test.identifier, test.sourceApp, test.campaign);
+        hash3 = generateCommentHash(test.level, test.app, test.week, projectName);
+      }
+      
+      console.log(`  generateCommentHash: ${test.level === 'WEEK' ? hash1 : hash3}`);
+      console.log(`  generateDetailedCommentHash: ${test.level === 'WEEK' ? hash3 : hash1}`);
+      console.log(`  cache.generateRowHash: ${hash2}`);
+      console.log(`  Все совпадают: ${hash1 === hash2 && hash2 === hash3 ? 'ДА' : 'НЕТ'}`);
+    });
+    
+    // 4. Проверка распознавания префиксов
+    console.log('\n\n4. ПРОВЕРКА РАСПОЗНАВАНИЯ ПРЕФИКСОВ');
+    console.log('====================================');
+    
+    const { commentsByHash } = cache.loadAllComments();
+    const hashPrefixAnalysis = {};
+    
+    Object.keys(commentsByHash).forEach(hash => {
+      if (hash.startsWith('TRI_W_')) {
+        hashPrefixAnalysis['TRI_W_'] = (hashPrefixAnalysis['TRI_W_'] || 0) + 1;
+      } else if (hash.startsWith('TRI_S_')) {
+        hashPrefixAnalysis['TRI_S_'] = (hashPrefixAnalysis['TRI_S_'] || 0) + 1;
+      } else if (hash.startsWith('TRI_C_')) {
+        hashPrefixAnalysis['TRI_C_'] = (hashPrefixAnalysis['TRI_C_'] || 0) + 1;
+      } else if (hash.startsWith('TRI_N_')) {
+        hashPrefixAnalysis['TRI_N_'] = (hashPrefixAnalysis['TRI_N_'] || 0) + 1;
+      } else if (hash.startsWith('TRI_')) {
+        const prefix = hash.substring(0, 5);
+        hashPrefixAnalysis[prefix] = (hashPrefixAnalysis[prefix] || 0) + 1;
+      }
+    });
+    
+    console.log('\nРаспределение префиксов в кеше:');
+    Object.entries(hashPrefixAnalysis).forEach(([prefix, count]) => {
       console.log(`  ${prefix}: ${count}`);
     });
     
   } catch (e) {
-    console.error('Error analyzing cache:', e);
+    console.error('Ошибка в debugHashGeneration:', e);
+    console.log('Stack trace:', e.stack);
   }
+  
+  console.log('\n=== КОНЕЦ ДЕБАГА ===\n');
 }
