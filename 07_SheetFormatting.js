@@ -216,7 +216,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
     sheet.hideColumns(14, 1);
-    sheet.hideColumns(20, 1);
     
     console.log(`🎨 Optimized formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
@@ -356,7 +355,7 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
     });
     
     if (requests.length > 0) {
-      const batchSize = 100;
+      const batchSize = 500;
       for (let i = 0; i < requests.length; i += batchSize) {
         const batch = requests.slice(i, i + batchSize);
         Sheets.Spreadsheets.batchUpdate({
