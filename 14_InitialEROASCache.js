@@ -1,5 +1,5 @@
 /**
- * Initial Metrics Cache Management - Кеширует первоначальные значения eROAS 730d и eProfit 730d в отдельной таблице
+ * Initial Metrics Cache Management - ИСПРАВЛЕНО: единая логика для eROAS и eProfit + поддержка отрицательной прибыли
  */
 
 const INITIAL_METRICS_CACHE_SPREADSHEET_ID = '1JBYtINHH7yLwdsfCPV3q3sj6NlP3WmftsPvbdfzTWdU';
@@ -10,6 +10,7 @@ class InitialMetricsCache {
     this.cacheSpreadsheet = null;
     this.cacheSheet = null;
     this.memoryCache = null;
+    this.rowIndexCache = null;
     
     try {
       this.cacheSpreadsheet = SpreadsheetApp.openById(INITIAL_METRICS_CACHE_SPREADSHEET_ID);
@@ -22,7 +23,7 @@ class InitialMetricsCache {
   getOrCreateCacheSheet() {
     if (this.cacheSheet) return this.cacheSheet;
     
-    const sheetName = `InitialMetrics_${this.projectName}`;
+    const sheetName = `InitialEROAS_${this.projectName}`;
     this.cacheSheet = this.cacheSpreadsheet.getSheetByName(sheetName);
     
     if (!this.cacheSheet) {
@@ -60,6 +61,7 @@ class InitialMetricsCache {
     
     const sheet = this.getOrCreateCacheSheet();
     const cache = {};
+    this.rowIndexCache = {};
     
     if (sheet.getLastRow() <= 1) {
       this.memoryCache = cache;
@@ -70,14 +72,15 @@ class InitialMetricsCache {
       const lastCol = Math.max(8, sheet.getLastColumn());
       const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
       
-      data.forEach(row => {
+      data.forEach((row, index) => {
         const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded, initialProfit] = row;
-        if ((initialEROAS !== '' && initialEROAS > 0) || (initialProfit !== '' && initialProfit > 0)) {
+        if (initialEROAS || initialProfit !== '') {
           const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
           cache[key] = {
-            eROAS: initialEROAS && initialEROAS > 0 ? parseFloat(initialEROAS) : null,
-            profit: initialProfit && initialProfit > 0 ? parseFloat(initialProfit) : null
+            eROAS: (initialEROAS && initialEROAS !== '' && initialEROAS > 0) ? parseFloat(initialEROAS) : null,
+            profit: (initialProfit !== '' && initialProfit !== null && initialProfit !== undefined) ? parseFloat(initialProfit) : null
           };
+          this.rowIndexCache[key] = index + 2;
         }
       });
       
@@ -86,14 +89,14 @@ class InitialMetricsCache {
     } catch (e) {
       console.error('Error loading initial metrics values:', e);
       this.memoryCache = {};
+      this.rowIndexCache = {};
     }
     
     return this.memoryCache;
   }
 
   saveInitialValue(level, appName, weekRange, currentEROAS, currentProfit, identifier = '', sourceApp = '') {
-    if ((currentEROAS === null || currentEROAS === undefined || currentEROAS === '' || currentEROAS === 0) &&
-        (currentProfit === null || currentProfit === undefined || currentProfit === '' || currentProfit === 0)) return;
+    if ((!currentEROAS || currentEROAS <= 0) && (currentProfit === null || currentProfit === undefined || currentProfit === '')) return;
     
     const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
     const cache = this.loadAllInitialValues();
@@ -106,8 +109,8 @@ class InitialMetricsCache {
       const sheet = this.getOrCreateCacheSheet();
       const lastRow = sheet.getLastRow();
       
-      const validEROAS = currentEROAS && currentEROAS > 0 ? currentEROAS : '';
-      const validProfit = currentProfit && currentProfit > 0 ? currentProfit : '';
+      const validEROAS = (currentEROAS && currentEROAS > 0) ? currentEROAS : '';
+      const validProfit = (currentProfit !== null && currentProfit !== undefined && currentProfit !== '') ? currentProfit : '';
       
       sheet.getRange(lastRow + 1, 1, 1, 8).setValues([[
         level,
@@ -123,8 +126,9 @@ class InitialMetricsCache {
       if (this.memoryCache) {
         this.memoryCache[key] = {
           eROAS: validEROAS ? parseFloat(validEROAS) : null,
-          profit: validProfit ? parseFloat(validProfit) : null
+          profit: validProfit !== '' ? parseFloat(validProfit) : null
         };
+        this.rowIndexCache[key] = lastRow + 1;
       }
     } catch (e) {
       console.error('Error saving initial metrics value:', e);
@@ -137,6 +141,7 @@ class InitialMetricsCache {
     this.loadAllInitialValues();
     
     const newValues = [];
+    const updateRequests = [];
     
     if (this.projectName === 'INCENT_TRAFFIC') {
       Object.values(appData).forEach(network => {
@@ -150,23 +155,116 @@ class InitialMetricsCache {
           const weekTotals = calculateWeekTotals(allCampaigns);
           
           const weekKey = this.createKey('WEEK', network.networkName, weekRange, '', '');
-          if (!this.memoryCache[weekKey] && (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit > 0)) {
-            newValues.push(['WEEK', network.networkName, weekRange, '', '', 
-              weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-              new Date(), 
-              weekTotals.totalProfit > 0 ? weekTotals.totalProfit : ''
-            ]);
+          const existingEntry = this.memoryCache[weekKey];
+          
+          if (!existingEntry) {
+            if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+              newValues.push(['WEEK', network.networkName, weekRange, '', '', 
+                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                new Date(), 
+                weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+              ]);
+            }
+          } else {
+            const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                               (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+            if (needsUpdate) {
+              updateRequests.push({
+                key: weekKey,
+                rowIndex: this.rowIndexCache[weekKey],
+                eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+              });
+            }
           }
           
           Object.values(week.apps).forEach(app => {
             const appTotals = calculateWeekTotals(app.campaigns);
             const appKey = this.createKey('APP', network.networkName, weekRange, app.appId, app.appName);
-            if (!this.memoryCache[appKey] && (appTotals.avgEROASD730 > 0 || appTotals.totalProfit > 0)) {
-              newValues.push(['APP', network.networkName, weekRange, app.appId, app.appName, 
-                appTotals.avgEROASD730 > 0 ? appTotals.avgEROASD730 : '', 
+            const existingEntry = this.memoryCache[appKey];
+            
+            if (!existingEntry) {
+              if (appTotals.avgEROASD730 > 0 || appTotals.totalProfit !== 0) {
+                newValues.push(['APP', network.networkName, weekRange, app.appId, app.appName, 
+                  appTotals.avgEROASD730 > 0 ? appTotals.avgEROASD730 : '', 
+                  new Date(), 
+                  appTotals.totalProfit !== 0 ? appTotals.totalProfit : ''
+                ]);
+              }
+            } else {
+              const needsUpdate = (appTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (appTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: appKey,
+                  rowIndex: this.rowIndexCache[appKey],
+                  eROAS: existingEntry.eROAS || (appTotals.avgEROASD730 > 0 ? appTotals.avgEROASD730 : null),
+                  profit: existingEntry.profit || (appTotals.totalProfit !== 0 ? appTotals.totalProfit : null)
+                });
+              }
+            }
+          });
+        });
+      });
+    } else if (this.projectName === 'OVERALL') {
+      Object.values(appData).forEach(app => {
+        Object.values(app.weeks).forEach(week => {
+          const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+          
+          const allCampaigns = [];
+          Object.values(week.networks).forEach(network => {
+            allCampaigns.push(...network.campaigns);
+          });
+          const weekTotals = calculateWeekTotals(allCampaigns);
+          
+          const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
+          const existingEntry = this.memoryCache[weekKey];
+          
+          if (!existingEntry) {
+            if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+              newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
                 new Date(), 
-                appTotals.totalProfit > 0 ? appTotals.totalProfit : ''
+                weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
               ]);
+            }
+          } else {
+            const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                               (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+            if (needsUpdate) {
+              updateRequests.push({
+                key: weekKey,
+                rowIndex: this.rowIndexCache[weekKey],
+                eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+              });
+            }
+          }
+          
+          Object.values(week.networks).forEach(network => {
+            const networkTotals = calculateWeekTotals(network.campaigns);
+            const networkKey = this.createKey('NETWORK', app.appName, weekRange, network.networkId, network.networkName);
+            const existingEntry = this.memoryCache[networkKey];
+            
+            if (!existingEntry) {
+              if (networkTotals.avgEROASD730 > 0 || networkTotals.totalProfit !== 0) {
+                newValues.push(['NETWORK', app.appName, weekRange, network.networkId, network.networkName, 
+                  networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : '', 
+                  new Date(), 
+                  networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : ''
+                ]);
+              }
+            } else {
+              const needsUpdate = (networkTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (networkTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: networkKey,
+                  rowIndex: this.rowIndexCache[networkKey],
+                  eROAS: existingEntry.eROAS || (networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : null),
+                  profit: existingEntry.profit || (networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : null)
+                });
+              }
             }
           });
         });
@@ -184,84 +282,132 @@ class InitialMetricsCache {
             const weekTotals = calculateWeekTotals(allCampaigns);
             
             const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-            if (!this.memoryCache[weekKey] && (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit > 0)) {
-              newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                new Date(), 
-                weekTotals.totalProfit > 0 ? weekTotals.totalProfit : ''
-              ]);
+            const existingEntry = this.memoryCache[weekKey];
+            
+            if (!existingEntry) {
+              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                  new Date(), 
+                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                ]);
+              }
+            } else {
+              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: weekKey,
+                  rowIndex: this.rowIndexCache[weekKey],
+                  eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                  profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                });
+              }
             }
             
             Object.values(week.sourceApps).forEach(sourceApp => {
               const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
               const sourceAppKey = this.createKey('SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName);
-              if (!this.memoryCache[sourceAppKey] && (sourceAppTotals.avgEROASD730 > 0 || sourceAppTotals.totalProfit > 0)) {
-                newValues.push(['SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, 
-                  sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : '', 
-                  new Date(), 
-                  sourceAppTotals.totalProfit > 0 ? sourceAppTotals.totalProfit : ''
-                ]);
+              const existingEntry = this.memoryCache[sourceAppKey];
+              
+              if (!existingEntry) {
+                if (sourceAppTotals.avgEROASD730 > 0 || sourceAppTotals.totalProfit !== 0) {
+                  newValues.push(['SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, 
+                    sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : '', 
+                    new Date(), 
+                    sourceAppTotals.totalProfit !== 0 ? sourceAppTotals.totalProfit : ''
+                  ]);
+                }
+              } else {
+                const needsUpdate = (sourceAppTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                   (sourceAppTotals.totalProfit !== 0 && !existingEntry.profit);
+                if (needsUpdate) {
+                  updateRequests.push({
+                    key: sourceAppKey,
+                    rowIndex: this.rowIndexCache[sourceAppKey],
+                    eROAS: existingEntry.eROAS || (sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : null),
+                    profit: existingEntry.profit || (sourceAppTotals.totalProfit !== 0 ? sourceAppTotals.totalProfit : null)
+                  });
+                }
               }
               
               sourceApp.campaigns.forEach(campaign => {
                 const campaignKey = this.createKey('CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp);
-                if (!this.memoryCache[campaignKey] && (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast > 0)) {
-                  newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
-                    campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
-                    new Date(), 
-                    campaign.eProfitForecast > 0 ? campaign.eProfitForecast : ''
-                  ]);
+                const existingEntry = this.memoryCache[campaignKey];
+                
+                if (!existingEntry) {
+                  if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
+                    newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
+                      campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
+                      new Date(), 
+                      campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
+                    ]);
+                  }
+                } else {
+                  const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
+                                     (campaign.eProfitForecast !== 0 && !existingEntry.profit);
+                  if (needsUpdate) {
+                    updateRequests.push({
+                      key: campaignKey,
+                      rowIndex: this.rowIndexCache[campaignKey],
+                      eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
+                      profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
+                    });
+                  }
                 }
               });
             });
-          } else if (this.projectName === 'OVERALL' && week.networks) {
-            const allCampaigns = [];
-            Object.values(week.networks).forEach(network => {
-              allCampaigns.push(...network.campaigns);
-            });
-            const weekTotals = calculateWeekTotals(allCampaigns);
+          } else {
+            const weekTotals = calculateWeekTotals(week.campaigns || []);
             
             const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-            if (!this.memoryCache[weekKey] && (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit > 0)) {
-              newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                new Date(), 
-                weekTotals.totalProfit > 0 ? weekTotals.totalProfit : ''
-              ]);
-            }
+            const existingEntry = this.memoryCache[weekKey];
             
-            Object.values(week.networks).forEach(network => {
-              const networkTotals = calculateWeekTotals(network.campaigns);
-              const networkKey = this.createKey('NETWORK', app.appName, weekRange, network.networkId, network.networkName);
-              if (!this.memoryCache[networkKey] && (networkTotals.avgEROASD730 > 0 || networkTotals.totalProfit > 0)) {
-                newValues.push(['NETWORK', app.appName, weekRange, network.networkId, network.networkName, 
-                  networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : '', 
+            if (!existingEntry) {
+              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
                   new Date(), 
-                  networkTotals.totalProfit > 0 ? networkTotals.totalProfit : ''
+                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
                 ]);
               }
-            });
-          } else {
-            const weekTotals = calculateWeekTotals(week.campaigns);
-            
-            const weekKey = this.createKey('WEEK', app.appName, weekRange, '', '');
-            if (!this.memoryCache[weekKey] && (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit > 0)) {
-              newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                new Date(), 
-                weekTotals.totalProfit > 0 ? weekTotals.totalProfit : ''
-              ]);
+            } else {
+              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: weekKey,
+                  rowIndex: this.rowIndexCache[weekKey],
+                  eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                  profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                });
+              }
             }
             
             if (week.campaigns) {
               week.campaigns.forEach(campaign => {
                 const campaignKey = this.createKey('CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp);
-                if (!this.memoryCache[campaignKey] && (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast > 0)) {
-                  newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
-                    campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
-                    new Date(), 
-                    campaign.eProfitForecast > 0 ? campaign.eProfitForecast : ''
-                  ]);
+                const existingEntry = this.memoryCache[campaignKey];
+                
+                if (!existingEntry) {
+                  if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
+                    newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
+                      campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
+                      new Date(), 
+                      campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
+                    ]);
+                  }
+                } else {
+                  const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
+                                     (campaign.eProfitForecast !== 0 && !existingEntry.profit);
+                  if (needsUpdate) {
+                    updateRequests.push({
+                      key: campaignKey,
+                      rowIndex: this.rowIndexCache[campaignKey],
+                      eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
+                      profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
+                    });
+                  }
                 }
               });
             }
@@ -276,23 +422,75 @@ class InitialMetricsCache {
         const lastRow = sheet.getLastRow();
         sheet.getRange(lastRow + 1, 1, newValues.length, 8).setValues(newValues);
         
-        newValues.forEach(row => {
+        newValues.forEach((row, index) => {
           const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded, initialProfit] = row;
           const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
           if (this.memoryCache) {
             this.memoryCache[key] = {
-              eROAS: initialEROAS && initialEROAS > 0 ? parseFloat(initialEROAS) : null,
-              profit: initialProfit && initialProfit > 0 ? parseFloat(initialProfit) : null
+              eROAS: (initialEROAS && initialEROAS !== '' && initialEROAS > 0) ? parseFloat(initialEROAS) : null,
+              profit: (initialProfit !== '' && initialProfit !== null && initialProfit !== undefined) ? parseFloat(initialProfit) : null
             };
+            this.rowIndexCache[key] = lastRow + 1 + index;
           }
         });
         
-        console.log(`${this.projectName}: Recorded ${newValues.length} new initial metrics values`);
+        console.log(`${this.projectName}: Added ${newValues.length} new initial metrics values`);
       } catch (e) {
         console.error(`Error batch saving initial metrics values for ${this.projectName}:`, e);
       }
-    } else {
+    }
+    
+    if (updateRequests.length > 0) {
+      try {
+        this.processUpdateRequests(updateRequests);
+        console.log(`${this.projectName}: Updated ${updateRequests.length} existing entries with missing values`);
+      } catch (e) {
+        console.error(`Error updating existing entries for ${this.projectName}:`, e);
+      }
+    }
+    
+    if (newValues.length === 0 && updateRequests.length === 0) {
       console.log(`${this.projectName}: No new initial metrics values to record`);
+    }
+  }
+
+  processUpdateRequests(updateRequests) {
+    if (updateRequests.length === 0) return;
+    
+    const spreadsheetId = this.cacheSpreadsheet.getId();
+    const batchUpdateData = [];
+    
+    updateRequests.forEach(update => {
+      if (update.rowIndex && update.rowIndex > 1) {
+        if (update.eROAS !== null && update.eROAS !== undefined) {
+          batchUpdateData.push({
+            range: `${this.cacheSheet.getName()}!F${update.rowIndex}`,
+            values: [[update.eROAS]]
+          });
+        }
+        if (update.profit !== null && update.profit !== undefined) {
+          batchUpdateData.push({
+            range: `${this.cacheSheet.getName()}!H${update.rowIndex}`,
+            values: [[update.profit]]
+          });
+        }
+      }
+    });
+    
+    if (batchUpdateData.length > 0) {
+      const batchUpdateRequest = {
+        valueInputOption: 'RAW',
+        data: batchUpdateData
+      };
+      
+      Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, spreadsheetId);
+      
+      updateRequests.forEach(request => {
+        if (this.memoryCache && this.memoryCache[request.key]) {
+          if (request.eROAS !== null) this.memoryCache[request.key].eROAS = request.eROAS;
+          if (request.profit !== null) this.memoryCache[request.key].profit = request.profit;
+        }
+      });
     }
   }
 
@@ -303,7 +501,7 @@ class InitialMetricsCache {
     const metrics = cache[key];
     const currentValue = Math.round(currentEROAS);
     
-    if (metrics && metrics.eROAS !== null) {
+    if (metrics && metrics.eROAS !== null && metrics.eROAS !== undefined) {
       const initialRounded = Math.round(metrics.eROAS);
       return `${initialRounded}% → ${currentValue}%`;
     } else {
@@ -318,7 +516,7 @@ class InitialMetricsCache {
     const metrics = cache[key];
     const currentValue = Math.round(currentProfit);
     
-    if (metrics && metrics.profit !== null) {
+    if (metrics && metrics.profit !== null && metrics.profit !== undefined) {
       const initialRounded = Math.round(metrics.profit);
       return `${initialRounded}$ → ${currentValue}$`;
     } else {
@@ -328,6 +526,7 @@ class InitialMetricsCache {
 
   clearMemoryCache() {
     this.memoryCache = null;
+    this.rowIndexCache = null;
   }
 }
 
