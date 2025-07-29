@@ -356,7 +356,7 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
     });
     
     if (requests.length > 0) {
-      const batchSize = 500;
+      const batchSize = 100;
       for (let i = 0; i < requests.length; i += batchSize) {
         const batch = requests.slice(i, i + batchSize);
         Sheets.Spreadsheets.batchUpdate({

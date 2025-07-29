@@ -583,12 +583,10 @@ function generateCommentHash(level, appName, weekRange, projectName = null) {
 function generateDetailedCommentHash(level, appName, weekRange, identifier, sourceApp, campaignOrNetwork, projectName = null) {
   const project = projectName || CURRENT_PROJECT;
   
-  // Для WEEK уровня используем упрощенный хеш
   if (level === 'WEEK') {
     return generateCommentHash(level, appName, weekRange, project);
   }
   
-  // Нормализуем все параметры
   const normalizedLevel = (level || '').toString().toUpperCase().trim();
   const normalizedApp = (appName || '').toString().trim();
   const normalizedWeek = (weekRange || '').toString().trim();
@@ -596,45 +594,36 @@ function generateDetailedCommentHash(level, appName, weekRange, identifier, sour
   const normalizedSource = (sourceApp || '').toString().trim();
   const normalizedCampaign = (campaignOrNetwork || '').toString().trim();
   
-  // Компоненты хеша в зависимости от уровня и проекта
   let hashComponents = [project, normalizedLevel, normalizedApp, normalizedWeek];
   
   switch (normalizedLevel) {
     case 'CAMPAIGN':
-      // Для кампаний важен ID и source app
-      hashComponents.push(normalizedId || 'NO_ID');
+      // ИСПРАВЛЕНО: Убираем зависимость от identifier, используем только sourceApp
       hashComponents.push(normalizedSource || 'NO_SOURCE');
       break;
       
     case 'SOURCE_APP':
-      // Для source app важен сам source app ID
       hashComponents.push(normalizedId || normalizedSource || 'NO_SOURCE');
       break;
       
     case 'NETWORK':
-      // Для сетей важен network ID
       hashComponents.push(normalizedId || 'NO_NETWORK_ID');
       break;
       
     case 'APP':
-      // Для приложений достаточно базовых компонентов
       hashComponents.push(normalizedId || normalizedApp);
       break;
       
     default:
-      // Для остальных случаев добавляем все что есть
       hashComponents.push(normalizedId);
       hashComponents.push(normalizedSource);
       hashComponents.push(normalizedCampaign);
   }
   
-  // Убираем пустые компоненты
   hashComponents = hashComponents.filter(c => c && c !== '');
   
-  // Создаем строку для хеширования
   const hashInput = hashComponents.join('|||');
   
-  // Хеш функция
   let hash = 0;
   for (let i = 0; i < hashInput.length; i++) {
     const char = hashInput.charCodeAt(i);
@@ -642,7 +631,123 @@ function generateDetailedCommentHash(level, appName, weekRange, identifier, sour
     hash = hash & hash;
   }
   
-  // Префикс для идентификации уровня
   const levelPrefix = normalizedLevel.substring(0, 1);
   return `${project.substring(0, 3)}_${levelPrefix}_${Math.abs(hash).toString(36)}`;
+}
+
+function migrateCampaignHashes() {
+  const ui = SpreadsheetApp.getUi();
+  const projects = ['MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
+  
+  const result = ui.alert(
+    '🔄 Migrate Campaign Hashes', 
+    `This will fix campaign comment hashes in BOTH main sheets and cache.\n\nProjects: ${projects.join(', ')}\n\nContinue?`, 
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (result !== ui.Button.YES) return;
+  
+  let totalMigrated = 0;
+  
+  projects.forEach(projectName => {
+    try {
+      console.log(`🔄 Migrating campaign hashes for ${projectName}...`);
+      
+      const config = getProjectConfig(projectName);
+      const cache = new CommentCache(projectName);
+      
+      const mainRange = `${config.SHEET_NAME}!A:T`;
+      const mainResponse = Sheets.Spreadsheets.Values.get(config.SHEET_ID, mainRange);
+      
+      if (mainResponse.values && mainResponse.values.length > 1) {
+        const mainData = mainResponse.values;
+        const headers = mainData[0];
+        const hashCol = headers.findIndex(h => h === 'RowHash');
+        
+        if (hashCol !== -1) {
+          const mainUpdateRequests = [];
+          let currentApp = '';
+          let currentWeek = '';
+          
+          for (let i = 1; i < mainData.length; i++) {
+            const row = mainData[i];
+            const level = row[0];
+            const nameOrRange = row[1];
+            
+            if (level === 'APP') {
+              currentApp = nameOrRange;
+            } else if (level === 'WEEK') {
+              currentWeek = nameOrRange;
+            } else if (level === 'CAMPAIGN' && currentApp && currentWeek) {
+              const sourceApp = nameOrRange;
+              const newHash = generateDetailedCommentHash('CAMPAIGN', currentApp, currentWeek, '', sourceApp, sourceApp, projectName);
+              
+              mainUpdateRequests.push({
+                range: `${config.SHEET_NAME}!${cache.columnNumberToLetter(hashCol + 1)}${i + 1}`,
+                values: [[newHash]]
+              });
+            }
+          }
+          
+          if (mainUpdateRequests.length > 0) {
+            const batchUpdateRequest = {
+              valueInputOption: 'RAW',
+              data: mainUpdateRequests
+            };
+            
+            Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, config.SHEET_ID);
+            console.log(`✅ ${projectName}: Updated ${mainUpdateRequests.length} hashes in main sheet`);
+          }
+        }
+      }
+      
+      cache.getOrCreateCacheSheet();
+      
+      const cacheRange = `${cache.cacheSheetName}!A:I`;
+      const cacheResponse = cache.getCachedSheetData(cache.cacheSpreadsheetId, cacheRange);
+      
+      if (cacheResponse.values && cacheResponse.values.length > 1) {
+        const cacheData = cacheResponse.values;
+        const cacheUpdateRequests = [];
+        let projectCount = 0;
+        
+        for (let i = 1; i < cacheData.length; i++) {
+          const row = cacheData[i];
+          if (row.length >= 6 && row[2] === 'CAMPAIGN') {
+            const [appName, weekRange, level, identifier, sourceApp, campaign] = row;
+            
+            const newHash = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, '', sourceApp, campaign, projectName);
+            
+            cacheUpdateRequests.push({
+              range: `${cache.cacheSheetName}!I${i + 1}`,
+              values: [[newHash]]
+            });
+            
+            projectCount++;
+          }
+        }
+        
+        if (cacheUpdateRequests.length > 0) {
+          const batchUpdateRequest = {
+            valueInputOption: 'RAW',
+            data: cacheUpdateRequests
+          };
+          
+          Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, cache.cacheSpreadsheetId);
+          
+          const cacheKey = `${cache.cacheSpreadsheetId}_${cacheRange}`;
+          delete COMMENT_CACHE_GLOBAL.sheetData[cacheKey];
+          delete COMMENT_CACHE_GLOBAL.sheetDataTime[cacheKey];
+          
+          console.log(`✅ ${projectName}: Updated ${projectCount} hashes in cache`);
+          totalMigrated += projectCount;
+        }
+      }
+      
+    } catch (e) {
+      console.error(`❌ Error migrating ${projectName}:`, e);
+    }
+  });
+  
+  ui.alert('Migration Complete', `✅ Migrated ${totalMigrated} campaign hashes in both main sheets and cache!`, ui.ButtonSet.OK);
 }
