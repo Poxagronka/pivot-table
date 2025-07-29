@@ -417,7 +417,7 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   
   row[0] = level;
   
-  if (level === 'APP') {
+  if (level === 'APP' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
     row[1] = displayName || identifier;
     return row;
   } else if (level === 'WEEK') {
