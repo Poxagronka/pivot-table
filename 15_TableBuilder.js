@@ -392,7 +392,7 @@ function addOptimizedCampaignRows(tableData, campaigns, week, weekKey, formatDat
       if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
         campaignIdValue = `=HYPERLINK("https://app.appgrowth.com/campaigns/${campaign.campaignId}", "${campaign.campaignId}")`;
       } else {
-        campaignIdValue = campaign.campaignId;
+        campaignIdValue = campaign.campaignId || 'N/A';
       }
       
       const campaignWoW = getOptimizedWoW(`${campaign.campaignId}_${weekKey}`, 'campaignWoW');
@@ -441,13 +441,20 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.totalProfit); row[16] = profitWoW; row[17] = status;
   } else if (level === 'CAMPAIGN') {
-    row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
+    const cleanSourceApp = (data.sourceApp && data.sourceApp !== 'Unknown') ? data.sourceApp : 'N/A';
+    const cleanCampaignId = (data.campaignId && data.campaignId !== 'Unknown') ? data.campaignId : 'N/A';
+    const cleanCampaignName = (data.campaignName && data.campaignName !== 'Unknown') ? data.campaignName : cleanSourceApp;
+    
+    row[1] = cleanSourceApp; 
+    row[2] = campaignIdValue || 'N/A'; 
+    row[3] = data.geo;
+    
     const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.eRoasForecastD730.toFixed(0)}%`;
     if (initialEROASCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-      eROAS730Display = initialEROASCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, data.eRoasForecastD730, data.campaignId, data.sourceApp);
+      eROAS730Display = initialEROASCache.formatEROASWithInitial('CAMPAIGN', appName, weekRange, data.eRoasForecastD730, cleanCampaignId, cleanSourceApp);
     }
     
     row[4] = formatSmartCurrency(data.spend); row[5] = spendWoW; row[6] = data.installs; row[7] = data.cpi ? data.cpi.toFixed(3) : '0.000';
@@ -455,13 +462,16 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
     row[15] = formatSmartCurrency(data.eProfitForecast); row[16] = profitWoW; row[17] = status;
   } else {
-    row[1] = displayName || identifier;
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    
+    row[1] = cleanDisplayName;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
     if (initialEROASCache && appName) {
       const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-      eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, identifier, displayName);
+      eROAS730Display = initialEROASCache.formatEROASWithInitial(level, appName, weekRange, data.avgEROASD730, cleanIdentifier, cleanDisplayName);
     }
     
     row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
@@ -477,22 +487,30 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   if (level === 'WEEK') {
     row[19] = generateCommentHash('WEEK', appName, weekRange);
   } else if (level === 'CAMPAIGN') {
-    let cleanCampaignId = data.campaignId;
-    if (CURRENT_PROJECT === 'TRICKY' && campaignIdValue && campaignIdValue.includes('HYPERLINK')) {
-      const match = campaignIdValue.match(/campaigns\/([^"]+)/);
-      cleanCampaignId = match ? match[1] : data.campaignId;
-    }
+    const cleanSourceApp = (data.sourceApp && data.sourceApp !== 'Unknown') ? data.sourceApp : 'N/A';
+    const cleanCampaignId = (data.campaignId && data.campaignId !== 'Unknown') ? data.campaignId : 'N/A';
+    const cleanCampaignName = (data.campaignName && data.campaignName !== 'Unknown') ? data.campaignName : cleanSourceApp;
+    
     row[19] = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, 
-      cleanCampaignId, data.sourceApp, data.campaignName || data.sourceApp);
+      cleanCampaignId, cleanSourceApp, cleanCampaignName);
   } else if (level === 'SOURCE_APP') {
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    
     row[19] = generateDetailedCommentHash('SOURCE_APP', appName, weekRange, 
-      identifier, displayName || identifier, '');
+      cleanIdentifier, cleanDisplayName, '');
   } else if (level === 'NETWORK') {
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    
     row[19] = generateDetailedCommentHash('NETWORK', appName, weekRange, 
-      identifier, '', displayName || identifier);
+      cleanIdentifier, '', cleanDisplayName);
   } else if (level === 'APP') {
+    const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
+    const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
+    
     row[19] = generateDetailedCommentHash('APP', appName, weekRange, 
-      identifier, displayName || identifier, '');
+      cleanIdentifier, cleanDisplayName, '');
   } else {
     row[19] = '';
   }
@@ -582,4 +600,87 @@ function getUnifiedHeaders() {
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
     'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments', 'RowHash'
   ];
+}
+
+function migrateAllProjectCommentHashes() {
+  const ui = SpreadsheetApp.getUi();
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
+  
+  const result = ui.alert(
+    '🔄 Migrate Comment Hashes', 
+    `This will regenerate ALL comment hashes for better matching.\n\nProjects to migrate: ${projects.join(', ')}\n\nThis may take several minutes. Continue?`, 
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (result !== ui.Button.YES) return;
+  
+  let migratedProjects = 0;
+  let totalCommentsMigrated = 0;
+  
+  projects.forEach(projectName => {
+    try {
+      console.log(`🔄 Migrating comment hashes for ${projectName}...`);
+      
+      const cache = new CommentCache(projectName);
+      cache.getOrCreateCacheSheet();
+      
+      const range = `${cache.cacheSheetName}!A:I`;
+      const response = cache.getCachedSheetData(cache.cacheSpreadsheetId, range);
+      
+      if (!response.values || response.values.length <= 1) {
+        console.log(`${projectName}: No comments to migrate`);
+        return;
+      }
+      
+      const data = response.values;
+      const updateRequests = [];
+      let projectCommentsCount = 0;
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (row.length >= 6) {
+          const [appName, weekRange, level, identifier, sourceApp, campaign] = row;
+          
+          const cleanIdentifier = (identifier && identifier !== 'N/A' && identifier !== 'Unknown') ? identifier : 'N/A';
+          const cleanSourceApp = (sourceApp && sourceApp !== 'N/A' && sourceApp !== 'Unknown') ? sourceApp : 'N/A';
+          const cleanCampaign = (campaign && campaign !== 'N/A' && campaign !== 'Unknown') ? campaign : cleanSourceApp;
+          
+          const newHash = cache.generateRowHash(level, appName, weekRange, cleanIdentifier, cleanSourceApp, cleanCampaign);
+          
+          updateRequests.push({
+            range: `${cache.cacheSheetName}!I${i + 1}`,
+            values: [[newHash]]
+          });
+          
+          projectCommentsCount++;
+        }
+      }
+      
+      if (updateRequests.length > 0) {
+        const batchUpdateRequest = {
+          valueInputOption: 'RAW',
+          data: updateRequests
+        };
+        
+        Sheets.Spreadsheets.Values.batchUpdate(batchUpdateRequest, cache.cacheSpreadsheetId);
+        
+        const cacheKey = `${cache.cacheSpreadsheetId}_${range}`;
+        delete COMMENT_CACHE_GLOBAL.sheetData[cacheKey];
+        delete COMMENT_CACHE_GLOBAL.sheetDataTime[cacheKey];
+        
+        console.log(`✅ ${projectName}: Migrated ${projectCommentsCount} comment hashes`);
+        migratedProjects++;
+        totalCommentsMigrated += projectCommentsCount;
+      }
+      
+    } catch (e) {
+      console.error(`❌ Error migrating ${projectName}:`, e);
+    }
+  });
+  
+  ui.alert(
+    'Migration Complete', 
+    `✅ Migration completed!\n\nProjects migrated: ${migratedProjects}/${projects.length}\nTotal comments: ${totalCommentsMigrated}\n\nComment matching should now work better.`, 
+    ui.ButtonSet.OK
+  );
 }

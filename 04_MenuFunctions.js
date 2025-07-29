@@ -13,6 +13,7 @@ function onOpen() {
         .addItem('🔄 Refresh Settings', 'refreshSettings')
         .addItem('📊 System Status', 'showQuickStatus')
         .addSeparator()
+        .addItem('Comments Hash Migration','migrateAllProjectCommentHashes')
         .addItem('🧹 Clear Column Cache', 'clearColumnCache')
         .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
         .addSeparator()
