@@ -216,6 +216,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
     sheet.hideColumns(14, 1);
+    sheet.hideColumns(20, 1);
     
     console.log(`🎨 Optimized formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     

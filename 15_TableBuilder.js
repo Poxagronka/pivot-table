@@ -331,17 +331,20 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       
       let sourceAppDisplayName = sourceApp.sourceAppName;
       if (CURRENT_PROJECT === 'TRICKY' && appsDbCache) {
-      const appInfo = appsDbCache[sourceApp.sourceAppId];
-      if (appInfo && appInfo.linkApp) {
-        sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
-        formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+        const appInfo = appsDbCache[sourceApp.sourceAppId];
+        if (appInfo && appInfo.linkApp) {
+          sourceAppDisplayName = `=HYPERLINK("${appInfo.linkApp}", "${sourceApp.sourceAppName}")`;
+          formatData.push({ row: tableData.length + 1, type: 'HYPERLINK' });
+        }
       }
-}
       
-      const sourceAppRow = createUnifiedRow('SOURCE_APP', week, sourceAppTotals, spendWoW, profitWoW, status, appName, initialEROASCache, sourceApp.sourceAppId, sourceAppDisplayName);
+      const sourceAppRow = createUnifiedRow('SOURCE_APP', 
+        { weekStart: week.weekStart, weekEnd: week.weekEnd }, 
+        sourceAppTotals, spendWoW, profitWoW, status, appName, 
+        initialEROASCache, sourceApp.sourceAppId, sourceApp.sourceAppName);
       tableData.push(sourceAppRow);
       
-      addOptimizedCampaignRows(tableData, sourceApp.campaigns, { weekStart: weekKey.split('-').join('/'), weekEnd: '' }, weekKey, formatData, appName, initialEROASCache);
+      addOptimizedCampaignRows(tableData, sourceApp.campaigns, { weekStart: week.weekStart, weekEnd: week.weekEnd }, weekKey, formatData, appName, initialEROASCache);
     });
   } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
     const networkKeys = Object.keys(week.networks).sort((a, b) => {
@@ -362,7 +365,10 @@ function addOptimizedSubRows(tableData, week, weekKey, formatData, appName = '',
       
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
       
-      const networkRow = createUnifiedRow('NETWORK', week, networkTotals, spendWoW, profitWoW, status, appName, initialEROASCache, network.networkId, network.networkName);
+      const networkRow = createUnifiedRow('NETWORK', 
+        { weekStart: week.weekStart, weekEnd: week.weekEnd }, 
+        networkTotals, spendWoW, profitWoW, status, appName, 
+        initialEROASCache, network.networkId, network.networkName);
       tableData.push(networkRow);
     });
   } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
@@ -465,6 +471,32 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   }
   
   row[18] = '';
+  
+  const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+  
+  if (level === 'WEEK') {
+    row[19] = generateCommentHash('WEEK', appName, weekRange);
+  } else if (level === 'CAMPAIGN') {
+    let cleanCampaignId = data.campaignId;
+    if (CURRENT_PROJECT === 'TRICKY' && campaignIdValue && campaignIdValue.includes('HYPERLINK')) {
+      const match = campaignIdValue.match(/campaigns\/([^"]+)/);
+      cleanCampaignId = match ? match[1] : data.campaignId;
+    }
+    row[19] = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, 
+      cleanCampaignId, data.sourceApp, data.campaignName || data.sourceApp);
+  } else if (level === 'SOURCE_APP') {
+    row[19] = generateDetailedCommentHash('SOURCE_APP', appName, weekRange, 
+      identifier, displayName || identifier, '');
+  } else if (level === 'NETWORK') {
+    row[19] = generateDetailedCommentHash('NETWORK', appName, weekRange, 
+      identifier, '', displayName || identifier);
+  } else if (level === 'APP') {
+    row[19] = generateDetailedCommentHash('APP', appName, weekRange, 
+      identifier, displayName || identifier, '');
+  } else {
+    row[19] = '';
+  }
+  
   return row;
 }
 
@@ -548,6 +580,6 @@ function getUnifiedHeaders() {
   return [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments', 'RowHash'
   ];
 }

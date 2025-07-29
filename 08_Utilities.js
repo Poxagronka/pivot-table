@@ -547,3 +547,102 @@ function clearAllCommentColumnCaches() {
     } catch (e) {}
   });
 }
+
+// Comment Hash Generation
+function generateCommentHash(level, appName, weekRange, projectName = null) {
+  const project = projectName || CURRENT_PROJECT;
+  
+  // Нормализуем данные
+  const normalizedLevel = (level || '').toString().toUpperCase().trim();
+  const normalizedApp = (appName || '').toString().trim();
+  const normalizedWeek = (weekRange || '').toString().trim();
+  
+  // Базовые компоненты для всех проектов
+  let hashComponents = [
+    project,
+    normalizedLevel,
+    normalizedApp,
+    normalizedWeek
+  ];
+  
+  // Создаем строку для хеширования
+  const hashInput = hashComponents.join('|||');
+  
+  // Простая хеш функция
+  let hash = 0;
+  for (let i = 0; i < hashInput.length; i++) {
+    const char = hashInput.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  
+  // Возвращаем хеш с префиксом проекта для уникальности
+  return `${project.substring(0, 3)}_${Math.abs(hash).toString(36)}`;
+}
+
+function generateDetailedCommentHash(level, appName, weekRange, identifier, sourceApp, campaignOrNetwork, projectName = null) {
+  const project = projectName || CURRENT_PROJECT;
+  
+  // Для WEEK уровня используем упрощенный хеш
+  if (level === 'WEEK') {
+    return generateCommentHash(level, appName, weekRange, project);
+  }
+  
+  // Нормализуем все параметры
+  const normalizedLevel = (level || '').toString().toUpperCase().trim();
+  const normalizedApp = (appName || '').toString().trim();
+  const normalizedWeek = (weekRange || '').toString().trim();
+  const normalizedId = (identifier || '').toString().trim();
+  const normalizedSource = (sourceApp || '').toString().trim();
+  const normalizedCampaign = (campaignOrNetwork || '').toString().trim();
+  
+  // Компоненты хеша в зависимости от уровня и проекта
+  let hashComponents = [project, normalizedLevel, normalizedApp, normalizedWeek];
+  
+  switch (normalizedLevel) {
+    case 'CAMPAIGN':
+      // Для кампаний важен ID и source app
+      hashComponents.push(normalizedId || 'NO_ID');
+      hashComponents.push(normalizedSource || 'NO_SOURCE');
+      break;
+      
+    case 'SOURCE_APP':
+      // Для source app важен сам source app ID
+      hashComponents.push(normalizedId || normalizedSource || 'NO_SOURCE');
+      break;
+      
+    case 'NETWORK':
+      // Для сетей важен network ID
+      hashComponents.push(normalizedId || 'NO_NETWORK_ID');
+      break;
+      
+    case 'APP':
+      // Для приложений достаточно базовых компонентов
+      hashComponents.push(normalizedId || normalizedApp);
+      break;
+      
+    default:
+      // Для остальных случаев добавляем все что есть
+      hashComponents.push(normalizedId);
+      hashComponents.push(normalizedSource);
+      hashComponents.push(normalizedCampaign);
+  }
+  
+  // Убираем пустые компоненты
+  hashComponents = hashComponents.filter(c => c && c !== '');
+  
+  // Создаем строку для хеширования
+  const hashInput = hashComponents.join('|||');
+  
+  // Хеш функция
+  let hash = 0;
+  for (let i = 0; i < hashInput.length; i++) {
+    const char = hashInput.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  
+  // Префикс для идентификации уровня
+  const levelPrefix = normalizedLevel.substring(0, 1);
+  return `${project.substring(0, 3)}_${levelPrefix}_${Math.abs(hash).toString(36)}`;
+}
