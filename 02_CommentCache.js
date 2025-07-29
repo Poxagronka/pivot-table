@@ -199,8 +199,7 @@ class CommentCache {
     }
   }
 
- generateRowHash(level, appName, weekRange, identifier = '', sourceApp = '', campaign = '') {
-    // Используем единую функцию из Utilities
+  generateRowHash(level, appName, weekRange, identifier = '', sourceApp = '', campaign = '') {
     if (level === 'WEEK') {
       return generateCommentHash(level, appName, weekRange, this.projectName);
     } else {
@@ -579,17 +578,23 @@ class CommentCache {
             } else {
               campaignName = sourceAppName || 'Unknown';
             }
-            
-            commentsToSave.push({
-              appName: currentApp,
-              weekRange: currentWeek,
-              level: 'CAMPAIGN',
-              comment: comment,
-              identifier: this.projectName === 'TRICKY' ? campaignIdValue : 'N/A',
-              sourceApp: sourceAppName || 'N/A',
-              campaign: campaignName,
-              hash: hash || this.generateRowHash('CAMPAIGN', currentApp, currentWeek, campaignIdValue, sourceAppName || '', campaignName)
-            });
+           
+const correctIdentifier = this.projectName === 'TRICKY' ? campaignIdValue : 'N/A';
+const correctCampaignName = this.projectName === 'TRICKY' ? 
+  (campaignIdValue !== 'N/A' && campaignIdValue !== 'Unknown' ? campaignIdValue : campaignName) : 
+  sourceAppName;
+
+commentsToSave.push({
+  appName: currentApp,
+  weekRange: currentWeek,
+  level: 'CAMPAIGN',
+  comment: comment,
+  identifier: correctIdentifier,
+  sourceApp: sourceAppName || 'N/A',
+  campaign: correctCampaignName,
+  hash: hash || this.generateRowHash('CAMPAIGN', currentApp, currentWeek, 
+    correctIdentifier, sourceAppName || '', correctCampaignName)
+});
             campaignComments++;
           }
         } catch (e) {
@@ -634,6 +639,8 @@ class CommentCache {
     const sheetName = this.config.SHEET_NAME;
     
     try {
+      console.log(`\n=== ${this.projectName}: Starting to apply comments ===`);
+      
       const range = `${sheetName}!A:Z`;
       const response = this.getCachedSheetData(this.config.SHEET_ID, range);
       
@@ -660,6 +667,8 @@ class CommentCache {
       }
       
       const { comments, commentsByHash } = this.loadAllComments();
+      const totalCachedComments = Object.keys(commentsByHash).length;
+      console.log(`${this.projectName}: Loaded ${totalCachedComments} comments from cache`);
       
       let currentApp = '';
       let currentWeek = '';
@@ -669,7 +678,9 @@ class CommentCache {
       let campaignComments = 0;
       let networkComments = 0;
       let hashMatches = 0;
-      let fallbackMatches = 0;
+      let hashMismatches = [];
+      let missingWeeks = [];
+      let noHashInSheet = 0;
       
       for (let i = 1; i < data.length; i++) {
         const row = data[i];
@@ -681,7 +692,6 @@ class CommentCache {
         const hash = hashCol >= 0 ? (row[hashCol] || '') : '';
         
         let foundComment = null;
-        let matchType = '';
         
         if (level === 'APP') {
           currentApp = nameOrRange;
@@ -689,17 +699,26 @@ class CommentCache {
         } else if (level === 'WEEK' && currentApp) {
           currentWeek = nameOrRange;
           
-          if (hash && commentsByHash[hash]) {
+          if (!hash) {
+            noHashInSheet++;
+            console.log(`${this.projectName} WEEK row ${i + 1}: No hash in sheet for ${currentApp} - ${currentWeek}`);
+            continue;
+          }
+          
+          if (commentsByHash[hash]) {
             foundComment = commentsByHash[hash];
-            matchType = 'hash';
             hashMatches++;
           } else {
-            const weekKey = this.getCommentKey(currentApp, currentWeek, 'WEEK', 'N/A', 'N/A', 'N/A');
-            if (comments[weekKey]) {
-              foundComment = comments[weekKey];
-              matchType = 'fallback';
-              fallbackMatches++;
-            }
+            const expectedHash = this.generateRowHash('WEEK', currentApp, currentWeek, '', '', '');
+            hashMismatches.push({
+              row: i + 1,
+              level: 'WEEK',
+              app: currentApp,
+              week: currentWeek,
+              sheetHash: hash,
+              expectedHash: expectedHash,
+              reason: 'Hash not found in cache'
+            });
           }
           
           if (foundComment) {
@@ -713,17 +732,27 @@ class CommentCache {
         } else if (level === 'SOURCE_APP' && currentApp && currentWeek) {
           const sourceAppDisplayName = nameOrRange;
           
-          if (hash && commentsByHash[hash]) {
+          if (!hash) {
+            noHashInSheet++;
+            console.log(`${this.projectName} SOURCE_APP row ${i + 1}: No hash in sheet`);
+            continue;
+          }
+          
+          if (commentsByHash[hash]) {
             foundComment = commentsByHash[hash];
-            matchType = 'hash';
             hashMatches++;
           } else {
-            const sourceAppKey = this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', sourceAppDisplayName, sourceAppDisplayName, 'N/A');
-            if (comments[sourceAppKey]) {
-              foundComment = comments[sourceAppKey];
-              matchType = 'fallback';
-              fallbackMatches++;
-            }
+            const expectedHash = this.generateRowHash('SOURCE_APP', currentApp, currentWeek, sourceAppDisplayName, sourceAppDisplayName, '');
+            hashMismatches.push({
+              row: i + 1,
+              level: 'SOURCE_APP',
+              app: currentApp,
+              week: currentWeek,
+              sourceApp: sourceAppDisplayName,
+              sheetHash: hash,
+              expectedHash: expectedHash,
+              reason: 'Hash not found in cache'
+            });
           }
           
           if (foundComment) {
@@ -749,20 +778,32 @@ class CommentCache {
             campaignName = sourceAppName || 'Unknown';
           }
           
-          if (hash && commentsByHash[hash]) {
+          if (!hash) {
+            noHashInSheet++;
+            console.log(`${this.projectName} CAMPAIGN row ${i + 1}: No hash in sheet`);
+            continue;
+          }
+          
+          if (commentsByHash[hash]) {
             foundComment = commentsByHash[hash];
-            matchType = 'hash';
             hashMatches++;
           } else {
-            const campaignKey = this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', 
+            const expectedHash = this.generateRowHash('CAMPAIGN', currentApp, currentWeek, 
               this.projectName === 'TRICKY' ? campaignIdValue : 'N/A', 
               sourceAppName, 
               campaignName);
-            if (comments[campaignKey]) {
-              foundComment = comments[campaignKey];
-              matchType = 'fallback';
-              fallbackMatches++;
-            }
+            hashMismatches.push({
+              row: i + 1,
+              level: 'CAMPAIGN',
+              app: currentApp,
+              week: currentWeek,
+              campaign: campaignName,
+              sourceApp: sourceAppName,
+              campaignId: campaignIdValue,
+              sheetHash: hash,
+              expectedHash: expectedHash,
+              reason: 'Hash not found in cache'
+            });
           }
           
           if (foundComment) {
@@ -776,17 +817,28 @@ class CommentCache {
         } else if (level === 'NETWORK' && currentApp && currentWeek) {
           const networkName = nameOrRange;
           
-          if (hash && commentsByHash[hash]) {
+          if (!hash) {
+            noHashInSheet++;
+            console.log(`${this.projectName} NETWORK row ${i + 1}: No hash in sheet`);
+            continue;
+          }
+          
+          if (commentsByHash[hash]) {
             foundComment = commentsByHash[hash];
-            matchType = 'hash';
             hashMatches++;
           } else {
-            const networkKey = this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', networkName);
-            if (comments[networkKey]) {
-              foundComment = comments[networkKey];
-              matchType = 'fallback';
-              fallbackMatches++;
-            }
+            const expectedHash = this.generateRowHash('NETWORK', currentApp, currentWeek, idOrEmpty || 'N/A', 'N/A', networkName);
+            hashMismatches.push({
+              row: i + 1,
+              level: 'NETWORK',
+              app: currentApp,
+              week: currentWeek,
+              network: networkName,
+              networkId: idOrEmpty,
+              sheetHash: hash,
+              expectedHash: expectedHash,
+              reason: 'Hash not found in cache'
+            });
           }
           
           if (foundComment) {
@@ -811,12 +863,44 @@ class CommentCache {
         const cacheKey = `${this.config.SHEET_ID}_${range}`;
         delete COMMENT_CACHE_GLOBAL.sheetData[cacheKey];
         delete COMMENT_CACHE_GLOBAL.sheetDataTime[cacheKey];
-        
-        console.log(`${this.projectName}: Applied ${updatesToMake.length} comments (${weekComments} weeks, ${sourceAppComments} source apps, ${campaignComments} campaigns, ${networkComments} networks)`);
-        console.log(`${this.projectName}: Match types - Hash: ${hashMatches}, Fallback: ${fallbackMatches}`);
-      } else {
-        console.log(`${this.projectName}: No comments found to apply`);
       }
+      
+      console.log(`\n=== ${this.projectName}: Comments Application Summary ===`);
+      console.log(`Total cached comments: ${totalCachedComments}`);
+      console.log(`Applied: ${updatesToMake.length} (${weekComments} weeks, ${sourceAppComments} source apps, ${campaignComments} campaigns, ${networkComments} networks)`);
+      console.log(`Hash matches: ${hashMatches}`);
+      console.log(`Rows without hash in sheet: ${noHashInSheet}`);
+      
+      if (hashMismatches.length > 0) {
+        console.log(`\n⚠️  Hash mismatches: ${hashMismatches.length}`);
+        console.log('First 5 mismatches:');
+        hashMismatches.slice(0, 5).forEach(mismatch => {
+          console.log(`  Row ${mismatch.row} (${mismatch.level}):`);
+          console.log(`    App: ${mismatch.app}, Week: ${mismatch.week}`);
+          if (mismatch.level === 'CAMPAIGN') {
+            console.log(`    Campaign: ${mismatch.campaign}, Source: ${mismatch.sourceApp}, ID: ${mismatch.campaignId}`);
+          } else if (mismatch.level === 'SOURCE_APP') {
+            console.log(`    Source App: ${mismatch.sourceApp}`);
+          } else if (mismatch.level === 'NETWORK') {
+            console.log(`    Network: ${mismatch.network}, ID: ${mismatch.networkId}`);
+          }
+          console.log(`    Sheet hash: ${mismatch.sheetHash}`);
+          console.log(`    Expected hash: ${mismatch.expectedHash}`);
+          console.log(`    Reason: ${mismatch.reason}`);
+        });
+      }
+      
+      const notAppliedCount = totalCachedComments - hashMatches;
+      if (notAppliedCount > 0) {
+        console.log(`\n⚠️  Comments not applied: ${notAppliedCount}`);
+        console.log('Possible reasons:');
+        console.log(`  - Hash mismatches: ${hashMismatches.length}`);
+        console.log(`  - Rows without hash: ${noHashInSheet}`);
+        console.log(`  - Comments for weeks/campaigns not in current report`);
+      }
+      
+      console.log(`\n=== End of ${this.projectName} summary ===\n`);
+      
     } catch (e) {
       console.error(`Error applying comments to ${sheetName}:`, e);
       throw e;

@@ -14,6 +14,7 @@ function onOpen() {
         .addItem('📊 System Status', 'showQuickStatus')
         .addSeparator()
         .addItem('🔧 Fix Campaign Hashes', 'migrateCampaignHashes')
+        .addItem('🔍 Debug Comment Hashes', 'debugCommentHashes')
         .addItem('🧹 Clear Column Cache', 'clearColumnCache')
         .addItem('💾 Save All Comments', 'saveAllCommentsToCache')
         .addSeparator()

@@ -489,11 +489,18 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   } else if (level === 'CAMPAIGN') {
     const cleanSourceApp = (data.sourceApp && data.sourceApp !== 'Unknown') ? data.sourceApp : 'N/A';
     const cleanCampaignId = (data.campaignId && data.campaignId !== 'Unknown') ? data.campaignId : 'N/A';
-    const cleanCampaignName = (data.campaignName && data.campaignName !== 'Unknown') ? data.campaignName : cleanSourceApp;
+    
+    // Для TRICKY используем campaignId как identifier, для остальных - 'N/A'
+    const identifier = CURRENT_PROJECT === 'TRICKY' ? cleanCampaignId : 'N/A';
+    
+    // Для TRICKY campaignName это campaignId, для остальных - sourceApp
+    const cleanCampaignName = CURRENT_PROJECT === 'TRICKY' ? 
+      (cleanCampaignId !== 'N/A' ? cleanCampaignId : 'Unknown') : 
+      cleanSourceApp;
     
     row[19] = generateDetailedCommentHash('CAMPAIGN', appName, weekRange, 
-      cleanCampaignId, cleanSourceApp, cleanCampaignName);
-  } else if (level === 'SOURCE_APP') {
+      identifier, cleanSourceApp, cleanCampaignName);
+} else if (level === 'SOURCE_APP') {
     const cleanDisplayName = (displayName && displayName !== 'Unknown') ? displayName : 'N/A';
     const cleanIdentifier = (identifier && identifier !== 'Unknown') ? identifier : 'N/A';
     
