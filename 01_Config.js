@@ -448,7 +448,7 @@ var TABLE_CONFIG = {
   { c: 12, w: 42 },  // RR D-7
   { c: 13, w: 55 },  // eARPU 365d
   { c: 14, w: 55 },  // eROAS 365d
-  { c: 15, w: 100 }, // eROAS 730d
+  { c: 15, w: 115 }, // eROAS 730d
   { c: 16, w: 120 }, // eProfit 730d (было 125)
   { c: 17, w: 85 },  // eProfit 730d WoW %
   { c: 18, w: 160 }, // Growth Status
