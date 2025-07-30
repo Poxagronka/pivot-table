@@ -402,10 +402,12 @@ function formatCurrency(amount, currency = 'USD') {
 }
 
 function formatSmartCurrency(amount) {
-  if (Math.abs(amount) >= 1) {
-    return amount.toFixed(0);
+  if (Math.abs(amount) >= 10) {
+    return '$' + amount.toFixed(0);  // $1234
+  } else if (Math.abs(amount) >= 1) {
+    return '$' + amount.toFixed(1);  // $5.3
   } else {
-    return amount.toFixed(2);
+    return '$' + amount.toFixed(2);  // $0.75
   }
 }
 

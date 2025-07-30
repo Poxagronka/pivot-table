@@ -557,6 +557,6 @@ function getUnifiedHeaders() {
   return [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ];
 }

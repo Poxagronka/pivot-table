@@ -430,16 +430,30 @@ var TABLE_CONFIG = {
   HEADERS: [
     'Level', 'Week Range / Source App', 'ID', 'GEO',
     'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d', 'eProfit 730d', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
   ],
 
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 }, { c: 2, w: 230 }, { c: 3, w: 40 }, { c: 4, w: 40 },
-    { c: 5, w: 75 }, { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 50 },
-    { c: 9, w: 195 }, { c: 10, w: 37 }, { c: 11, w: 42 }, { c: 12, w: 42 },
-    { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 100 }, { c: 16, w: 125 }, 
-    { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 450 }
-  ]
+  { c: 1, w: 80 },   // Level
+  { c: 2, w: 230 },  // Week Range / Source App
+  { c: 3, w: 40 },   // ID
+  { c: 4, w: 40 },   // GEO
+  { c: 5, w: 65 },   // Spend (было 75)
+  { c: 6, w: 55 },   // Spend WoW %
+  { c: 7, w: 55 },   // Installs
+  { c: 8, w: 45 },   // CPI (было 50)
+  { c: 9, w: 185 },  // ROAS D1→D3→D7→D30 (было 195)
+  { c: 10, w: 37 },  // IPM
+  { c: 11, w: 42 },  // RR D-1
+  { c: 12, w: 42 },  // RR D-7
+  { c: 13, w: 55 },  // eARPU 365d
+  { c: 14, w: 55 },  // eROAS 365d
+  { c: 15, w: 100 }, // eROAS 730d
+  { c: 16, w: 120 }, // eProfit 730d (было 125)
+  { c: 17, w: 85 },  // eProfit 730d WoW %
+  { c: 18, w: 160 }, // Growth Status
+  { c: 19, w: 450 }  // Comments
+]
 };
 
 var COLORS = {

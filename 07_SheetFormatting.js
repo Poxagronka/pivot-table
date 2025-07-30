@@ -200,12 +200,12 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       console.log(`⏱️ Number formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
       
       const numberFormatOperations = [
-        { range: sheet.getRange(2, 5, numRows - 1, 1), format: '$0.0' },
-        { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },
-        { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },
-        { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' },
-        { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }
-      ];
+  // Удалена строка: { range: sheet.getRange(2, 5, numRows - 1, 1), format: '$0.0' },
+  { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },  // CPI
+  { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },  // IPM
+  { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' }, // eARPU
+  { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }  // eProfit
+];
       
       numberFormatOperations.forEach(op => op.range.setNumberFormat(op.format));
     }
@@ -219,6 +219,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
     sheet.hideColumns(14, 1);
+    sheet.hideColumns(3);
     
     console.log(`🎨 Optimized formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
