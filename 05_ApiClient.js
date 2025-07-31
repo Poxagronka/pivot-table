@@ -65,8 +65,6 @@ function fetchCampaignData(dateRange) {
     query: getGraphQLQuery()
   };
 
-  console.log(`${CURRENT_PROJECT}: API request payload size: ${JSON.stringify(payload).length} chars`);
-
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -155,8 +153,6 @@ function fetchProjectCampaignData(projectName, dateRange) {
     query: getGraphQLQuery()
   };
 
-  console.log(`${projectName}: API request payload size: ${JSON.stringify(payload).length} chars`);
-
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -184,13 +180,9 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`${projectName}: API request attempt ${attempt}/${maxRetries}`);
-      
       const resp = UrlFetchApp.fetch(url, options);
       const responseCode = resp.getResponseCode();
       const responseText = resp.getContentText();
-      
-      console.log(`${projectName}: HTTP ${responseCode}, response size: ${responseText.length} chars`);
       
       if (responseCode === 200) {
         try {
@@ -202,21 +194,17 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
           }
           
           const endTime = Date.now();
-          console.log(`${projectName}: API request completed successfully in ${(endTime - startTime) / 1000}s`);
+          console.log(`${projectName}: API request completed in ${(endTime - startTime) / 1000}s`);
           return parsedResponse;
           
         } catch (parseError) {
           console.error(`${projectName}: JSON parse error:`, parseError);
-          console.log(`${projectName}: Response preview:`, responseText.substring(0, 500));
           throw new Error(`JSON parse error: ${parseError.toString()}`);
         }
       }
       
-      // Handle non-200 responses
       if (responseCode >= 400 && responseCode < 500) {
-        // Client errors - don't retry
         console.error(`${projectName}: Client error ${responseCode}`);
-        console.log(`${projectName}: Error response:`, responseText.substring(0, 1000));
         
         if (responseCode === 401) {
           throw new Error('Unauthorized: Bearer token may be expired or invalid');
@@ -230,28 +218,18 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
       }
       
       if (responseCode >= 500) {
-        // Server errors - retry
         const errorMsg = `Server error ${responseCode}`;
         console.error(`${projectName}: ${errorMsg}, attempt ${attempt}/${maxRetries}`);
-        
-        if (responseText.includes('<!DOCTYPE html>')) {
-          console.log(`${projectName}: Server returned HTML error page`);
-          console.log(`${projectName}: HTML preview:`, responseText.substring(0, 500));
-        } else {
-          console.log(`${projectName}: Server response:`, responseText.substring(0, 500));
-        }
         
         lastError = new Error(`${errorMsg}: Server returned HTML error page`);
         
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-          console.log(`${projectName}: Retrying in ${delay}ms...`);
           Utilities.sleep(delay);
           continue;
         }
       }
       
-      // Other response codes
       lastError = new Error(`Unexpected response code ${responseCode}: ${responseText.substring(0, 200)}`);
       
     } catch (e) {
@@ -260,7 +238,6 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
       
       if (attempt < maxRetries) {
         const delay = Math.min(2000 * attempt, 10000);
-        console.log(`${projectName}: Retrying in ${delay}ms...`);
         Utilities.sleep(delay);
       }
     }
@@ -354,14 +331,11 @@ function ensureBundleIdCacheLoaded() {
     return;
   }
   
-  console.log('Loading Bundle ID Cache from table...');
-  
   try {
     const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
     const sheet = spreadsheet.getSheetByName('Bundle ID Cache');
     
     if (!sheet) {
-      console.log('Bundle ID Cache sheet not found, creating...');
       createBundleIdCacheSheet();
       BUNDLE_ID_CACHE_LOADED = true;
       BUNDLE_ID_CACHE_TIME = now;
@@ -380,7 +354,6 @@ function ensureBundleIdCacheLoaded() {
     
     BUNDLE_ID_CACHE_LOADED = true;
     BUNDLE_ID_CACHE_TIME = now;
-    console.log(`Bundle ID Cache loaded: ${BUNDLE_ID_CACHE.size} entries`);
   } catch (e) {
     console.error('Error loading Bundle ID Cache:', e);
     BUNDLE_ID_CACHE_LOADED = true;
@@ -400,8 +373,6 @@ function createBundleIdCacheSheet() {
     sheet.setColumnWidth(2, 150);
     sheet.setColumnWidth(3, 200);
     sheet.setColumnWidth(4, 150);
-    
-    console.log('Bundle ID Cache sheet created');
   } catch (e) {
     console.error('Error creating Bundle ID Cache sheet:', e);
   }
@@ -432,7 +403,6 @@ function saveBundleIdCache(newCache) {
     if (newEntries.length > 0) {
       const lastRow = sheet.getLastRow();
       sheet.getRange(lastRow + 1, 1, newEntries.length, 4).setValues(newEntries);
-      console.log(`Bundle ID Cache: saved ${newEntries.length} new entries`);
     }
   } catch (e) {
     console.error('Error saving Bundle ID Cache:', e);
@@ -446,7 +416,6 @@ function getOptimizedAppsDbForTricky() {
     return APPS_DB_CACHE;
   }
   
-  console.log('Loading Apps Database for TRICKY...');
   try {
     const appsDb = new AppsDatabase('TRICKY');
     appsDb.ensureCacheUpToDate();
@@ -455,7 +424,6 @@ function getOptimizedAppsDbForTricky() {
     APPS_DB_CACHE = cache;
     APPS_DB_CACHE_TIME = now;
     
-    console.log(`Apps Database loaded: ${Object.keys(cache).length} apps`);
     return cache;
   } catch (e) {
     console.error('Error loading Apps Database:', e);
@@ -733,10 +701,8 @@ function processApiData(rawData, includeLastWeek = null) {
 function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
   const startTime = Date.now();
   
-  console.log('TRICKY optimization: Pre-loading all caches...');
   ensureBundleIdCacheLoaded();
   const appsDbCache = getOptimizedAppsDbForTricky();
-  console.log(`TRICKY optimization: Caches loaded - Bundle IDs: ${BUNDLE_ID_CACHE.size}, Apps DB: ${Object.keys(appsDbCache).length}`);
   
   const appData = {};
   const newBundleIds = new Map();
@@ -871,7 +837,6 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
   });
 
   if (newBundleIds.size > 0) {
-    console.log(`Saving ${newBundleIds.size} new Bundle IDs to cache...`);
     try {
       saveBundleIdCache(newBundleIds);
     } catch (e) {
@@ -880,8 +845,7 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
   }
 
   const endTime = Date.now();
-  console.log(`TRICKY: Optimized processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
-  console.log(`TRICKY optimization: Cached ${bundleIdToDisplayName.size} display name lookups`);
+  console.log(`TRICKY: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
   return appData;
 }
 

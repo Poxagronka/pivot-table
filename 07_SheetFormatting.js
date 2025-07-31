@@ -3,7 +3,6 @@ function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
 function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
 
 function createUnifiedPivotTable(data) {
-  console.log('📊 Starting pivot table creation...');
   const startTime = Date.now();
   
   const config = getCurrentConfig();
@@ -13,40 +12,33 @@ function createUnifiedPivotTable(data) {
   else sheet.clear();
 
   if (!data || Object.keys(data).length === 0) {
-    console.log(`${CURRENT_PROJECT}: No data to display`);
     const headers = getUnifiedHeaders();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     return;
   }
 
-  console.log(`⏱️ Initial metrics cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const initialMetricsCache = new InitialMetricsCache();
   initialMetricsCache.recordInitialValuesFromData(data);
 
-  console.log(`⏱️ WoW calculations starting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const wow = CURRENT_PROJECT === 'INCENT_TRAFFIC' ? 
     calculateIncentTrafficWoWMetrics(data) : 
     calculateWoWMetrics(data);
   
-  console.log(`⏱️ Building table data... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
   buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache);
 
-  console.log(`⏱️ Writing to sheet... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
   
-  console.log(`⏱️ Applying formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   applyOptimizedFormatting(sheet, tableData.length, headers.length, formatData, data);
   
-  console.log(`⏱️ Creating row grouping... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   createUnifiedRowGrouping(sheet, tableData, data);
   
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(2);
-  console.log(`✅ Pivot table completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`Pivot table created in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function hexToRgb(hex) {
@@ -60,19 +52,16 @@ function hexToRgb(hex) {
 
 function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) {
   const startTime = Date.now();
-  console.log('🎨 Starting optimized formatting...');
   
   try {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
-    console.log(`⏱️ Setting column widths... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
     columnWidths.forEach(col => {
       sheet.setColumnWidth(col.c, col.w);
     });
 
-    console.log(`⏱️ Header formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     const headerRange = sheet.getRange(1, 1, 1, numCols);
     headerRange
       .setBackground('#4285f4')
@@ -84,8 +73,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       .setWrap(true);
 
     if (numRows > 1) {
-      console.log(`⏱️ Basic formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-      
       const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
       allDataRange.setVerticalAlignment('middle');
       
@@ -105,8 +92,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       eprofitRange.setHorizontalAlignment('right');
     }
 
-    console.log(`⏱️ Row type formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    
     const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
     formatData.forEach(item => {
       if (item.type === 'APP') rowTypeMap.app.push(item.row);
@@ -117,8 +102,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
     });
 
-    console.log(`⏱️ Batch row formatting - APP: ${rowTypeMap.app.length}, WEEK: ${rowTypeMap.week.length}, SOURCE_APP: ${rowTypeMap.sourceApp.length}, CAMPAIGN: ${rowTypeMap.campaign.length}... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    
     if (rowTypeMap.app.length > 0) {
       const appRanges = createOptimizedRanges(sheet, rowTypeMap.app, numCols);
       if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
@@ -176,8 +159,6 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       }
     }
 
-    console.log(`⏱️ Hyperlink formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-    
     if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
       try {
         const validHyperlinkRows = rowTypeMap.hyperlink.filter(row => row >= 2 && row <= numRows);
@@ -197,23 +178,18 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     }
 
     if (numRows > 1) {
-      console.log(`⏱️ Number formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
-      
       const numberFormatOperations = [
-  // Удалена строка: { range: sheet.getRange(2, 5, numRows - 1, 1), format: '$0.0' },
-  { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },  // CPI
-  { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },  // IPM
-  { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' }, // eARPU
-  { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }  // eProfit
-];
+        { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },  // CPI
+        { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },  // IPM
+        { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' }, // eARPU
+        { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }  // eProfit
+      ];
       
       numberFormatOperations.forEach(op => op.range.setNumberFormat(op.format));
     }
 
-    console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
     
-    console.log(`⏱️ eROAS/eProfit rich text (optimized)... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedEROASFormatting(sheet, numRows);
     
     sheet.hideColumns(1);
@@ -221,7 +197,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     sheet.hideColumns(14, 1);
     sheet.hideColumns(3);
     
-    console.log(`🎨 Optimized formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+    console.log(`Formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
   } catch (e) {
     console.error('Error in applyOptimizedFormatting:', e);
@@ -256,7 +232,6 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
   if (numRows <= 1) return;
   
   const startTime = Date.now();
-  console.log('🚀 Starting optimized eROAS/eProfit formatting...');
   
   try {
     const spreadsheetId = sheet.getParent().getId();
@@ -408,7 +383,7 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
       }
     }
     
-    console.log(`✅ eROAS/eProfit formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
+    console.log(`eROAS/eProfit formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
     
   } catch (e) {
     console.error('Error applying optimized eROAS/eProfit formatting:', e);
@@ -418,7 +393,6 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
 function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
   try {
     const startTime = Date.now();
-    console.log(`Starting batch conditional formatting for ${numRows} rows...`);
     
     if (numRows <= 1) return;
     
@@ -689,8 +663,6 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
       });
     });
     
-    console.log(`Applying ${conditionalFormatRequests.length} conditional format rules in batch...`);
-    
     const batchUpdateRequest = {
       requests: conditionalFormatRequests
     };
@@ -698,7 +670,7 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
     Sheets.Spreadsheets.batchUpdate(batchUpdateRequest, spreadsheetId);
     
     const endTime = Date.now();
-    console.log(`Conditional formatting completed in ${(endTime - startTime) / 1000}s (${conditionalFormatRequests.length} rules applied)`);
+    console.log(`Conditional formatting completed in ${(endTime - startTime) / 1000}s (${conditionalFormatRequests.length} rules)`);
     
   } catch (e) {
     console.error('Error applying conditional formatting:', e);

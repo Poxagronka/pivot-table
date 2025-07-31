@@ -51,24 +51,15 @@ function updateSelectedProjects() {
     try {
       var projectName = proj.toUpperCase();
       
-      console.log(`\n=== UPDATING ${projectName} (${index + 1}/${selected.length}) ===`);
-      console.log(`Completed so far: ${successfulProjects.join(', ') || 'None'}`);
-      
       if (index > 0) {
-        console.log('Clearing caches and waiting before project update...');
         clearSettingsCache();
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
-        
-        console.log('Waiting 3 seconds before next project...');
         Utilities.sleep(3000);
       }
       
       updateProjectDataWithRetry(projectName);
-      
       successfulProjects.push(projectName);
-      console.log(`✅ ${projectName} updated successfully`);
-      
       Utilities.sleep(2000);
       
     } catch (e) {
@@ -77,15 +68,12 @@ function updateSelectedProjects() {
         project: proj,
         error: e.toString().substring(0, 80)
       });
-      
-      console.log('Error occurred. Waiting 10 seconds before continuing...');
       Utilities.sleep(10000);
     }
   });
   
   if (successfulProjects.length > 0) {
     try {
-      console.log('Waiting before sorting sheets...');
       Utilities.sleep(3000);
       sortProjectSheetsWithRetry();
     } catch (e) {
@@ -110,13 +98,9 @@ function updateAllProjects() {
     
     projects.forEach(function(proj, index) {
       try {
-        console.log(`Updating ${proj} (${index + 1}/${projects.length})...`);
-        
         var projectName = proj.toUpperCase();
         updateProjectDataWithRetry(projectName);
-        
         successfulProjects.push(proj);
-        console.log(`✅ ${proj} updated successfully`);
         
         if (index < projects.length - 1) {
           Utilities.sleep(2000);
@@ -283,7 +267,6 @@ function generateAllProjects(weeks) {
     for (var i = 0; i < MENU_PROJECTS.length; i++) {
       var proj = MENU_PROJECTS[i];
       try { 
-        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
         generateProjectReportByWeeks(proj.toUpperCase(), weeks); 
         success++; 
       } catch(e) { 
@@ -292,7 +275,7 @@ function generateAllProjects(weeks) {
     }
     
     sortProjectSheets();
-    console.log(`Generated ${success}/${total} reports successfully for last ${weeks} weeks`);
+    console.log(`Generated ${success}/${total} reports for ${weeks} weeks`);
   } catch(e) {
     console.error('Error generating all projects:', e);
   }
@@ -302,9 +285,9 @@ function generateSingleProject(projectName, weeks) {
   try {
     generateProjectReportByWeeks(projectName, weeks);
     sortProjectSheets();
-    console.log(`${projectName} report generated successfully for last ${weeks} weeks`);
+    console.log(`${projectName} report generated for ${weeks} weeks`);
   } catch(e) {
-    console.error(`Error generating ${projectName} report: ${e.toString()}`);
+    console.error(`Error generating ${projectName}: ${e.toString()}`);
   }
 }
 
@@ -315,7 +298,6 @@ function generateMultipleProjects(projects, weeks) {
     for (var i = 0; i < projects.length; i++) {
       var proj = projects[i];
       try {
-        console.log(`Generating report for ${proj} (${weeks} weeks)...`);
         generateProjectReportByWeeks(proj.toUpperCase(), weeks);
         success++;
       } catch(e) {
@@ -324,7 +306,7 @@ function generateMultipleProjects(projects, weeks) {
     }
     
     sortProjectSheets();
-    console.log(`Generated ${success}/${projects.length} reports successfully for last ${weeks} weeks`);
+    console.log(`Generated ${success}/${projects.length} reports for ${weeks} weeks`);
   } catch(e) {
     console.error('Error generating multiple projects:', e);
   }
@@ -351,21 +333,15 @@ function syncTriggersWithSettings() {
     
     if (settings.automation.autoCache && !cacheTrigger) {
       ScriptApp.newTrigger('autoCacheAllProjects').timeBased().atHour(2).everyDays(1).create();
-      console.log('Created auto cache trigger');
     } else if (!settings.automation.autoCache && cacheTrigger) {
       ScriptApp.deleteTrigger(cacheTrigger);
-      console.log('Deleted auto cache trigger');
     }
     
     if (settings.automation.autoUpdate && !updateTrigger) {
       ScriptApp.newTrigger('autoUpdateAllProjects').timeBased().atHour(5).everyDays(1).create();
-      console.log('Created auto update trigger');
     } else if (!settings.automation.autoUpdate && updateTrigger) {
       ScriptApp.deleteTrigger(updateTrigger);
-      console.log('Deleted auto update trigger');
     }
-    
-    console.log('Triggers synchronized with Settings sheet');
   } catch (e) {
     console.error('Error syncing triggers with settings:', e);
   }
@@ -390,21 +366,15 @@ function updateProjectDataWithRetry(projectName, maxRetries = 1) {
       }
       
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
-        console.log('Timeout detected - waiting before retry...');
-        
         clearSettingsCache();
         clearAllCommentColumnCaches();
         
         var timeoutDelay = baseDelay * 2;
-        console.log(`Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
-        
         SpreadsheetApp.flush();
         Utilities.sleep(2000);
       } else {
-        var delay = baseDelay;
-        console.log(`Waiting ${delay}ms before retry...`);
-        Utilities.sleep(delay);
+        Utilities.sleep(baseDelay);
       }
     }
   }
@@ -424,9 +394,7 @@ function sortProjectSheetsWithRetry(maxRetries = 1) {
         throw e;
       }
       
-      var delay = baseDelay;
-      console.log(`Waiting ${delay}ms before retry...`);
-      Utilities.sleep(delay);
+      Utilities.sleep(baseDelay);
     }
   }
 }
@@ -500,29 +468,16 @@ function showAppsDbStatus() {
     var cache = appsDb.loadFromCache();
     var appCount = Object.keys(cache).length;
     
-    console.log(`Apps Database Status: ${appCount} apps cached`);
+    console.log(`Apps Database: ${appCount} apps cached`);
     
     if (appCount > 0) {
-      var bundleIds = Object.keys(cache);
-      var sampleApp = cache[bundleIds[0]];
-      console.log(`Last Updated: ${sampleApp.lastUpdated || 'Unknown'}`);
-      console.log(`Cache Sheet: ${appsDb.cacheSheet ? 'Found' : 'Missing'}`);
-      
       var shouldUpdate = appsDb.shouldUpdateCache();
-      console.log(`Update Needed: ${shouldUpdate ? 'YES (>24h old)' : 'NO'}`);
-      
-      console.log('Sample entries:');
-      var sampleCount = Math.min(3, bundleIds.length);
-      for (var i = 0; i < sampleCount; i++) {
-        var bundleId = bundleIds[i];
-        var app = cache[bundleId];
-        console.log(`${bundleId} → ${app.publisher} ${app.appName}`);
-      }
+      console.log(`Update needed: ${shouldUpdate ? 'YES' : 'NO'}`);
     } else {
-      console.log('Status: Empty cache - refresh needed');
+      console.log('Cache empty - refresh needed');
     }
   } catch (e) {
-    console.error('Error checking Apps Database status:', e);
+    console.error('Error checking Apps Database:', e);
   }
 }
 
@@ -533,21 +488,17 @@ function showAppsDbSample() {
     var bundleIds = Object.keys(cache);
     
     if (bundleIds.length === 0) {
-      console.log('Apps Database cache is empty. Please refresh first.');
+      console.log('Apps Database cache is empty');
       return;
     }
     
-    console.log('Apps Database Sample:');
-    var sampleCount = Math.min(5, bundleIds.length);
+    console.log(`Apps Database: ${bundleIds.length} apps total`);
+    var sampleCount = Math.min(3, bundleIds.length);
     
     for (var i = 0; i < sampleCount; i++) {
       var bundleId = bundleIds[i];
       var app = cache[bundleId];
       console.log(`${bundleId} → ${app.publisher} ${app.appName}`);
-    }
-    
-    if (bundleIds.length > sampleCount) {
-      console.log(`... and ${bundleIds.length - sampleCount} more apps`);
     }
   } catch (e) {
     console.error('Error showing sample data:', e);
@@ -564,8 +515,6 @@ function clearAppsDbCache() {
     if (appsDb.cacheSheet && appsDb.cacheSheet.getLastRow() > 1) {
       appsDb.cacheSheet.deleteRows(2, appsDb.cacheSheet.getLastRow() - 1);
       console.log('Apps Database cache cleared');
-    } else {
-      console.log('Apps Database cache sheet not found');
     }
   } catch (e) {
     console.error('Error clearing cache:', e);

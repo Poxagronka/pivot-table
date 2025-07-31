@@ -1,6 +1,5 @@
 function createUnifiedRowGrouping(sheet, tableData, data) {
   try {
-    console.log('Creating row grouping...');
     const startTime = new Date().getTime();
     
     const sheetId = sheet.getSheetId();
@@ -35,12 +34,12 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
       }
     }
     
+    console.log(`Row grouping: ${allCreateRequests.length} create + ${allCollapseRequests.length} collapse requests`);
+    
     const BATCH_SIZE = 100;
     
     for (let i = 0; i < allCreateRequests.length; i += BATCH_SIZE) {
       const batch = allCreateRequests.slice(i, i + BATCH_SIZE);
-      console.log(`Processing create batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(allCreateRequests.length/BATCH_SIZE)} (${batch.length} requests)`);
-      
       Sheets.Spreadsheets.batchUpdate({
         requests: batch
       }, spreadsheetId);
@@ -48,16 +47,12 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
     
     for (let i = 0; i < allCollapseRequests.length; i += BATCH_SIZE) {
       const batch = allCollapseRequests.slice(i, i + BATCH_SIZE);
-      console.log(`Processing collapse batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(allCollapseRequests.length/BATCH_SIZE)} (${batch.length} requests)`);
-      
       Sheets.Spreadsheets.batchUpdate({
         requests: batch
       }, spreadsheetId);
     }
     
-    const endTime = new Date().getTime();
-    console.log(`Row grouping completed in ${(endTime - startTime)/1000}s`);
-    console.log(`Total requests: ${allCreateRequests.length} create, ${allCollapseRequests.length} collapse`);
+    console.log(`Row grouping completed in ${(new Date().getTime() - startTime)/1000}s`);
     
   } catch (e) {
     console.error('Error in unified row grouping:', e);

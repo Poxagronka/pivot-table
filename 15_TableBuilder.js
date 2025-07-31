@@ -6,21 +6,17 @@ const WOW_KEYS_CACHE = new Map();
 
 function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache) {
   const startTime = Date.now();
-  console.log(`🔧 buildUnifiedTable started for ${CURRENT_PROJECT}`);
 
   clearTableBuilderCaches();
   
-  console.log(`⏱️ Precomputing totals and WoW... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
   precomputeAllTotals(data);
   precomputeWoWCache(wow);
   
   let appsDbCache = null;
   if (CURRENT_PROJECT === 'TRICKY') {
-    console.log(`⏱️ Loading AppsDatabase cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     try {
       const appsDb = new AppsDatabase('TRICKY');
       appsDbCache = appsDb.loadFromCache();
-      console.log(`📱 AppsDatabase loaded: ${Object.keys(appsDbCache).length} apps`);
     } catch (e) {
       console.error('Error loading AppsDatabase:', e);
       appsDbCache = {};
@@ -28,12 +24,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
   }
   
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    console.log(`⏱️ Processing INCENT_TRAFFIC networks... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
-    
     const networkKeys = Object.keys(data).sort((a, b) => 
       data[a].networkName.localeCompare(data[b].networkName)
     );
-    console.log(`📊 Found ${networkKeys.length} networks to process`);
     
     networkKeys.forEach((networkKey, networkIndex) => {
       const network = data[networkKey];
@@ -45,7 +38,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       tableData.push(emptyRow);
       
       const weekKeys = Object.keys(network.weeks).sort();
-      console.log(`  Network ${networkIndex + 1}/${networkKeys.length}: ${network.networkName} (${weekKeys.length} weeks)`);
       
       weekKeys.forEach(weekKey => {
         const week = network.weeks[weekKey];
@@ -91,14 +83,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
         });
       });
     });
-
-    console.log(`✅ INCENT_TRAFFIC processing completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
   } else {
-    console.log(`⏱️ Processing regular projects... (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
-    
     const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
-    console.log(`📊 Found ${appKeys.length} apps to process`);
     
     appKeys.forEach((appKey, appIndex) => {
       const app = data[appKey];
@@ -110,7 +97,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       tableData.push(emptyRow);
 
       const weekKeys = Object.keys(app.weeks).sort();
-      console.log(`  App ${appIndex + 1}/${appKeys.length}: ${app.appName} (${weekKeys.length} weeks)`);
       
       weekKeys.forEach((weekKey, weekIndex) => {
         const week = app.weeks[weekKey];
@@ -144,11 +130,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
         addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialMetricsCache, appsDbCache);
       });
     });
-
-    console.log(`✅ Regular projects processing completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
   }
   
-  console.log(`🔧 buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function precomputeAllTotals(data) {
@@ -234,7 +218,7 @@ function precomputeAllTotals(data) {
     });
   }
   
-  console.log(`🚀 Precomputed ${computedCount} totals and ${WOW_KEYS_CACHE.size} WoW keys in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`Precomputed ${computedCount} totals in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function precomputeWoWCache(wow) {
@@ -283,7 +267,7 @@ function precomputeWoWCache(wow) {
     });
   }
   
-  console.log(`🚀 Precomputed ${cacheCount} WoW cache entries in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`Precomputed ${cacheCount} WoW entries in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function getOptimizedWoW(key, type) {
