@@ -1,207 +1,52 @@
-function calculateWeekTotals(campaigns) {
-  if (!campaigns || campaigns.length === 0) {
-    return {
-      spend: 0, cpi: 0, installs: 0, ipm: 0, rrD1: 0, roasD1: 0,
-      roasD3: 0, rrD7: 0, roasD7: 0, roasD30: 0, eArpuForecast: 0,
-      eRoasForecast: 0, eProfitForecast: 0, eRoasForecastD730: 0
-    };
-  }
-  
-  const totals = {
-    spend: 0, cpi: 0, installs: 0, ipm: 0, rrD1: 0, roasD1: 0,
-    roasD3: 0, rrD7: 0, roasD7: 0, roasD30: 0, eArpuForecast: 0,
-    eRoasForecast: 0, eProfitForecast: 0, eRoasForecastD730: 0
-  };
-  
-  let totalSpend = 0;
-  let totalInstalls = 0;
-  let weightedMetrics = {
-    cpi: 0, ipm: 0, rrD1: 0, roasD1: 0, roasD3: 0, rrD7: 0, roasD7: 0,
-    roasD30: 0, eArpuForecast: 0, eRoasForecast: 0, eRoasForecastD730: 0
-  };
-  
-  campaigns.forEach(campaign => {
-    const spend = parseFloat(campaign.spend) || 0;
-    const installs = parseInt(campaign.installs) || 0;
-    
-    totalSpend += spend;
-    totalInstalls += installs;
-    totals.eProfitForecast += parseFloat(campaign.eProfitForecast) || 0;
-    
-    if (spend > 0) {
-      Object.keys(weightedMetrics).forEach(metric => {
-        const value = parseFloat(campaign[metric]) || 0;
-        weightedMetrics[metric] += value * spend;
-      });
-    }
-  });
-  
-  totals.spend = totalSpend;
-  totals.installs = totalInstalls;
-  
-  if (totalSpend > 0) {
-    Object.keys(weightedMetrics).forEach(metric => {
-      totals[metric] = weightedMetrics[metric] / totalSpend;
-    });
-  }
-  
-  return totals;
-}
+/**
+ * Analytics Functions - ОБНОВЛЕНО: WoW аналитика с новыми ROAS метриками и поддержкой сеток для OVERALL + INCENT_TRAFFIC
+ */
 
-function calculateWeekOverWeekAnalytics(appData) {
-  const apps = {};
-  const appWeekWoW = {};
-  
-  Object.keys(appData).forEach(appKey => {
-    const app = appData[appKey];
-    const weeks = Object.keys(app.weeks).sort();
-    const appAnalytics = { appName: app.appName, totalSpend: 0, totalProfit: 0, weeks: [] };
-    
-    weeks.forEach((weekKey, index) => {
-      const currentWeek = app.weeks[weekKey];
-      let allCampaigns = [];
-      
-      if (CURRENT_PROJECT === 'TRICKY' && currentWeek.sourceApps) {
-        Object.values(currentWeek.sourceApps).forEach(sourceApp => {
-          allCampaigns.push(...sourceApp.campaigns);
-        });
-      } else if (CURRENT_PROJECT === 'OVERALL' && currentWeek.networks) {
-        Object.values(currentWeek.networks).forEach(network => {
-          allCampaigns.push(...network.campaigns);
-        });
-      } else {
-        allCampaigns = currentWeek.campaigns || [];
-      }
-      
-      const weekTotals = calculateWeekTotals(allCampaigns);
-      appAnalytics.totalSpend += weekTotals.spend;
-      appAnalytics.totalProfit += weekTotals.eProfitForecast;
-      
-      if (index > 0) {
-        const prevWeekKey = weeks[index - 1];
-        const prevWeek = app.weeks[prevWeekKey];
-        
-        let prevAllCampaigns = [];
-        if (CURRENT_PROJECT === 'TRICKY' && prevWeek.sourceApps) {
-          Object.values(prevWeek.sourceApps).forEach(sourceApp => {
-            prevAllCampaigns.push(...sourceApp.campaigns);
-          });
-        } else if (CURRENT_PROJECT === 'OVERALL' && prevWeek.networks) {
-          Object.values(prevWeek.networks).forEach(network => {
-            prevAllCampaigns.push(...network.campaigns);
-          });
-        } else {
-          prevAllCampaigns = prevWeek.campaigns || [];
-        }
-        
-        const prevWeekTotals = calculateWeekTotals(prevAllCampaigns);
-        
-        const spendChange = weekTotals.spend - prevWeekTotals.spend;
-        const spendChangePercent = prevWeekTotals.spend > 0 ? (spendChange / prevWeekTotals.spend) * 100 : 0;
-        
-        const profitChange = weekTotals.eProfitForecast - prevWeekTotals.eProfitForecast;
-        const profitChangePercent = prevWeekTotals.eProfitForecast > 0 ? (profitChange / prevWeekTotals.eProfitForecast) * 100 : 0;
-        
-        let growthStatus = 'Stable';
-        if (spendChangePercent > 10 && profitChangePercent > 5) {
-          growthStatus = 'Growing';
-        } else if (spendChangePercent < -10 || profitChangePercent < -15) {
-          growthStatus = 'Declining';
-        }
-        
-        const appWeekKey = `${app.appName}_${weekKey}`;
-        appWeekWoW[appWeekKey] = {
-          spendChange,
-          spendChangePercent,
-          eProfitChange: profitChange,
-          eProfitChangePercent: profitChangePercent,
-          growthStatus
-        };
-      }
-      
-      appAnalytics.weeks.push({
-        weekKey,
-        weekStart: currentWeek.weekStart,
-        weekEnd: currentWeek.weekEnd,
-        ...weekTotals
-      });
-    });
-    
-    apps[appKey] = appAnalytics;
-  });
-  
-  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    const networkData = {};
-    
-    Object.values(appData).forEach(network => {
-      const networkKey = `${network.networkName}_${network.networkId}`;
-      const weeks = Object.keys(network.weeks).sort();
-      
-      weeks.forEach((weekKey, index) => {
-        const week = network.weeks[weekKey];
-        
-        if (index > 0) {
-          const prevWeekKey = weeks[index - 1];
-          const prevWeek = network.weeks[prevWeekKey];
-          
-          Object.values(week.apps).forEach(app => {
-            const appWeekKey = `${app.appName}_${weekKey}`;
-            
-            let currentCampaigns = app.campaigns || [];
-            let prevCampaigns = prevWeek.apps[app.appId] ? prevWeek.apps[app.appId].campaigns || [] : [];
-            
-            const currentTotals = calculateWeekTotals(currentCampaigns);
-            const prevTotals = calculateWeekTotals(prevCampaigns);
-            
-            const spendChange = currentTotals.spend - prevTotals.spend;
-            const spendChangePercent = prevTotals.spend > 0 ? (spendChange / prevTotals.spend) * 100 : 0;
-            
-            const profitChange = currentTotals.eProfitForecast - prevTotals.eProfitForecast;
-            const profitChangePercent = prevTotals.eProfitForecast > 0 ? (profitChange / prevTotals.eProfitForecast) * 100 : 0;
-            
-            let growthStatus = 'Stable';
-            if (spendChangePercent > 10 && profitChangePercent > 5) {
-              growthStatus = 'Growing';
-            } else if (spendChangePercent < -10 || profitChangePercent < -15) {
-              growthStatus = 'Declining';
-            }
-            
-            appWeekWoW[appWeekKey] = {
-              networkId: network.networkId,
-              networkName: network.networkName,
-              spendChange,
-              spendChangePercent,
-              eProfitChange: profitChange,
-              eProfitChangePercent: profitChangePercent,
-              growthStatus
-            };
-          });
-        }
-      });
-    });
-    
-    return { apps, appWeekWoW, networkData };
+function calculateWoWMetrics(appData) {
+  if (!appData || typeof appData !== 'object') {
+    console.error('Invalid appData provided to calculateWoWMetrics');
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
-  
-  if (CURRENT_PROJECT === 'OVERALL') {
-    const networkData = {};
+
+  try {
     const campaignData = {};
-    
+    const appWeekData = {};
+    const sourceAppData = {};
+    const networkData = {};
+
     Object.values(appData).forEach(app => {
-      const weeks = Object.keys(app.weeks).sort();
+      appWeekData[app.appName] = {};
       
-      weeks.forEach((weekKey, index) => {
-        const week = app.weeks[weekKey];
+      Object.values(app.weeks).forEach(week => {
+        let allCampaigns = [];
         
         if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
           Object.values(week.sourceApps).forEach(sourceApp => {
+            allCampaigns.push(...sourceApp.campaigns);
+            
+            const sourceAppKey = sourceApp.sourceAppId;
+            const sourceAppSpend = sourceApp.campaigns.reduce((s, c) => s + c.spend, 0);
+            const sourceAppProfit = sourceApp.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+            
+            if (!sourceAppData[sourceAppKey]) {
+              sourceAppData[sourceAppKey] = {};
+            }
+            
+            sourceAppData[sourceAppKey][week.weekStart] = {
+              weekStart: week.weekStart,
+              spend: sourceAppSpend,
+              profit: sourceAppProfit,
+              sourceAppId: sourceApp.sourceAppId,
+              sourceAppName: sourceApp.sourceAppName
+            };
+            
             sourceApp.campaigns.forEach(c => {
               if (c.campaignId) {
                 campaignData[`${c.campaignId}_${week.weekStart}`] = {
-                  weekStart: week.weekStart,
-                  appName: app.appName,
                   campaignId: c.campaignId,
                   campaignName: c.campaignName,
+                  sourceApp: c.sourceApp,
+                  weekStart: week.weekStart,
                   spend: c.spend,
                   eRoasForecastD730: c.eRoasForecastD730 || 0,
                   eProfitForecast: c.eProfitForecast,
@@ -249,10 +94,10 @@ function calculateWeekOverWeekAnalytics(appData) {
           allCampaigns.forEach(c => {
             if (c.campaignId) {
               campaignData[`${c.campaignId}_${week.weekStart}`] = {
-                weekStart: week.weekStart,
-                appName: app.appName,
                 campaignId: c.campaignId,
                 campaignName: c.campaignName,
+                sourceApp: c.sourceApp,
+                weekStart: week.weekStart,
                 spend: c.spend,
                 eRoasForecastD730: c.eRoasForecastD730 || 0,
                 eProfitForecast: c.eProfitForecast,
@@ -270,87 +115,391 @@ function calculateWeekOverWeekAnalytics(appData) {
             }
           });
         }
+        
+        const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+        const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        appWeekData[app.appName][week.weekStart] = { weekStart: week.weekStart, spend, profit };
       });
-   });
-    
-    return { apps, appWeekWoW, networkData, campaignData };
-  }
-  
-  return { apps, appWeekWoW };
-}
+    });
 
-let WEEK_TOTALS_CACHE = new Map();
+    const campaignWoW = {};
+    
+    if (CURRENT_PROJECT === 'OVERALL') {
+      const networks = {};
+      Object.values(networkData).forEach(d => {
+        Object.values(d).forEach(weekData => {
+          if (!networks[weekData.networkId]) networks[weekData.networkId] = [];
+          networks[weekData.networkId].push(weekData);
+        });
+      });
 
-function getCachedWeekTotals(campaigns) {
-  if (!campaigns || campaigns.length === 0) {
-    return {
-      spend: 0, cpi: 0, installs: 0, ipm: 0, rrD1: 0, roasD1: 0,
-      roasD3: 0, rrD7: 0, roasD7: 0, roasD30: 0, eArpuForecast: 0,
-      eRoasForecast: 0, eProfitForecast: 0, eRoasForecastD730: 0
-    };
-  }
-  
-  const cacheKey = campaigns.map(c => `${c.campaignId}_${c.spend}_${c.installs}`).join('|');
-  
-  if (WEEK_TOTALS_CACHE.has(cacheKey)) {
-    return WEEK_TOTALS_CACHE.get(cacheKey);
-  }
-  
-  const totals = {
-    spend: 0, cpi: 0, installs: 0, ipm: 0, rrD1: 0, roasD1: 0,
-    roasD3: 0, rrD7: 0, roasD7: 0, roasD30: 0, eArpuForecast: 0,
-    eRoasForecast: 0, eProfitForecast: 0, eRoasForecastD730: 0
-  };
-  
-  let totalSpend = 0;
-  let totalInstalls = 0;
-  let weightedMetrics = {
-    cpi: 0, ipm: 0, rrD1: 0, roasD1: 0, roasD3: 0, rrD7: 0, roasD7: 0,
-    roasD30: 0, eArpuForecast: 0, eRoasForecast: 0, eRoasForecastD730: 0
-  };
-  
-  campaigns.forEach(campaign => {
-    const spend = parseFloat(campaign.spend) || 0;
-    const installs = parseInt(campaign.installs) || 0;
-    
-    totalSpend += spend;
-    totalInstalls += installs;
-    totals.eProfitForecast += parseFloat(campaign.eProfitForecast) || 0;
-    
-    if (spend > 0) {
-      Object.keys(weightedMetrics).forEach(metric => {
-        const value = parseFloat(campaign[metric]) || 0;
-        weightedMetrics[metric] += value * spend;
+      Object.keys(networks).forEach(networkId => {
+        networks[networkId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        networks[networkId].forEach((curr, i) => {
+          const key = `${networkId}_${curr.weekStart}`;
+          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = networks[networkId][i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+            campaignWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+            };
+          }
+        });
+      });
+    } else if (CURRENT_PROJECT !== 'OVERALL') {
+      const campaigns = {};
+      Object.values(campaignData).forEach(d => {
+        if (!campaigns[d.campaignId]) campaigns[d.campaignId] = [];
+        campaigns[d.campaignId].push(d);
+      });
+
+      Object.keys(campaigns).forEach(campaignId => {
+        campaigns[campaignId].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        campaigns[campaignId].forEach((curr, i) => {
+          const key = `${campaignId}_${curr.weekStart}`;
+          campaignWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = campaigns[campaignId][i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.eProfitForecast ? ((curr.eProfitForecast - prev.eProfitForecast) / Math.abs(prev.eProfitForecast)) * 100 : 0;
+            campaignWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct) 
+            };
+          }
+        });
       });
     }
+
+    const appWeekWoW = {};
+    Object.keys(appWeekData).forEach(appName => {
+      const weeks = Object.values(appWeekData[appName]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+      weeks.forEach((curr, i) => {
+        const key = `${appName}_${curr.weekStart}`;
+        appWeekWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+        
+        if (i > 0) {
+          const prev = weeks[i - 1];
+          const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+          const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+          appWeekWoW[key] = { 
+            spendChangePercent: spendPct, 
+            eProfitChangePercent: profitPct, 
+            growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+          };
+        }
+      });
+    });
+
+    const sourceAppWoW = {};
+    if (CURRENT_PROJECT === 'TRICKY') {
+      Object.keys(sourceAppData).forEach(bundleId => {
+        const weeks = Object.values(sourceAppData[bundleId]).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+        weeks.forEach((curr, i) => {
+          const key = `${bundleId}_${curr.weekStart}`;
+          sourceAppWoW[key] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+          
+          if (i > 0) {
+            const prev = weeks[i - 1];
+            const spendPct = prev.spend ? ((curr.spend - prev.spend) / Math.abs(prev.spend)) * 100 : 0;
+            const profitPct = prev.profit ? ((curr.profit - prev.profit) / Math.abs(prev.profit)) * 100 : 0;
+            sourceAppWoW[key] = { 
+              spendChangePercent: spendPct, 
+              eProfitChangePercent: profitPct, 
+              growthStatus: calculateGrowthStatus(prev, curr, spendPct, profitPct, 'profit') 
+            };
+          }
+        });
+      });
+    }
+
+    return { campaignWoW, appWeekWoW, sourceAppWoW };
+  } catch (e) {
+    console.error('Error calculating WoW metrics:', e);
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
+  }
+}
+
+function calculateIncentTrafficWoWMetrics(networkData) {
+  const weekWoW = {};
+  const appWoW = {};
+  const networkWoW = {};
+  
+  Object.keys(networkData).forEach(networkKey => {
+    const network = networkData[networkKey];
+    const weeks = Object.values(network.weeks).sort((a, b) => 
+      new Date(a.weekStart) - new Date(b.weekStart)
+    );
+    
+    const appHistory = {};
+    
+    weeks.forEach((week, i) => {
+      const weekKey = `${networkKey}_${week.weekStart}`;
+      const allCampaigns = [];
+      Object.values(week.apps).forEach(app => {
+        allCampaigns.push(...app.campaigns);
+      });
+      
+      const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+      const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+      
+      if (i === 0) {
+        weekWoW[weekKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+      } else {
+        const prevWeek = weeks[i - 1];
+        const prevCampaigns = [];
+        Object.values(prevWeek.apps).forEach(app => {
+          prevCampaigns.push(...app.campaigns);
+        });
+        const prevSpend = prevCampaigns.reduce((s, c) => s + c.spend, 0);
+        const prevProfit = prevCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        
+        const spendPct = prevSpend ? ((spend - prevSpend) / Math.abs(prevSpend)) * 100 : 0;
+        const profitPct = prevProfit ? ((profit - prevProfit) / Math.abs(prevProfit)) * 100 : 0;
+        
+        weekWoW[weekKey] = {
+          spendChangePercent: spendPct,
+          eProfitChangePercent: profitPct,
+          growthStatus: calculateGrowthStatus(
+            { spend: prevSpend, profit: prevProfit },
+            { spend: spend, profit: profit },
+            spendPct, profitPct, 'profit'
+          )
+        };
+      }
+      
+      Object.keys(week.apps).forEach(appId => {
+        const appData = week.apps[appId];
+        const appKey = `${networkKey}_${week.weekStart}_${appId}`;
+        const appSpend = appData.campaigns.reduce((s, c) => s + c.spend, 0);
+        const appProfit = appData.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+        
+        if (appHistory[appId] && appHistory[appId].length > 0) {
+          const prevAppData = appHistory[appId][appHistory[appId].length - 1];
+          const prevAppSpend = prevAppData.spend;
+          const prevAppProfit = prevAppData.profit;
+          
+          const spendPct = prevAppSpend ? ((appSpend - prevAppSpend) / Math.abs(prevAppSpend)) * 100 : 0;
+          const profitPct = prevAppProfit ? ((appProfit - prevAppProfit) / Math.abs(prevAppProfit)) * 100 : 0;
+          
+          appWoW[appKey] = {
+            spendChangePercent: spendPct,
+            eProfitChangePercent: profitPct,
+            growthStatus: calculateGrowthStatus(
+              { spend: prevAppSpend, profit: prevAppProfit },
+              { spend: appSpend, profit: appProfit },
+              spendPct, profitPct, 'profit'
+            )
+          };
+        } else {
+          appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
+        }
+        
+        if (!appHistory[appId]) {
+          appHistory[appId] = [];
+        }
+        appHistory[appId].push({
+          weekStart: week.weekStart,
+          spend: appSpend,
+          profit: appProfit
+        });
+      });
+    });
   });
   
-  totals.spend = totalSpend;
-  totals.installs = totalInstalls;
+  return { weekWoW, appWoW, networkWoW };
+}
+
+function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
+  const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
+  const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
   
-  if (totalSpend > 0) {
-    Object.keys(weightedMetrics).forEach(metric => {
-      totals[metric] = weightedMetrics[metric] / totalSpend;
-    });
+  const t = {
+    healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
+    efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
+    inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
+    decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
+    scalingDown: { maxSpendChange: -15, efficient: { minProfitChange: 0 }, moderate: { maxProfitDecline: -10, minProfitDecline: -1 }, problematic: { maxProfitDecline: -15 } },
+    moderateGrowthSpend: 3, moderateGrowthProfit: 2,
+    minimalGrowth: { maxSpendChange: 2, maxProfitChange: 1 },
+    moderateDecline: { maxSpendDecline: -3, maxProfitDecline: -3, spendOptimizationRatio: 1.5, efficiencyDropRatio: 1.5, proportionalRatio: 1.3 },
+    stable: { maxAbsoluteChange: 2 }
+  };
+  
+  if (prevProfit < 0 && currProfit > 0) return '🟢 Healthy Growth';
+  if (prevProfit > 0 && currProfit < 0) return '🔴 Inefficient Growth';
+  if (profitPct <= t.inefficientGrowth.maxProfitChange) return '🔴 Inefficient Growth';
+  if (spendPct >= t.healthyGrowth.minSpendChange && profitPct >= t.healthyGrowth.minProfitChange) return '🟢 Healthy Growth';
+  if (spendPct <= t.efficiencyImprovement.maxSpendDecline && profitPct >= t.efficiencyImprovement.minProfitGrowth) return '🟢 Efficiency Improvement';
+  if (spendPct <= t.efficiencyImprovement.maxSpendDecline && profitPct > 0 && profitPct < t.efficiencyImprovement.minProfitGrowth) return '🟡 Efficiency Improvement';
+  
+  if (spendPct <= t.scalingDown.maxSpendChange) {
+    if (profitPct >= t.scalingDown.efficient.minProfitChange) return '🔵 Scaling Down - Efficient';
+    if (profitPct >= t.scalingDown.moderate.minProfitDecline && profitPct <= t.scalingDown.moderate.maxProfitDecline) return '🔵 Scaling Down - Moderate';
+    if (profitPct <= t.scalingDown.problematic.maxProfitDecline) return '🔵 Scaling Down - Problematic';
+    return '🔵 Scaling Down';
   }
   
-  WEEK_TOTALS_CACHE.set(cacheKey, totals);
-  return totals;
+  if (spendPct >= t.decliningEfficiency.minSpendStable && spendPct <= t.decliningEfficiency.maxSpendGrowth && profitPct >= t.decliningEfficiency.maxProfitDecline && profitPct <= t.decliningEfficiency.minProfitDecline) return '🟠 Declining Efficiency';
+  
+  if (spendPct < 0 && profitPct < 0 && spendPct >= t.moderateDecline.maxSpendDecline && profitPct >= t.moderateDecline.maxProfitDecline) {
+    const spendDeclineAbs = Math.abs(spendPct);
+    const profitDeclineAbs = Math.abs(profitPct);
+    if (spendDeclineAbs >= profitDeclineAbs * t.moderateDecline.spendOptimizationRatio) return '🟡 Moderate Decline - Spend Optimization';
+    if (profitDeclineAbs >= spendDeclineAbs * t.moderateDecline.efficiencyDropRatio) return '🟡 Moderate Decline - Efficiency Drop';
+    return '🟡 Moderate Decline - Proportional';
+  }
+  
+  if (spendPct >= t.moderateGrowthSpend && profitPct >= t.moderateGrowthProfit && (spendPct < t.healthyGrowth.minSpendChange || profitPct < t.healthyGrowth.minProfitChange)) return '🟡 Moderate Growth';
+  if (spendPct > 0 && profitPct > 0) {
+    if (spendPct <= t.minimalGrowth.maxSpendChange && profitPct <= t.minimalGrowth.maxProfitChange) return '🟡 Minimal Growth';
+    if (spendPct < t.moderateGrowthSpend || profitPct < t.moderateGrowthProfit) return '🟡 Minimal Growth';
+  }
+  if (spendPct < 0 && profitPct < 0 && spendPct >= t.scalingDown.maxSpendChange && profitPct >= t.inefficientGrowth.maxProfitChange) return '🟡 Moderate Decline';
+  if (spendPct > 0 && spendPct <= 15 && profitPct < 0 && profitPct >= -10) return '🟠 Declining Efficiency';
+  if (Math.abs(spendPct) <= 5 && profitPct < -2 && profitPct >= -12) return '🟠 Declining Efficiency';
+  if (Math.abs(spendPct) <= t.stable.maxAbsoluteChange && Math.abs(profitPct) <= t.stable.maxAbsoluteChange) return '⚪ Stable';
+  if (Math.abs(spendPct) <= 10 && Math.abs(profitPct) <= 10) return '⚪ Stable';
+  return '⚪ Stable';
+}
+
+function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    return calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField);
+  } finally {
+    setCurrentProject(originalProject);
+  }
+}
+
+function getGrowthStatusExplanation() {
+  return `Growth Status Criteria for ${CURRENT_PROJECT}:
+
+🟢 ПОЗИТИВНЫЕ: Healthy Growth (Spend ≥10% AND Profit ≥5%), Efficiency Improvement (спенд падает, профит растет), переход из убытка в прибыль
+🔴 КРИТИЧЕСКИЕ: Inefficient Growth (Profit ≤-8%), переход из прибыли в убыток  
+🟠 ПРЕДУПРЕЖДАЮЩИЕ: Declining Efficiency (спенд растет/стабилен, профит падает умеренно)
+🔵 СОКРАЩЕНИЕ: Scaling Down (Spend ≤-15%) - Efficient/Moderate/Problematic
+🟡 УМЕРЕННЫЕ: Moderate Growth/Decline, Minimal Growth, различные паттерны
+⚪ СТАБИЛЬНЫЕ: Минимальные изменения в любую сторону`;
+}
+
+function getProjectGrowthStatusExplanation(projectName) {
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  try {
+    return getGrowthStatusExplanation();
+  } finally {
+    setCurrentProject(originalProject);
+  }
+}
+
+function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJECT) {
+  const mockPrev = { eProfitForecast: 100, spend: 100 };
+  const mockCurr = { eProfitForecast: 100 + profitPct, spend: 100 + spendPct };
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  const status = calculateGrowthStatus(mockPrev, mockCurr, spendPct, profitPct);
+  setCurrentProject(originalProject);
+  return { spendPct, profitPct, projectName, status };
+}
+
+function generateReport(days) {
+  try {
+    const dateRange = getDateRange(days);
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      SpreadsheetApp.getUi().alert('No data found for the specified period.');
+      return;
+    }
+    
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      SpreadsheetApp.getUi().alert('No valid data to process.');
+      return;
+    }
+    
+    clearAllDataSilent();
+    
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
+    
+    const cache = new CommentCache();
+    cache.applyCommentsToSheet();
+  } catch (e) {
+    console.error('Error generating report:', e);
+    SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+function generateReportForDateRange(startDate, endDate) {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    const dateRange = { from: startDate, to: endDate };
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      ui.alert('No Data', 'No data found for the selected date range.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      ui.alert('No Valid Data', 'No valid data to process for the selected date range.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    clearAllDataSilent();
+    
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
+    
+    const cache = new CommentCache();
+    cache.applyCommentsToSheet();
+    
+    ui.alert('Success', `Report generated successfully!\n\nDate range: ${startDate} to ${endDate}`, ui.ButtonSet.OK);
+  } catch (e) {
+    console.error('Error generating report for date range:', e);
+    ui.alert('Error', 'Error generating report:\n\n' + e.toString() + '\n\nPlease check:\n1. Your internet connection\n2. The API token is still valid\n3. Try a smaller date range', ui.ButtonSet.OK);
+  }
 }
 
 function updateProjectData(projectName) {
-  const startTime = Date.now();
   const config = getProjectConfig(projectName);
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
   const sheet = spreadsheet.getSheetByName(config.SHEET_NAME);
   
   if (!sheet || sheet.getLastRow() < 2) {
+    console.log(`${projectName}: No existing data to update`);
     return;
   }
   
+  console.log(`${projectName}: Saving comments before update...`);
   try {
     const cache = new CommentCache(projectName);
     cache.syncCommentsFromSheet();
+    console.log(`${projectName}: Comments saved successfully`);
   } catch (e) {
     console.error(`${projectName}: Failed to save comments:`, e);
   }
@@ -372,6 +521,7 @@ function updateProjectData(projectName) {
   }
   
   if (!earliestDate) {
+    console.log(`${projectName}: No week data found`);
     return;
   }
   
@@ -390,15 +540,19 @@ function updateProjectData(projectName) {
     to: formatDateForAPI(endDate)
   };
   
+  console.log(`${projectName}: Fetching data from ${dateRange.from} to ${dateRange.to}`);
+  
   const raw = fetchProjectCampaignData(projectName, dateRange);
   
   if (!raw.data?.analytics?.richStats?.stats?.length) {
+    console.log(`${projectName}: No data returned from API`);
     return;
   }
   
   const processed = processProjectApiData(projectName, raw);
   
   if (Object.keys(processed).length === 0) {
+    console.log(`${projectName}: No valid data to process`);
     return;
   }
   
@@ -406,17 +560,13 @@ function updateProjectData(projectName) {
   
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
-  
-  let rowCount = 0;
-  const recordCount = raw.data.analytics.richStats.stats.length;
-  
   try {
     if (projectName === 'OVERALL') {
-      rowCount = createOverallPivotTable(processed);
+      createOverallPivotTable(processed);
     } else if (projectName === 'INCENT_TRAFFIC') {
-      rowCount = createIncentTrafficPivotTable(processed);
+      createIncentTrafficPivotTable(processed);
     } else {
-      rowCount = createEnhancedPivotTable(processed);
+      createEnhancedPivotTable(processed);
     }
     const cache = new CommentCache(projectName);
     cache.applyCommentsToSheet();
@@ -424,12 +574,10 @@ function updateProjectData(projectName) {
     setCurrentProject(originalProject);
   }
   
-  const totalTime = Date.now() - startTime;
-  logInfo(projectName, recordCount, rowCount, totalTime);
+  console.log(`${projectName}: Update completed`);
 }
 
 function updateAllDataToCurrent() {
-  const overallStartTime = Date.now();
   const ui = SpreadsheetApp.getUi();
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -443,20 +591,21 @@ function updateAllDataToCurrent() {
   try {
     let earliestDate = null;
 
-    const range = `${config.SHEET_NAME}!A:B`;
-    const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
-    const data = response.values || [];
+// Читаем только колонки A и B через Sheets API v4 для ускорения
+const range = `${config.SHEET_NAME}!A:B`;
+const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
+const data = response.values || [];
 
-    for (let i = 1; i < data.length; i++) {
-      if (data[i] && data[i][0] === 'WEEK') {
-        const weekRange = data[i][1];
-        if (weekRange) {
-          const [startStr] = weekRange.split(' - ');
-          const startDate = new Date(startStr);
-          if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
-        }
-      }
+for (let i = 1; i < data.length; i++) {
+  if (data[i] && data[i][0] === 'WEEK') {
+    const weekRange = data[i][1];
+    if (weekRange) {
+      const [startStr] = weekRange.split(' - ');
+      const startDate = new Date(startStr);
+      if (!earliestDate || startDate < earliestDate) earliestDate = startDate;
     }
+  }
+}
     
     if (!earliestDate) {
       ui.alert('No week data found in the sheet.');
@@ -489,22 +638,16 @@ function updateAllDataToCurrent() {
     
     clearAllDataSilent();
     
-    let rowCount = 0;
-    const recordCount = raw.data.analytics.richStats.stats.length;
-    
     if (CURRENT_PROJECT === 'OVERALL') {
-      rowCount = createOverallPivotTable(processed);
+      createOverallPivotTable(processed);
     } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-      rowCount = createIncentTrafficPivotTable(processed);
+      createIncentTrafficPivotTable(processed);
     } else {
-      rowCount = createEnhancedPivotTable(processed);
+      createEnhancedPivotTable(processed);
     }
     
     const cache = new CommentCache();
     cache.applyCommentsToSheet();
-    
-    const totalTime = Date.now() - overallStartTime;
-    logInfo(CURRENT_PROJECT, recordCount, rowCount, totalTime);
     
     ui.alert('Success', `Successfully updated all data from ${dateRange.from} to ${dateRange.to}!`, ui.ButtonSet.OK);
   } catch (e) {

@@ -1,190 +1,286 @@
+/**
+ * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов + INCENT_TRAFFIC + умное форматирование валют
+ */
+
 // Date Utils
-function getCurrentDateString() {
-  return new Date().toISOString().split('T')[0];
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+function getSundayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() + (day === 0 ? 0 : 7 - day);
+  return new Date(d.setDate(diff));
 }
 
 function formatDateForAPI(date) {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function getDateRange(days) {
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
   const today = new Date();
-  const fromDate = new Date(today);
-  fromDate.setDate(today.getDate() - days + 1);
-  
+  today.setHours(0, 0, 0, 0);
+  const endDate = new Date(today);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - days + 1);
   return {
-    from: formatDateForAPI(fromDate),
-    to: formatDateForAPI(today)
+    from: Utilities.formatDate(startDate, tz, 'yyyy-MM-dd'),
+    to: Utilities.formatDate(endDate, tz, 'yyyy-MM-dd')
   };
 }
 
-function parseCustomDateRange(customRange) {
-  if (!customRange || typeof customRange !== 'string') {
-    throw new Error('Custom range must be a string');
-  }
-  
-  const cleanRange = customRange.trim();
-  const rangeParts = cleanRange.split(/\s*-\s*/);
-  
-  if (rangeParts.length !== 2) {
-    throw new Error('Range must be in format "YYYY-MM-DD - YYYY-MM-DD"');
-  }
-  
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  
-  if (!dateRegex.test(rangeParts[0]) || !dateRegex.test(rangeParts[1])) {
-    throw new Error('Dates must be in YYYY-MM-DD format');
-  }
-  
-  const fromDate = new Date(rangeParts[0] + 'T00:00:00');
-  const toDate = new Date(rangeParts[1] + 'T00:00:00');
-  
-  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    throw new Error('Invalid dates provided');
-  }
-  
-  if (fromDate > toDate) {
-    throw new Error('From date must be before or equal to To date');
-  }
-  
-  return {
-    from: rangeParts[0],
-    to: rangeParts[1]
-  };
-}
-
-function getMondayOfWeek(date) {
-  const d = new Date(date);
-  const dayOfWeek = d.getDay();
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  d.setDate(d.getDate() - daysToMonday);
-  return d;
-}
-
-function getFormattedDateRange(startDate, endDate) {
-  const options = { month: 'short', day: 'numeric' };
-  const start = new Date(startDate).toLocaleDateString('en-US', options);
-  const end = new Date(endDate).toLocaleDateString('en-US', options);
-  return `${start} - ${end}`;
-}
-
-function isValidDateString(dateStr) {
+function isValidDate(dateString) {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!regex.test(dateStr)) return false;
-  
-  const date = new Date(dateStr + 'T00:00:00');
-  return !isNaN(date.getTime()) && date.toISOString().startsWith(dateStr);
-}
-
-// Logging Utils
-function getFormattedTimestamp() {
-  return new Date().toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
-}
-
-function logInfo(projectName, recordCount, rowCount, totalTimeMs) {
-  const timestamp = getFormattedTimestamp();
-  const totalTimeS = (totalTimeMs / 1000).toFixed(1);
-  console.log(`${timestamp}  INFO   ✅ ${projectName}: ${recordCount.toLocaleString()} records → ${rowCount.toLocaleString()} rows in ${totalTimeS}s`);
-}
-
-function logDebugTiming(timings) {
-  const timestamp = getFormattedTimestamp();
-  const parts = [];
-  
-  if (timings.api !== undefined) parts.push(`API: ${(timings.api / 1000).toFixed(1)}s`);
-  if (timings.processing !== undefined) parts.push(`Processing: ${(timings.processing / 1000).toFixed(1)}s`);
-  if (timings.format !== undefined) parts.push(`Format: ${(timings.format / 1000).toFixed(1)}s`);
-  if (timings.grouping !== undefined) parts.push(`Grouping: ${(timings.grouping / 1000).toFixed(1)}s`);
-  
-  if (parts.length > 0) {
-    console.log(`${timestamp}  DEBUG    ${parts.join(' | ')}`);
-  }
-}
-
-function measureExecutionTime(fn, label = 'Function') {
-  const startTime = Date.now();
-  const result = fn();
-  const endTime = Date.now();
-  const executionTime = endTime - startTime;
-  
-  return { result, executionTime };
+  if (!regex.test(dateString)) return false;
+  const date = new Date(dateString);
+  return date instanceof Date && !isNaN(date);
 }
 
 // Sheet Utils
-function clearProjectDataSilent(projectName, preserveComments = true) {
+function expandAllGroups(sheet) {
+  try {
+    const maxRows = sheet.getMaxRows();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).expandGroups();
+      } catch (e) {
+        break;
+      }
+    }
+  } catch (e) {
+    console.log('No groups to expand or error expanding groups:', e);
+  }
+}
+
+function clearAllGroups(sheet) {
+  try {
+    const maxRows = sheet.getMaxRows();
+    let hasGroups = true;
+    let attempts = 0;
+    
+    while (hasGroups && attempts < 10) {
+      try {
+        sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
+        attempts++;
+      } catch (e) {
+        hasGroups = false;
+      }
+    }
+  } catch (e) {
+    console.log('Error clearing groups:', e);
+  }
+}
+
+function recreateGrouping(sheet) {
+  expandAllGroups(sheet);
+  clearAllGroups(sheet);
+  const data = sheet.getDataRange().getValues();
+  createRowGrouping(sheet, data, null);
+}
+
+function clearAllDataSilent() {
+  const maxRetries = 2;
+  const baseDelay = 3000;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const config = getCurrentConfig();
+      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+      
+      if (oldSheet && oldSheet.getLastRow() > 1) {
+        try {
+          const cache = new CommentCache();
+          cache.syncCommentsFromSheet();
+          console.log('Comments cached before clearing sheet');
+        } catch (e) {
+          console.error('Error caching comments:', e);
+        }
+      }
+      
+      Utilities.sleep(1000);
+      
+      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      const newSheet = spreadsheet.insertSheet(tempSheetName);
+      
+      if (oldSheet) {
+        spreadsheet.deleteSheet(oldSheet);
+      }
+      
+      newSheet.setName(config.SHEET_NAME);
+      
+      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
+      return;
+    } catch (e) {
+      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
+      
+      if (attempt === maxRetries) {
+        throw e;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
+    }
+  }
+}
+
+function clearProjectDataSilent(projectName) {
   const maxRetries = 3;
-  const baseDelay = 2000;
+  const baseDelay = 5000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const config = getProjectConfig(projectName);
       const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      
+      if (!spreadsheet) {
+        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
+      }
+      
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
-      if (preserveComments && oldSheet && oldSheet.getLastRow() > 1) {
+      if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
-          const cache = new CommentCache(projectName);
-          cache.syncCommentsFromSheet();
+          const headers = oldSheet.getRange(1, 1, 1, oldSheet.getLastColumn()).getValues()[0];
+          const hasCommentColumn = headers.some(h => 
+            h && (h.toString().toLowerCase() === 'comments' || h.toString().toLowerCase() === 'comment')
+          );
+          
+          if (hasCommentColumn) {
+            console.log(`${projectName}: Found comment column, syncing comments...`);
+            const cache = new CommentCache(projectName);
+            cache.syncCommentsFromSheet();
+            console.log(`${projectName}: Comments cached successfully`);
+          } else {
+            console.log(`${projectName}: No comment column found in headers:`, headers);
+          }
         } catch (e) {
           if (e.toString().includes('timed out')) {
+            console.log(`${projectName}: Timeout while caching comments, continuing anyway`);
           } else {
             console.error(`${projectName}: Error caching comments:`, e);
+            console.log(`${projectName}: Continuing without comment cache`);
           }
         }
       }
       
+      Utilities.sleep(2000);
       SpreadsheetApp.flush();
       
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
+      console.log(`${projectName}: Creating temporary sheet: ${tempSheetName}`);
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
+      Utilities.sleep(1000);
       SpreadsheetApp.flush();
       
       if (oldSheet) {
         try {
+          console.log(`${projectName}: Attempting to delete old sheet...`);
           spreadsheet.deleteSheet(oldSheet);
-        } catch (deleteError) {
-          console.error(`${projectName}: Error deleting old sheet, will try to continue:`, deleteError);
-          const uniqueName = config.SHEET_NAME + '_' + Date.now();
-          newSheet.setName(uniqueName);
-         
-          try {
-            spreadsheet.deleteSheet(oldSheet);
-            newSheet.setName(config.SHEET_NAME);
-          } catch (e) {
-            console.error(`${projectName}: Failed to handle sheet deletion:`, e);
-            throw e;
+          console.log(`${projectName}: Old sheet deleted successfully`);
+          
+          Utilities.sleep(1000);
+          SpreadsheetApp.flush();
+          
+          const checkSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+          if (checkSheet) {
+            throw new Error(`Sheet ${config.SHEET_NAME} still exists after deletion`);
           }
-          return;
+        } catch (deleteError) {
+          console.error(`${projectName}: Error deleting old sheet:`, deleteError);
+          
+          const allSheets = spreadsheet.getSheets();
+          const existingNames = allSheets.map(s => s.getName());
+          console.log(`${projectName}: Existing sheets:`, existingNames);
+          
+          const tempSheets = allSheets.filter(s => s.getName().startsWith(config.SHEET_NAME + '_temp_'));
+          if (tempSheets.length > 1) {
+            console.log(`${projectName}: Found ${tempSheets.length} temporary sheets, cleaning up...`);
+            tempSheets.slice(1).forEach(sheet => {
+              try {
+                spreadsheet.deleteSheet(sheet);
+                console.log(`${projectName}: Deleted temp sheet: ${sheet.getName()}`);
+              } catch (e) {
+                console.error(`${projectName}: Failed to delete temp sheet: ${sheet.getName()}`);
+              }
+            });
+          }
+          
+          if (existingNames.includes(config.SHEET_NAME)) {
+            const backupName = config.SHEET_NAME + '_backup_' + Date.now();
+            console.log(`${projectName}: Renaming existing sheet to ${backupName}`);
+            const existingSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
+            existingSheet.setName(backupName);
+            
+            Utilities.sleep(1000);
+            SpreadsheetApp.flush();
+          }
         }
       }
       
+      Utilities.sleep(1000);
       SpreadsheetApp.flush();
+      
+      console.log(`${projectName}: Renaming temp sheet to ${config.SHEET_NAME}`);
+      const finalCheck = spreadsheet.getSheetByName(config.SHEET_NAME);
+      if (finalCheck) {
+        const backupName = config.SHEET_NAME + '_old_' + Date.now();
+        console.log(`${projectName}: Sheet still exists, renaming to ${backupName}`);
+        finalCheck.setName(backupName);
+        Utilities.sleep(1000);
+        SpreadsheetApp.flush();
+      }
       
       newSheet.setName(config.SHEET_NAME);
       
+      const allSheetsAfter = spreadsheet.getSheets();
+      const tempSheetsAfter = allSheetsAfter.filter(s => 
+        s.getName().startsWith(config.SHEET_NAME + '_temp_') || 
+        s.getName().startsWith(config.SHEET_NAME + '_backup_') ||
+        s.getName().startsWith(config.SHEET_NAME + '_old_')
+      );
+      
+      if (tempSheetsAfter.length > 0) {
+        console.log(`${projectName}: Cleaning up ${tempSheetsAfter.length} temporary/backup sheets...`);
+        tempSheetsAfter.forEach(sheet => {
+          try {
+            if (spreadsheet.getSheets().length > 1) {
+              spreadsheet.deleteSheet(sheet);
+              console.log(`${projectName}: Deleted: ${sheet.getName()}`);
+            }
+          } catch (e) {
+            console.error(`${projectName}: Failed to delete: ${sheet.getName()}`);
+          }
+        });
+      }
+      
+      console.log(`${projectName}: Sheet recreated successfully`);
       return;
     } catch (e) {
       console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
       
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
         const timeoutDelay = baseDelay * Math.pow(2, attempt);
+        console.log(`Timeout detected. Waiting ${timeoutDelay}ms before retry...`);
         Utilities.sleep(timeoutDelay);
         
         SpreadsheetApp.flush();
-      
+        Utilities.sleep(2000);
       } else if (attempt === maxRetries) {
         throw e;
       } else {
         const delay = baseDelay * Math.pow(1.5, attempt - 1);
+        console.log(`Waiting ${delay}ms before retry...`);
         Utilities.sleep(delay);
       }
     }
@@ -232,6 +328,10 @@ function sortProjectSheets() {
       ...otherVisibleSheets.map(item => item.sheet)
     ];
     
+    console.log('Sheet ordering (visible sheets only):');
+    console.log('- Project sheets:', projectSheets.map(s => s.name));
+    console.log('- Other visible sheets:', otherVisibleSheets.map(s => s.name));
+    
     let position = 1;
     
     finalOrder.forEach((sheet, index) => {
@@ -247,6 +347,8 @@ function sortProjectSheets() {
         console.error(`Error moving sheet ${sheet.getName()}:`, e);
       }
     });
+    
+    console.log('Visible project sheets sorted successfully');
   } catch (e) {
     console.error('Error sorting project sheets:', e);
     throw e;
@@ -300,10 +402,12 @@ function formatCurrency(amount, currency = 'USD') {
 }
 
 function formatSmartCurrency(amount) {
-  if (Math.abs(amount) >= 1) {
-    return amount.toFixed(0);
+  if (Math.abs(amount) >= 10) {
+    return '$' + amount.toFixed(0);  // $1234
+  } else if (Math.abs(amount) >= 1) {
+    return '$' + amount.toFixed(1);  // $5.3
   } else {
-    return amount.toFixed(1);
+    return '$' + amount.toFixed(2);  // $0.75
   }
 }
 
@@ -342,6 +446,7 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
       }
       
       const delay = baseDelay * Math.pow(2, attempts - 1);
+      console.log(`Attempt ${attempts} failed, retrying in ${delay}ms...`);
       Utilities.sleep(delay);
       return attempt();
     }
@@ -351,6 +456,14 @@ function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
 }
 
 // Performance Utils
+function measureExecutionTime(fn, label = 'Function') {
+  const startTime = new Date().getTime();
+  const result = fn();
+  const endTime = new Date().getTime();
+  console.log(`${label} execution time: ${endTime - startTime}ms`);
+  return result;
+}
+
 function batchOperation(items, batchSize, operation) {
   const results = [];
   for (let i = 0; i < items.length; i += batchSize) {
@@ -422,23 +535,17 @@ function getProjectStatus(projectName) {
     status.dataType = 'network-grouped traffic data';
     status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0 ? 
       project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ') : 'ALL NETWORKS';
-  } else {
-    status.dataType = 'campaign-level';
-    status.networkFilter = project.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID.join(', ');
   }
   
   return status;
 }
 
-// Cache Utils
-function getCacheKey(...parts) {
-  return parts.filter(p => p !== null && p !== undefined).join('_');
-}
-
-function clearAllCaches() {
-  try {
-    PropertiesService.getScriptProperties().deleteAll();
-  } catch (e) {
-    console.error('Error clearing script properties:', e);
-  }
+function clearAllCommentColumnCaches() {
+  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
+  projects.forEach(proj => {
+    try {
+      const cache = new CommentCache(proj);
+      cache.clearColumnCache();
+    } catch (e) {}
+  });
 }

@@ -1,17 +1,10 @@
-function createEnhancedPivotTable(appData) { 
-  return createUnifiedPivotTable(appData); 
-}
-
-function createOverallPivotTable(appData) { 
-  return createUnifiedPivotTable(appData); 
-}
-
-function createIncentTrafficPivotTable(networkData) { 
-  return createUnifiedPivotTable(networkData); 
-}
+function createEnhancedPivotTable(appData) { createUnifiedPivotTable(appData); }
+function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
+function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
 
 function createUnifiedPivotTable(data) {
-  const overallStartTime = Date.now();
+  console.log('📊 Starting pivot table creation...');
+  const startTime = Date.now();
   
   const config = getCurrentConfig();
   const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
@@ -20,44 +13,40 @@ function createUnifiedPivotTable(data) {
   else sheet.clear();
 
   if (!data || Object.keys(data).length === 0) {
+    console.log(`${CURRENT_PROJECT}: No data to display`);
     const headers = getUnifiedHeaders();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    return headers.length;
+    return;
   }
 
-  const formatStartTime = Date.now();
+  console.log(`⏱️ Initial metrics cache... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const initialMetricsCache = new InitialMetricsCache();
   initialMetricsCache.recordInitialValuesFromData(data);
 
+  console.log(`⏱️ WoW calculations starting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const wow = CURRENT_PROJECT === 'INCENT_TRAFFIC' ? 
     calculateIncentTrafficWoWMetrics(data) : 
     calculateWoWMetrics(data);
   
+  console.log(`⏱️ Building table data... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const headers = getUnifiedHeaders();
   const tableData = [headers];
   const formatData = [];
   buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache);
 
+  console.log(`⏱️ Writing to sheet... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   const range = sheet.getRange(1, 1, tableData.length, headers.length);
   range.setValues(tableData);
-  const formatTime = Date.now() - formatStartTime;
   
-  const groupingStartTime = Date.now();
+  console.log(`⏱️ Applying formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   applyOptimizedFormatting(sheet, tableData.length, headers.length, formatData, data);
-  const formatFinishTime = Date.now();
   
+  console.log(`⏱️ Creating row grouping... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
   createUnifiedRowGrouping(sheet, tableData, data);
-  const groupingTime = Date.now() - groupingStartTime;
   
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(2);
-  
-  logDebugTiming({ 
-    format: formatFinishTime - groupingStartTime, 
-    grouping: groupingTime 
-  });
-  
-  return tableData.length;
+  console.log(`✅ Pivot table completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function hexToRgb(hex) {
@@ -71,23 +60,19 @@ function hexToRgb(hex) {
 
 function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) {
   const startTime = Date.now();
+  console.log('🎨 Starting optimized formatting...');
   
   try {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
-    const columnWidths = [
-      { c: 1, w: 50 }, { c: 2, w: 120 }, { c: 3, w: 50 }, { c: 4, w: 80 },
-      { c: 5, w: 65 }, { c: 6, w: 70 }, { c: 7, w: 70 }, { c: 8, w: 60 },
-      { c: 9, w: 85 }, { c: 10, w: 60 }, { c: 11, w: 60 }, { c: 12, w: 60 },
-      { c: 13, w: 70 }, { c: 14, w: 50 }, { c: 15, w: 85 }, { c: 16, w: 80 },
-      { c: 17, w: 130 }, { c: 18, w: 200 }
-    ];
-    
+    console.log(`⏱️ Setting column widths... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
     columnWidths.forEach(col => {
       sheet.setColumnWidth(col.c, col.w);
     });
 
+    console.log(`⏱️ Header formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     const headerRange = sheet.getRange(1, 1, 1, numCols);
     headerRange
       .setBackground('#4285f4')
@@ -99,6 +84,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       .setWrap(true);
 
     if (numRows > 1) {
+      console.log(`⏱️ Basic formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+      
       const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
       allDataRange.setVerticalAlignment('middle');
       
@@ -117,55 +104,57 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       const eprofitRange = sheet.getRange(2, 16, numRows - 1, 1);
       eprofitRange.setHorizontalAlignment('right');
     }
+
+    console.log(`⏱️ Row type formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     
-    const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], network: [], hyperlink: [] };
-    
+    const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
     formatData.forEach(item => {
       if (item.type === 'APP') rowTypeMap.app.push(item.row);
-      else if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
-      else if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
-      else if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
-      else if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
-      else if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
+      if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
+      if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
+      if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
+      if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
+      if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
     });
 
+    console.log(`⏱️ Batch row formatting - APP: ${rowTypeMap.app.length}, WEEK: ${rowTypeMap.week.length}, SOURCE_APP: ${rowTypeMap.sourceApp.length}, CAMPAIGN: ${rowTypeMap.campaign.length}... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+    
     if (rowTypeMap.app.length > 0) {
       const appRanges = createOptimizedRanges(sheet, rowTypeMap.app, numCols);
-      appRanges.forEach(range => {
-        range.setBackground('#e8f0fe')
-             .setFontColor('#1a73e8')
-             .setFontWeight('bold')
-             .setFontSize(11);
-      });
+      if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+        appRanges.forEach(range => {
+          range.setBackground('#ffffff')
+               .setFontWeight('normal')
+               .setFontSize(9);
+        });
+      } else {
+        appRanges.forEach(range => {
+          range.setBackground('#d1e7fe')
+               .setFontColor('#000000')
+               .setFontWeight('bold')
+               .setFontSize(10);
+        });
+      }
     }
 
     if (rowTypeMap.week.length > 0) {
       const weekRanges = createOptimizedRanges(sheet, rowTypeMap.week, numCols);
       weekRanges.forEach(range => {
-        range.setBackground('#fce8e6')
-             .setFontColor('#d93025')
-             .setFontWeight('bold')
-             .setFontSize(10);
+        range.setBackground('#e8f0fe').setFontSize(10);
       });
     }
 
     if (rowTypeMap.sourceApp.length > 0) {
       const sourceAppRanges = createOptimizedRanges(sheet, rowTypeMap.sourceApp, numCols);
       sourceAppRanges.forEach(range => {
-        range.setBackground('#e6f4ea')
-             .setFontColor('#137333')
-             .setFontWeight('bold')
-             .setFontSize(10);
+        range.setBackground('#f0f8ff').setFontSize(10);
       });
     }
 
     if (rowTypeMap.campaign.length > 0) {
       const campaignRanges = createOptimizedRanges(sheet, rowTypeMap.campaign, numCols);
       campaignRanges.forEach(range => {
-        range.setBackground('#ffffff')
-             .setFontColor('#5f6368')
-             .setFontWeight('normal')
-             .setFontSize(9);
+        range.setBackground('#ffffff').setFontSize(9);
       });
     }
 
@@ -186,6 +175,8 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
         });
       }
     }
+
+    console.log(`⏱️ Hyperlink formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     
     if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
       try {
@@ -206,23 +197,31 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     }
 
     if (numRows > 1) {
+      console.log(`⏱️ Number formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+      
       const numberFormatOperations = [
-        { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },
-        { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },
-        { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' },
-        { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }
-      ];
+  // Удалена строка: { range: sheet.getRange(2, 5, numRows - 1, 1), format: '$0.0' },
+  { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },  // CPI
+  { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },  // IPM
+  { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' }, // eARPU
+  { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }  // eProfit
+];
       
       numberFormatOperations.forEach(op => op.range.setNumberFormat(op.format));
     }
 
+    console.log(`⏱️ Conditional formatting... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedConditionalFormatting(sheet, numRows, appData);
+    
+    console.log(`⏱️ eROAS/eProfit rich text (optimized)... (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
     applyOptimizedEROASFormatting(sheet, numRows);
     
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
     sheet.hideColumns(14, 1);
     sheet.hideColumns(3);
+    
+    console.log(`🎨 Optimized formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
   } catch (e) {
     console.error('Error in applyOptimizedFormatting:', e);
@@ -256,6 +255,9 @@ function createOptimizedRanges(sheet, rowNumbers, numCols) {
 function applyOptimizedEROASFormatting(sheet, numRows) {
   if (numRows <= 1) return;
   
+  const startTime = Date.now();
+  console.log('🚀 Starting optimized eROAS/eProfit formatting...');
+  
   try {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
@@ -286,31 +288,37 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
           break;
           
         case 'WEEK':
-          baseFontSize = 9;
+          baseFontSize = 10;
           break;
           
         case 'SOURCE_APP':
-          baseFontSize = 9;
+          baseFontSize = 10;
           break;
           
         case 'CAMPAIGN':
-          baseFontSize = 8;
+          baseFontSize = 9;
           break;
           
         case 'NETWORK':
-          baseFontSize = 9;
+          if (CURRENT_PROJECT === 'OVERALL') {
+            baseFontSize = 9;
+          } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+            baseFontSize = 10;
+          } else {
+            baseFontSize = 10;
+          }
           break;
           
         default:
-          baseFontSize = 9;
+          baseFontSize = 10;
       }
       
-      const smallerFontSize = Math.max(7, baseFontSize - 1);
+      const smallerFontSize = baseFontSize - 1;
       
+      // Format eROAS column
       if (eroasValue && typeof eroasValue === 'string' && eroasValue.includes('→')) {
         const arrowIndex = eroasValue.indexOf('→');
-        
-        if (arrowIndex > 0) {
+        if (arrowIndex !== -1) {
           requests.push({
             updateCells: {
               range: {
@@ -346,10 +354,10 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
         }
       }
       
+      // Format eProfit column
       if (eprofitValue && typeof eprofitValue === 'string' && eprofitValue.includes('→')) {
         const arrowIndex = eprofitValue.indexOf('→');
-        
-        if (arrowIndex > 0) {
+        if (arrowIndex !== -1) {
           requests.push({
             updateCells: {
               range: {
@@ -400,6 +408,8 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
       }
     }
     
+    console.log(`✅ eROAS/eProfit formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
+    
   } catch (e) {
     console.error('Error applying optimized eROAS/eProfit formatting:', e);
   }
@@ -407,98 +417,244 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
 
 function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
   try {
+    const startTime = Date.now();
+    console.log(`Starting batch conditional formatting for ${numRows} rows...`);
+    
     if (numRows <= 1) return;
     
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
     const conditionalFormatRequests = [];
-    let ruleIndex = 0;
     
-    const targetEROAS = getCurrentTargetEROAS();
-    const growthColumn = 17;
-    
-    const ranges = [{
-      sheetId: sheetId,
-      startRowIndex: 1,
-      endRowIndex: numRows,
-      startColumnIndex: 14,
-      endColumnIndex: 15
-    }];
-    
-    conditionalFormatRequests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: ranges,
-          booleanRule: {
-            condition: {
-              type: 'CUSTOM_FORMULA',
-              values: [{
-                userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= ${targetEROAS})`
-              }]
-            },
-            format: {
-              backgroundColor: hexToRgb('#d1f2eb'),
-              textFormat: { foregroundColor: hexToRgb('#0c5460') }
+    // 1. Правила для Spend WoW колонки (исправлен порядок и формулы)
+    const spendColumn = 6;
+    conditionalFormatRequests.push(
+      // ПЕРВОЕ правило: отрицательные значения → красный
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: spendColumn - 1,
+              endColumnIndex: spendColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), LEFT($F2,1)="-")' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
             }
-          }
-        },
-        index: ruleIndex++
+          },
+          index: 0
+        }
+      },
+      // ВТОРОЕ правило: положительные значения → зеленый
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: spendColumn - 1,
+              endColumnIndex: spendColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), $F2<>"", LEFT($F2,1)<>"-")' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
+            }
+          },
+          index: 1
+        }
       }
+    );
+    
+    // 2. Правила для eROAS колонки - оптимизированный подход
+    const eroasColumn = 15;
+    const data = sheet.getDataRange().getValues();
+    
+    const targetGroups = new Map();
+    
+    for (let i = 1; i < data.length; i++) {
+      const level = data[i][0];
+      let appName = '';
+      let targetEROAS = 150;
+      
+      if (level === 'APP') {
+        appName = data[i][1];
+        targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+      } else {
+        for (let j = i - 1; j >= 1; j--) {
+          if (data[j][0] === 'APP') {
+            appName = data[j][1];
+            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+            break;
+          }
+        }
+      }
+      
+      if (!targetGroups.has(targetEROAS)) {
+        targetGroups.set(targetEROAS, []);
+      }
+      targetGroups.get(targetEROAS).push(i + 1);
+    }
+    
+    let ruleIndex = conditionalFormatRequests.length;
+    
+    targetGroups.forEach((rows, targetEROAS) => {
+      const ranges = rows.map(row => ({
+        sheetId: sheetId,
+        startRowIndex: row - 1,
+        endRowIndex: row,
+        startColumnIndex: eroasColumn - 1,
+        endColumnIndex: eroasColumn
+      }));
+      
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= ${targetEROAS})`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+      
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= 120, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < ${targetEROAS})`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#fff3cd'),
+                textFormat: { foregroundColor: hexToRgb('#856404') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
+      
+      conditionalFormatRequests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: ranges,
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{
+                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < 120)`
+                }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
+            }
+          },
+          index: ruleIndex++
+        }
+      });
     });
     
-    conditionalFormatRequests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: ranges,
-          booleanRule: {
-            condition: {
-              type: 'CUSTOM_FORMULA',
-              values: [{
-                userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= 120, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < ${targetEROAS})`
-              }]
-            },
-            format: {
-              backgroundColor: hexToRgb('#fff3cd'),
-              textFormat: { foregroundColor: hexToRgb('#856404') }
+    // 3. Правила для Profit WoW колонки
+    const profitColumn = 17;
+    conditionalFormatRequests.push(
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: profitColumn - 1,
+              endColumnIndex: profitColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2>0)' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#d1f2eb'),
+                textFormat: { foregroundColor: hexToRgb('#0c5460') }
+              }
             }
-          }
-        },
-        index: ruleIndex++
-      }
-    });
-    
-    conditionalFormatRequests.push({
-      addConditionalFormatRule: {
-        rule: {
-          ranges: ranges,
-          booleanRule: {
-            condition: {
-              type: 'CUSTOM_FORMULA',
-              values: [{
-                userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < 120)`
-              }]
-            },
-            format: {
-              backgroundColor: hexToRgb('#f8d7da'),
-              textFormat: { foregroundColor: hexToRgb('#721c24') }
+          },
+          index: ruleIndex++
+        }
+      },
+      {
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [{
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: numRows,
+              startColumnIndex: profitColumn - 1,
+              endColumnIndex: profitColumn
+            }],
+            booleanRule: {
+              condition: {
+                type: 'CUSTOM_FORMULA',
+                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2<0)' }]
+              },
+              format: {
+                backgroundColor: hexToRgb('#f8d7da'),
+                textFormat: { foregroundColor: hexToRgb('#721c24') }
+              }
             }
-          }
-        },
-        index: ruleIndex++
+          },
+          index: ruleIndex++
+        }
       }
-    });
+    );
     
+    // 4. Правила для Growth Status колонки
+    const growthColumn = 18;
     const statusColors = {
-      "🟢 Strong Growth": { background: "#d4edda", fontColor: "#155724" },
-      "🟠 Declining": { background: "#f8d7da", fontColor: "#721c24" },
-      "🔵 Scale - Stable": { background: "#cce5ff", fontColor: "#0056b3" },
-      "🔵 Scale - Growing": { background: "#b3d9ff", fontColor: "#004080" },
-      "🔵 Scale - Declining": { background: "#e6f3ff", fontColor: "#0073e6" },
-      "⚫ Baseline - Stable": { background: "#f0f0f0", fontColor: "#666666" },
-      "⚫ Baseline - Growing": { background: "#e8e8e8", fontColor: "#555555" },
-      "⚫ Baseline - Declining": { background: "#f5f5f5", fontColor: "#777777" },
-      "🟤 Baseline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
+      "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
+      "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
+      "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
+      "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
+      "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
+      "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
+      "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
+      "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
+      "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
+      "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
+      "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
+      "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
       "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
       "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
       "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
@@ -533,11 +689,16 @@ function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
       });
     });
     
+    console.log(`Applying ${conditionalFormatRequests.length} conditional format rules in batch...`);
+    
     const batchUpdateRequest = {
       requests: conditionalFormatRequests
     };
     
     Sheets.Spreadsheets.batchUpdate(batchUpdateRequest, spreadsheetId);
+    
+    const endTime = Date.now();
+    console.log(`Conditional formatting completed in ${(endTime - startTime) / 1000}s (${conditionalFormatRequests.length} rules applied)`);
     
   } catch (e) {
     console.error('Error applying conditional formatting:', e);
@@ -549,7 +710,7 @@ function createProjectPivotTable(projectName, appData) {
   setCurrentProject(projectName);
   
   try {
-    return createUnifiedPivotTable(appData);
+    createUnifiedPivotTable(appData);
   } finally {
     setCurrentProject(originalProject);
   }
