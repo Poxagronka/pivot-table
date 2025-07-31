@@ -6,13 +6,20 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
     const sheetId = sheet.getSheetId();
     const spreadsheetId = sheet.getParent().getId();
     
+    const allCreateRequests = [];
+    const allCollapseRequests = [];
+    
     if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       const sortedNetworks = Object.keys(data).sort((a, b) => 
         data[a].networkName.localeCompare(data[b].networkName)
       );
       
       for (const networkKey of sortedNetworks) {
-        processEntityGroups(spreadsheetId, sheetId, data, networkKey, 'network');
+        const createRequests = buildCreateGroupsForEntity(data, networkKey, 'network', sheetId);
+        const collapseRequests = buildCollapseGroupsForEntity(data, networkKey, 'network', sheetId);
+        
+        allCreateRequests.push(...createRequests);
+        allCollapseRequests.push(...collapseRequests);
       }
     } else {
       const sortedApps = Object.keys(data).sort((a, b) => 
@@ -20,12 +27,37 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
       );
       
       for (const appKey of sortedApps) {
-        processEntityGroups(spreadsheetId, sheetId, data, appKey, 'app');
+        const createRequests = buildCreateGroupsForEntity(data, appKey, 'app', sheetId);
+        const collapseRequests = buildCollapseGroupsForEntity(data, appKey, 'app', sheetId);
+        
+        allCreateRequests.push(...createRequests);
+        allCollapseRequests.push(...collapseRequests);
       }
+    }
+    
+    const BATCH_SIZE = 100;
+    
+    for (let i = 0; i < allCreateRequests.length; i += BATCH_SIZE) {
+      const batch = allCreateRequests.slice(i, i + BATCH_SIZE);
+      console.log(`Processing create batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(allCreateRequests.length/BATCH_SIZE)} (${batch.length} requests)`);
+      
+      Sheets.Spreadsheets.batchUpdate({
+        requests: batch
+      }, spreadsheetId);
+    }
+    
+    for (let i = 0; i < allCollapseRequests.length; i += BATCH_SIZE) {
+      const batch = allCollapseRequests.slice(i, i + BATCH_SIZE);
+      console.log(`Processing collapse batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(allCollapseRequests.length/BATCH_SIZE)} (${batch.length} requests)`);
+      
+      Sheets.Spreadsheets.batchUpdate({
+        requests: batch
+      }, spreadsheetId);
     }
     
     const endTime = new Date().getTime();
     console.log(`Row grouping completed in ${(endTime - startTime)/1000}s`);
+    console.log(`Total requests: ${allCreateRequests.length} create, ${allCollapseRequests.length} collapse`);
     
   } catch (e) {
     console.error('Error in unified row grouping:', e);
@@ -130,7 +162,6 @@ function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
           
           const campaignCount = sourceApp.campaigns.length;
           rowPointer += campaignCount;
-          weekContentRows += 1 + campaignCount;
           
           if (campaignCount > 0) {
             groupRequests.push({
@@ -144,13 +175,13 @@ function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
               }
             });
           }
+          
+          weekContentRows += 1 + campaignCount;
         });
-        
       } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
         const networkCount = Object.keys(week.networks).length;
         rowPointer += networkCount;
         weekContentRows = networkCount;
-        
       } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
@@ -277,7 +308,6 @@ function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
           
           const campaignCount = sourceApp.campaigns.length;
           rowPointer += campaignCount;
-          weekContentRows += 1 + campaignCount;
           
           if (campaignCount > 0) {
             collapseRequests.push({
@@ -296,13 +326,13 @@ function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
               }
             });
           }
+          
+          weekContentRows += 1 + campaignCount;
         });
-        
       } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
         const networkCount = Object.keys(week.networks).length;
         rowPointer += networkCount;
         weekContentRows = networkCount;
-        
       } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
         const campaignCount = week.campaigns ? week.campaigns.length : 0;
         rowPointer += campaignCount;
