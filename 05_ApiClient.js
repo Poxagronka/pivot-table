@@ -1,257 +1,148 @@
-var BUNDLE_ID_CACHE = new Map();
-var BUNDLE_ID_CACHE_LOADED = false;
-var BUNDLE_ID_CACHE_TIME = null;
-var BUNDLE_ID_CACHE_DURATION = 21600000;
-var APPS_DB_CACHE = null;
-var APPS_DB_CACHE_TIME = null;
-var BUNDLE_ID_CACHE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM/edit?gid=754371211#gid=754371211';
-var BUNDLE_ID_CACHE_SHEET_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
+let BUNDLE_ID_CACHE = new Map();
+let BUNDLE_ID_CACHE_LOADED = false;
+let BUNDLE_ID_CACHE_TIME = null;
+const BUNDLE_ID_CACHE_DURATION = 3600000;
+
+let APPS_DB_CACHE = null;
+let APPS_DB_CACHE_TIME = null;
 
 function fetchCampaignData(dateRange) {
-  const startTime = Date.now();
   const config = getCurrentConfig();
-  const apiConfig = getCurrentApiConfig();
+  const query = getGraphQLQuery();
   
-  const filters = [
-    { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
-  ];
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
-    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
-  }
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    
-    if (searchPattern.startsWith('!')) {
-      const excludePattern = searchPattern.substring(1);
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: false,
-        searchByString: excludePattern
-      });
-    } else {
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: true, 
-        searchByString: searchPattern
-      });
-    }
-  }
-  
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
-  
-  const payload = {
-    operationName: apiConfig.OPERATION_NAME,
-    variables: {
-      dateFilters: [{
-        dimension: dateDimension,
-        from: dateRange.from,
-        to: dateRange.to,
-        include: true
-      }],
-      filters: filters,
-      groupBy: apiConfig.GROUP_BY,
-      measures: apiConfig.MEASURES,
-      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
-      anonymizationMode: "OFF",
-      topFilter: null,
-      revenuePredictionVersion: "",
-      isMultiMediation: true
-    },
-    query: getGraphQLQuery()
+  const variables = {
+    dateFilters: [{
+      key: config.API_CONFIG.DATE_DIMENSION,
+      operator: "BETWEEN",
+      values: [dateRange.from, dateRange.to]
+    }],
+    filters: [
+      {
+        key: "USER",
+        operator: "IN",
+        values: config.API_CONFIG.FILTERS.USER
+      },
+      {
+        key: "ATTRIBUTION_NETWORK_HID",
+        operator: "IN",
+        values: config.API_CONFIG.FILTERS.ATTRIBUTION_NETWORK_HID
+      }
+    ],
+    groupBy: config.API_CONFIG.GROUP_BY,
+    measures: config.API_CONFIG.MEASURES,
+    havingFilters: []
   };
 
-  console.log(`${CURRENT_PROJECT}: API request payload size: ${JSON.stringify(payload).length} chars`);
+  if (config.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
+    variables.filters.push({
+      key: "ATTRIBUTION_CAMPAIGN_NAME",
+      operator: config.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH.startsWith('!') ? 'DOES_NOT_MATCH_REGEX' : 'MATCHES_REGEX',
+      values: [config.API_CONFIG.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH.replace(/^!/, '')]
+    });
+  }
 
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: `Bearer ${config.BEARER_TOKEN}`,
-      Connection: 'keep-alive',
-      DNT: '1',
-      Origin: 'https://app.appodeal.com',
-      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-      'x-requested-with': 'XMLHttpRequest',
-      'Trace-Id': Utilities.getUuid()
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  return executeApiRequestWithRetry(config.API_URL, options, CURRENT_PROJECT, startTime);
-}
-
-function fetchProjectCampaignData(projectName, dateRange) {
+  const projectName = CURRENT_PROJECT;
   const startTime = Date.now();
-  const config = getProjectConfig(projectName);
-  const apiConfig = getProjectApiConfig(projectName);
-  
-  if (!config.BEARER_TOKEN) {
-    throw new Error(`${projectName} project is not configured: missing BEARER_TOKEN`);
-  }
-  
-  if (!apiConfig.FILTERS.USER || apiConfig.FILTERS.USER.length === 0) {
-    throw new Error(`${projectName} project is not configured: missing USER filters`);
-  }
-  
-  const filters = [
-    { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
-  ];
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
-    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
-  }
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    
-    if (searchPattern.startsWith('!')) {
-      const excludePattern = searchPattern.substring(1);
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: false,
-        searchByString: excludePattern
-      });
-    } else {
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: true, 
-        searchByString: searchPattern
-      });
-    }
-  }
-  
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
-    operationName: apiConfig.OPERATION_NAME,
-    variables: {
-      dateFilters: [{
-        dimension: dateDimension,
-        from: dateRange.from,
-        to: dateRange.to,
-        include: true
-      }],
-      filters: filters,
-      groupBy: apiConfig.GROUP_BY,
-      measures: apiConfig.MEASURES,
-      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
-      anonymizationMode: "OFF",
-      topFilter: null,
-      revenuePredictionVersion: "",
-      isMultiMediation: true
-    },
-    query: getGraphQLQuery()
+    query: query,
+    variables: variables
   };
 
-  console.log(`${projectName}: API request payload size: ${JSON.stringify(payload).length} chars`);
-
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: `Bearer ${config.BEARER_TOKEN}`,
-      Connection: 'keep-alive',
-      DNT: '1',
-      Origin: 'https://app.appodeal.com',
-      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-      'x-requested-with': 'XMLHttpRequest',
-      'Trace-Id': Utilities.getUuid()
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  return executeApiRequestWithRetry(config.API_URL, options, projectName, startTime);
-}
-
-function executeApiRequestWithRetry(url, options, projectName, startTime, maxRetries = 3) {
+  const maxRetries = 3;
   let lastError = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`${projectName}: API request attempt ${attempt}/${maxRetries}`);
+      const response = UrlFetchApp.fetch('https://api.appodeal.com/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.BEARER_TOKEN}`
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
       
-      const resp = UrlFetchApp.fetch(url, options);
-      const responseCode = resp.getResponseCode();
-      const responseText = resp.getContentText();
-      
-      console.log(`${projectName}: HTTP ${responseCode}, response size: ${responseText.length} chars`);
-      
+      const apiTime = Date.now() - startTime;
+      const responseCode = response.getResponseCode();
+      const responseText = response.getContentText();
+
       if (responseCode === 200) {
         try {
-          const parsedResponse = JSON.parse(responseText);
+          const data = JSON.parse(responseText);
           
-          if (parsedResponse.errors && parsedResponse.errors.length > 0) {
-            console.error(`${projectName}: GraphQL errors:`, parsedResponse.errors);
-            throw new Error(`GraphQL errors: ${JSON.stringify(parsedResponse.errors)}`);
+          if (data.errors && data.errors.length > 0) {
+            console.error(`${projectName}: GraphQL errors:`, data.errors);
+            throw new Error(`GraphQL errors: ${data.errors.map(e => e.message).join(', ')}`);
           }
           
-          const endTime = Date.now();
-          console.log(`${projectName}: API request completed successfully in ${(endTime - startTime) / 1000}s`);
-          return parsedResponse;
+          if (!data.data || !data.data.analytics || !data.data.analytics.richStats) {
+            throw new Error('Invalid API response structure');
+          }
           
+          const recordCount = data.data.analytics.richStats.stats ? data.data.analytics.richStats.stats.length : 0;
+          logDebugTiming({ api: apiTime });
+          
+          return data;
         } catch (parseError) {
-          console.error(`${projectName}: JSON parse error:`, parseError);
-          console.log(`${projectName}: Response preview:`, responseText.substring(0, 500));
-          throw new Error(`JSON parse error: ${parseError.toString()}`);
+          console.error(`${projectName}: Error parsing JSON response:`, parseError);
+          throw new Error(`JSON parsing failed: ${parseError.message}`);
         }
       }
       
-      // Handle non-200 responses
-      if (responseCode >= 400 && responseCode < 500) {
-        // Client errors - don't retry
-        console.error(`${projectName}: Client error ${responseCode}`);
-        console.log(`${projectName}: Error response:`, responseText.substring(0, 1000));
-        
-        if (responseCode === 401) {
-          throw new Error('Unauthorized: Bearer token may be expired or invalid');
-        } else if (responseCode === 403) {
-          throw new Error('Forbidden: Insufficient permissions');
-        } else if (responseCode === 429) {
-          throw new Error('Rate limited: Too many requests');
+      if (responseCode === 400) {
+        console.error(`${projectName}: Bad request (400):`, responseText.substring(0, 1000));
+        throw new Error(`Bad request: ${responseText.substring(0, 200)}`);
+      }
+      
+      if (responseCode === 401) {
+        console.error(`${projectName}: Unauthorized (401) - check Bearer token`);
+        throw new Error('Unauthorized - check Bearer token');
+      }
+      
+      if (responseCode === 403) {
+        console.error(`${projectName}: Forbidden (403) - insufficient permissions`);
+        throw new Error('Forbidden - insufficient permissions');
+      }
+      
+      if (responseCode === 429) {
+        console.error(`${projectName}: Rate limited (429)`);
+        if (attempt < maxRetries) {
+          const delay = 60000;
+          Utilities.sleep(delay);
+          continue;
+        } else {
+          throw new Error('Too many requests');
+        }
+      } else if (responseCode >= 400 && responseCode < 500) {
+        if (responseText.includes('Rate limit exceeded')) {
+          console.error(`${projectName}: Rate limit detected in response body`);
+          if (attempt < maxRetries) {
+            const delay = 60000;
+            Utilities.sleep(delay);
+            continue;
+          } else {
+            throw new Error('Too many requests');
+          }
         } else {
           throw new Error(`Client error ${responseCode}: ${responseText.substring(0, 200)}`);
         }
       }
       
       if (responseCode >= 500) {
-        // Server errors - retry
         const errorMsg = `Server error ${responseCode}`;
         console.error(`${projectName}: ${errorMsg}, attempt ${attempt}/${maxRetries}`);
-        
-        if (responseText.includes('<!DOCTYPE html>')) {
-          console.log(`${projectName}: Server returned HTML error page`);
-          console.log(`${projectName}: HTML preview:`, responseText.substring(0, 500));
-        } else {
-          console.log(`${projectName}: Server response:`, responseText.substring(0, 500));
-        }
         
         lastError = new Error(`${errorMsg}: Server returned HTML error page`);
         
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-          console.log(`${projectName}: Retrying in ${delay}ms...`);
           Utilities.sleep(delay);
           continue;
         }
       }
       
-      // Other response codes
       lastError = new Error(`Unexpected response code ${responseCode}: ${responseText.substring(0, 200)}`);
       
     } catch (e) {
@@ -260,7 +151,6 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
       
       if (attempt < maxRetries) {
         const delay = Math.min(2000 * attempt, 10000);
-        console.log(`${projectName}: Retrying in ${delay}ms...`);
         Utilities.sleep(delay);
       }
     }
@@ -271,80 +161,39 @@ function executeApiRequestWithRetry(url, options, projectName, startTime, maxRet
 }
 
 function getGraphQLQuery() {
-  return `query RichStats($dateFilters: [DateFilterInput!]!, $filters: [FilterInput!]!, $groupBy: [GroupByInput!]!, $measures: [RichMeasureInput!]!, $havingFilters: [HavingFilterInput!], $anonymizationMode: DataAnonymizationMode, $revenuePredictionVersion: String!, $topFilter: TopFilterInput, $funnelFilter: FunnelAttributes, $isMultiMediation: Boolean) {
-    analytics(anonymizationMode: $anonymizationMode) {
+  return `query RichStats($dateFilters: [DateFilterInput!]!, $filters: [FilterInput!]!, $groupBy: [GroupByInput!]!, $measures: [RichMeasureInput!]!, $havingFilters: [HavingFilterInput!]!) {
+    analytics {
       richStats(
-        funnelFilter: $funnelFilter
         dateFilters: $dateFilters
         filters: $filters
         groupBy: $groupBy
         measures: $measures
         havingFilters: $havingFilters
-        revenuePredictionVersion: $revenuePredictionVersion
-        topFilter: $topFilter
-        isMultiMediation: $isMultiMediation
       ) {
-        stats {
-          id
-          ... on RetentionStatsValue { value cohortSize __typename }
-          ... on ForecastStatsItem { value uncertainForecast __typename }
-          ... on AppInfo { name platform bundleId __typename }
-          ... on LineItemInfo { value appId __typename }
-          ... on StatsValue { value __typename }
-          ... on SegmentInfo { name description __typename }
-          ... on WaterfallConfigurationStats { value appId __typename }
-          ... on CountryInfo { code value __typename }
-          ... on UaAdSet {
-            hid accountId adSetId appId budget budgetPeriod name cpc createdAt lastBidChangedAt
-            network recommendedTargetCpa targetCpa targetDayN updatedAt isBeingUpdated isAutomated
-            status url type permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename }
-            __typename
-          }
-          ... on UaCampaign {
-            hid accountId campaignId appId budget budgetPeriod campaignName cpc createdAt
-            lastBidChangedAt network recommendedTargetCpa targetCpa targetDayN updatedAt
-            isBeingUpdated isAutomated autoBidsIgnored status url type permissions {
-              canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename
-            }
-            __typename
-          }
-          ... on UaCampaignCountry { code bid isBeingUpdated recommendedBid budget country countryId status permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename } __typename }
-          ... on UaCampaignCountrySourceApp { bid iconUrl isBeingUpdated name recommendedBid sourceApp status storeUrl permissions { canUpdateBid canUpdateAutoBid canUpdateBudget canUpdateStatus __typename } __typename }
-          ... on SourceAppInfo { name iconUrl storeUrl __typename }
-          __typename
-        }
-        totals {
-          day measure value {
-            id
-            ... on StatsValue { value __typename }
-            ... on WaterfallConfigurationStats { value __typename }
-            ... on RetentionStatsValue { value cohortSize __typename }
-            ... on ForecastStatsItem { value uncertainForecast __typename }
-            __typename
-          }
-          __typename
-        }
-        anonDict {
-          id
-          from { id ... on StatsValue { value __typename } __typename }
-          to {
-            id
-            ... on RetentionStatsValue { value cohortSize __typename }
-            ... on ForecastStatsItem { value uncertainForecast __typename }
-            ... on AppInfo { name __typename }
-            ... on StatsValue { value __typename }
-            ... on SegmentInfo { name description __typename }
-            ... on UaAdSet { name __typename }
-            ... on UaCampaign { campaignName __typename }
-            __typename
-          }
-          __typename
-        }
-        __typename
+        stats
       }
-      __typename
     }
   }`;
+}
+
+function extractBundleIdFromCampaign(campaignName) {
+  if (!campaignName) return null;
+  
+  const patterns = [
+    /id(\d+)/i,
+    /bundle[_\-]?id[_\-]?(\d+)/i,
+    /app[_\-]?id[_\-]?(\d+)/i,
+    /(\d{9,})/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = campaignName.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  return null;
 }
 
 function ensureBundleIdCacheLoaded() {
@@ -354,86 +203,96 @@ function ensureBundleIdCacheLoaded() {
     return;
   }
   
-  console.log('Loading Bundle ID Cache from table...');
-  
   try {
-    const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
-    const sheet = spreadsheet.getSheetByName('Bundle ID Cache');
+    const config = getProjectConfig('TRICKY');
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    const cacheSheet = spreadsheet.getSheetByName('BundleIdCache');
     
-    if (!sheet) {
-      console.log('Bundle ID Cache sheet not found, creating...');
-      createBundleIdCacheSheet();
+    if (!cacheSheet) {
+      BUNDLE_ID_CACHE.clear();
       BUNDLE_ID_CACHE_LOADED = true;
       BUNDLE_ID_CACHE_TIME = now;
       return;
     }
     
-    const data = sheet.getDataRange().getValues();
+    const range = `BundleIdCache!A:C`;
+    const response = Sheets.Spreadsheets.Values.get(config.SHEET_ID, range);
+    const data = response.values || [];
+    
     BUNDLE_ID_CACHE.clear();
     
     for (let i = 1; i < data.length; i++) {
-      const [campaignName, campaignId, bundleId, lastUpdated] = data[i];
-      if (campaignName && bundleId) {
-        BUNDLE_ID_CACHE.set(campaignName, { campaignId, bundleId, lastUpdated });
+      if (data[i] && data[i][0] && data[i][1]) {
+        BUNDLE_ID_CACHE.set(data[i][0], {
+          bundleId: data[i][1],
+          lastUsed: data[i][2] || new Date().toISOString()
+        });
       }
     }
     
     BUNDLE_ID_CACHE_LOADED = true;
     BUNDLE_ID_CACHE_TIME = now;
-    console.log(`Bundle ID Cache loaded: ${BUNDLE_ID_CACHE.size} entries`);
+    
   } catch (e) {
     console.error('Error loading Bundle ID Cache:', e);
+    BUNDLE_ID_CACHE.clear();
     BUNDLE_ID_CACHE_LOADED = true;
     BUNDLE_ID_CACHE_TIME = now;
   }
 }
 
-function createBundleIdCacheSheet() {
-  try {
-    const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
-    const sheet = spreadsheet.insertSheet('Bundle ID Cache');
-    
-    sheet.getRange(1, 1, 1, 4).setValues([['Campaign Name', 'Campaign ID', 'Bundle ID', 'Last Updated']]);
-    sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f0f0f0');
-    
-    sheet.setColumnWidth(1, 300);
-    sheet.setColumnWidth(2, 150);
-    sheet.setColumnWidth(3, 200);
-    sheet.setColumnWidth(4, 150);
-    
-    console.log('Bundle ID Cache sheet created');
-  } catch (e) {
-    console.error('Error creating Bundle ID Cache sheet:', e);
-  }
-}
-
-function saveBundleIdCache(newCache) {
-  if (newCache.size === 0) return;
+function saveBundleIdCache(newEntries) {
+  if (newEntries.size === 0) return;
   
   try {
-    const spreadsheet = SpreadsheetApp.openById(BUNDLE_ID_CACHE_SHEET_ID);
-    const sheet = spreadsheet.getSheetByName('Bundle ID Cache');
+    const config = getProjectConfig('TRICKY');
+    const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+    let cacheSheet = spreadsheet.getSheetByName('BundleIdCache');
     
-    if (!sheet) {
-      console.error('Bundle ID Cache sheet not found');
-      return;
+    if (!cacheSheet) {
+      cacheSheet = spreadsheet.insertSheet('BundleIdCache');
+      cacheSheet.hideSheet();
+      cacheSheet.getRange('A1:C1').setValues([['Campaign Name', 'Bundle ID', 'Last Used']]);
     }
     
-    const now = new Date();
-    const newEntries = [];
+    const existingData = cacheSheet.getDataRange().getValues();
+    const existingMap = new Map();
     
-    newCache.forEach((value, campaignName) => {
-      if (!BUNDLE_ID_CACHE.has(campaignName)) {
-        newEntries.push([campaignName, value.campaignId || '', value.bundleId, now]);
-        BUNDLE_ID_CACHE.set(campaignName, value);
+    for (let i = 1; i < existingData.length; i++) {
+      if (existingData[i][0]) {
+        existingMap.set(existingData[i][0], i + 1);
+      }
+    }
+    
+    const updates = [];
+    const appends = [];
+    
+    newEntries.forEach((data, campaignName) => {
+      const row = [campaignName, data.bundleId, new Date().toISOString()];
+      
+      if (existingMap.has(campaignName)) {
+        const rowIndex = existingMap.get(campaignName);
+        updates.push({ range: `A${rowIndex}:C${rowIndex}`, values: [row] });
+      } else {
+        appends.push(row);
       }
     });
     
-    if (newEntries.length > 0) {
-      const lastRow = sheet.getLastRow();
-      sheet.getRange(lastRow + 1, 1, newEntries.length, 4).setValues(newEntries);
-      console.log(`Bundle ID Cache: saved ${newEntries.length} new entries`);
+    if (updates.length > 0) {
+      updates.forEach(update => {
+        cacheSheet.getRange(update.range).setValues(update.values);
+      });
     }
+    
+    if (appends.length > 0) {
+      const startRow = cacheSheet.getLastRow() + 1;
+      cacheSheet.getRange(startRow, 1, appends.length, 3).setValues(appends);
+    }
+    
+    newEntries.forEach((data, campaignName) => {
+      BUNDLE_ID_CACHE.set(campaignName, data);
+    });
+    
   } catch (e) {
     console.error('Error saving Bundle ID Cache:', e);
   }
@@ -446,7 +305,6 @@ function getOptimizedAppsDbForTricky() {
     return APPS_DB_CACHE;
   }
   
-  console.log('Loading Apps Database for TRICKY...');
   try {
     const appsDb = new AppsDatabase('TRICKY');
     appsDb.ensureCacheUpToDate();
@@ -455,7 +313,6 @@ function getOptimizedAppsDbForTricky() {
     APPS_DB_CACHE = cache;
     APPS_DB_CACHE_TIME = now;
     
-    console.log(`Apps Database loaded: ${Object.keys(cache).length} apps`);
     return cache;
   } catch (e) {
     console.error('Error loading Apps Database:', e);
@@ -495,7 +352,7 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
 }
 
 function processApiData(rawData, includeLastWeek = null) {
-  const startTime = Date.now();
+  const processingStartTime = Date.now();
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
 
@@ -506,12 +363,13 @@ function processApiData(rawData, includeLastWeek = null) {
   const dayOfWeek = today.getDay();
   const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (dayOfWeek >= 2 || dayOfWeek === 0);
 
-  console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
-
   let processedCount = 0;
 
   if (CURRENT_PROJECT === 'TRICKY') {
-    return processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+    const result = processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+    const processingTime = Date.now() - processingStartTime;
+    logDebugTiming({ processing: processingTime });
+    return result;
   }
 
   const BATCH_SIZE = 500;
@@ -564,103 +422,111 @@ function processApiData(rawData, includeLastWeek = null) {
           eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
         };
 
-        const sunday = getSundayOfWeek(new Date(date));
-        const appKey = app.id;
-        
-        if (CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-          if (!appData[appKey]) {
-            appData[appKey] = {
-              appId: app.id,
-              appName: app.name,
-              platform: app.platform,
-              bundleId: app.bundleId,
-              weeks: new Map()
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+          const networkKey = `${network.networkName}_${network.networkId}`;
+          if (!appData[networkKey]) {
+            appData[networkKey] = {
+              networkId: network.networkId,
+              networkName: network.networkName,
+              weeks: {}
             };
           }
 
-          if (!appData[appKey].weeks.has(weekKey)) {
-            appData[appKey].weeks.set(weekKey, {
+          if (!appData[networkKey].weeks[weekKey]) {
+            appData[networkKey].weeks[weekKey] = {
               weekStart: formatDateForAPI(monday),
               weekEnd: formatDateForAPI(sunday),
-              networks: new Map()
-            });
-          }
-          
-          const networkId = network?.id || 'unknown';
-          const networkName = network?.value || 'Unknown Network';
-          
-          if (!appData[appKey].weeks.get(weekKey).networks.has(networkId)) {
-            appData[appKey].weeks.get(weekKey).networks.set(networkId, {
-              networkId: networkId,
-              networkName: networkName,
-              campaigns: []
-            });
-          }
-          
-          const networkCampaignData = {
-            date: date,
-            campaignId: `network_${networkId}_${app.id}_${weekKey}`,
-            campaignName: networkName,
-            ...metrics,
-            status: 'Active',
-            type: 'Network',
-            geo: 'ALL',
-            sourceApp: networkName,
-            isAutomated: false
-          };
-          
-          appData[appKey].weeks.get(weekKey).networks.get(networkId).campaigns.push(networkCampaignData);
-          processedCount++;
-        } else {
-          let campaignName = 'Unknown';
-          let campaignId = 'Unknown';
-          
-          if (campaign) {
-            if (campaign.campaignName) {
-              campaignName = campaign.campaignName;
-              campaignId = campaign.campaignId || campaign.id || 'Unknown';
-            } else if (campaign.value) {
-              campaignName = campaign.value;
-              campaignId = campaign.id || 'Unknown';
-            }
+              apps: {}
+            };
           }
 
-          const geo = extractGeoFromCampaign(campaignName);
-          const sourceApp = extractSourceApp(campaignName);
+          if (!appData[networkKey].weeks[weekKey].apps[app.appId]) {
+            appData[networkKey].weeks[weekKey].apps[app.appId] = {
+              appId: app.appId,
+              appName: app.appName,
+              platform: app.platform,
+              bundleId: app.bundleId,
+              campaigns: []
+            };
+          }
+
+          if (campaign) {
+            const campaignData = {
+              campaignId: campaign.campaignId,
+              campaignName: campaign.campaignName,
+              ...metrics
+            };
+            appData[networkKey].weeks[weekKey].apps[app.appId].campaigns.push(campaignData);
+          }
+
+        } else if (CURRENT_PROJECT === 'OVERALL') {
+          const appKey = `${app.appName}_${app.appId}`;
+          if (!appData[appKey]) {
+            appData[appKey] = {
+              appId: app.appId,
+              appName: app.appName,
+              platform: app.platform,
+              bundleId: app.bundleId,
+              weeks: {}
+            };
+          }
+
+          if (!appData[appKey].weeks[weekKey]) {
+            appData[appKey].weeks[weekKey] = {
+              weekStart: formatDateForAPI(monday),
+              weekEnd: formatDateForAPI(sunday),
+              networks: {}
+            };
+          }
+
+          const networkKey = `${network.networkName}_${network.networkId}`;
+          if (!appData[appKey].weeks[weekKey].networks[networkKey]) {
+            appData[appKey].weeks[weekKey].networks[networkKey] = {
+              networkId: network.networkId,
+              networkName: network.networkName,
+              campaigns: []
+            };
+          }
 
           const campaignData = {
-            date: date,
-            campaignId: campaignId,
-            campaignName: campaignName,
-            ...metrics,
-            status: campaign?.status || 'Unknown',
-            type: campaign?.type || 'Unknown',
-            geo,
-            sourceApp: sourceApp,
-            isAutomated: campaign?.isAutomated || false
+            campaignId: 'aggregated',
+            campaignName: 'Aggregated',
+            ...metrics
           };
+          appData[appKey].weeks[weekKey].networks[networkKey].campaigns.push(campaignData);
 
+        } else {
+          const appKey = `${app.appName}_${app.appId}`;
           if (!appData[appKey]) {
             appData[appKey] = {
-              appId: app.id,
-              appName: app.name,
+              appId: app.appId,
+              appName: app.appName,
               platform: app.platform,
               bundleId: app.bundleId,
-              weeks: new Map()
+              weeks: {}
             };
           }
 
-          if (!appData[appKey].weeks.has(weekKey)) {
-            appData[appKey].weeks.set(weekKey, {
+          if (!appData[appKey].weeks[weekKey]) {
+            appData[appKey].weeks[weekKey] = {
               weekStart: formatDateForAPI(monday),
               weekEnd: formatDateForAPI(sunday),
               campaigns: []
-            });
+            };
           }
-          
-          appData[appKey].weeks.get(weekKey).campaigns.push(campaignData);
-          processedCount++;
+
+          const campaignData = {
+            campaignId: campaign.campaignId,
+            campaignName: campaign.campaignName,
+            ...metrics
+          };
+          appData[appKey].weeks[weekKey].campaigns.push(campaignData);
         }
+
+        processedCount++;
 
       } catch (error) {
         console.error(`Error processing row ${batchStart + index}:`, error);
@@ -668,75 +534,32 @@ function processApiData(rawData, includeLastWeek = null) {
     });
   }
 
-  Object.values(appData).forEach(app => {
-    const weekMap = app.weeks;
-    app.weeks = {};
-    weekMap.forEach((value, key) => {
-      if (value.networks) {
-        const networkMap = value.networks;
-        value.networks = {};
-        networkMap.forEach((netValue, netKey) => {
-          value.networks[netKey] = netValue;
-        });
-      }
-      app.weeks[key] = value;
-    });
-  });
-
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    const networkData = {};
-    
-    Object.values(appData).forEach(app => {
-      Object.values(app.weeks).forEach(week => {
-        if (week.networks) {
-          Object.values(week.networks).forEach(network => {
-            const networkKey = network.networkId;
-            
-            if (!networkData[networkKey]) {
-              networkData[networkKey] = {
-                networkId: network.networkId,
-                networkName: network.networkName,
-                weeks: {}
-              };
-            }
-            
-            if (!networkData[networkKey].weeks[week.weekStart]) {
-              networkData[networkKey].weeks[week.weekStart] = {
-                weekStart: week.weekStart,
-                weekEnd: week.weekEnd,
-                apps: {}
-              };
-            }
-            
-            networkData[networkKey].weeks[week.weekStart].apps[app.appId] = {
-              appId: app.appId,
-              appName: app.appName,
-              platform: app.platform,
-              bundleId: app.bundleId,
-              campaigns: network.campaigns
-            };
-          });
-        }
+    Object.values(appData).forEach(network => {
+      Object.values(network.weeks).forEach(week => {
+        Object.values(week.apps).forEach(app => {
+          if (app.campaigns) {
+            app.campaigns.sort((a, b) => b.spend - a.spend);
+          }
+        });
       });
     });
     
-    const endTime = Date.now();
-    console.log(`${CURRENT_PROJECT}: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
-    return networkData;
+    const processingTime = Date.now() - processingStartTime;
+    logDebugTiming({ processing: processingTime });
+    return appData;
   }
 
-  const endTime = Date.now();
-  console.log(`${CURRENT_PROJECT}: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
+  const processingTime = Date.now() - processingStartTime;
+  logDebugTiming({ processing: processingTime });
   return appData;
 }
 
 function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
-  const startTime = Date.now();
+  const processingStartTime = Date.now();
   
-  console.log('TRICKY optimization: Pre-loading all caches...');
   ensureBundleIdCacheLoaded();
   const appsDbCache = getOptimizedAppsDbForTricky();
-  console.log(`TRICKY optimization: Caches loaded - Bundle IDs: ${BUNDLE_ID_CACHE.size}, Apps DB: ${Object.keys(appsDbCache).length}`);
   
   const appData = {};
   const newBundleIds = new Map();
@@ -783,22 +606,16 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
         };
 
-        let campaignName = 'Unknown';
-        let campaignId = 'Unknown';
+        let bundleId = getCachedBundleId(campaign.campaignName);
         
-        if (campaign) {
-          if (campaign.campaignName) {
-            campaignName = campaign.campaignName;
-            campaignId = campaign.campaignId || campaign.id || 'Unknown';
-          } else if (campaign.value) {
-            campaignName = campaign.value;
-            campaignId = campaign.id || 'Unknown';
+        if (!bundleId) {
+          bundleId = extractBundleIdFromCampaign(campaign.campaignName);
+          if (bundleId) {
+            newBundleIds.set(campaign.campaignName, {
+              bundleId: bundleId,
+              lastUsed: new Date().toISOString()
+            });
           }
-        }
-
-        const bundleId = getCachedBundleId(campaignName, campaignId);
-        if (bundleId && !BUNDLE_ID_CACHE.has(campaignName)) {
-          newBundleIds.set(campaignName, { campaignId, bundleId });
         }
 
         let sourceAppDisplayName;
@@ -806,30 +623,25 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
           sourceAppDisplayName = bundleIdToDisplayName.get(bundleId);
         } else {
           sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
-          bundleIdToDisplayName.set(bundleId, sourceAppDisplayName);
+          if (bundleId) {
+            bundleIdToDisplayName.set(bundleId, sourceAppDisplayName);
+          }
         }
 
-        const geo = extractGeoFromCampaign(campaignName);
-        const sourceApp = extractSourceApp(campaignName);
-        const sunday = getSundayOfWeek(new Date(date));
-        const appKey = app.id;
-
         const campaignData = {
-          date: date,
-          campaignId: campaignId,
-          campaignName: campaignName,
-          ...metrics,
-          status: campaign?.status || 'Unknown',
-          type: campaign?.type || 'Unknown',
-          geo,
-          sourceApp: sourceApp,
-          isAutomated: campaign?.isAutomated || false
+          campaignId: campaign.campaignId,
+          campaignName: campaign.campaignName,
+          ...metrics
         };
 
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+
+        const appKey = `${app.appName}_${app.appId}`;
         if (!appData[appKey]) {
           appData[appKey] = {
-            appId: app.id,
-            appName: app.name,
+            appId: app.appId,
+            appName: app.appName,
             platform: app.platform,
             bundleId: app.bundleId,
             weeks: {}
@@ -871,7 +683,6 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
   });
 
   if (newBundleIds.size > 0) {
-    console.log(`Saving ${newBundleIds.size} new Bundle IDs to cache...`);
     try {
       saveBundleIdCache(newBundleIds);
     } catch (e) {
@@ -879,9 +690,8 @@ function processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shou
     }
   }
 
-  const endTime = Date.now();
-  console.log(`TRICKY: Optimized processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
-  console.log(`TRICKY optimization: Cached ${bundleIdToDisplayName.size} display name lookups`);
+  const processingTime = Date.now() - processingStartTime;
+  logDebugTiming({ processing: processingTime });
   return appData;
 }
 
@@ -900,30 +710,50 @@ function processProjectApiData(projectName, rawData, includeLastWeek = null) {
 function extractGeoFromCampaign(campaignName) {
   if (!campaignName) return 'OTHER';
   
- if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
-  const geoMap = {
-    '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
-    '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR',
-    '| FRA |': 'FRA', '| ITA |': 'ITA', '| ESP |': 'ESP', '| RUS |': 'RUS', '| CHN |': 'CHN',
-    '| IND |': 'IND', '| TUR |': 'TUR', '| POL |': 'POL', '| NLD |': 'NLD', '| SWE |': 'SWE',
-    '| NOR |': 'NOR', '| DNK |': 'DNK', '| FIN |': 'FIN', '| CHE |': 'CHE', '| AUT |': 'AUT',
-    '| BEL |': 'BEL', '| PRT |': 'PRT', '| GRC |': 'GRC', '| CZE |': 'CZE', '| HUN |': 'HUN',
-    '| ROU |': 'ROU', '| BGR |': 'BGR', '| HRV |': 'HRV', '| SVK |': 'SVK', '| SVN |': 'SVN',
-    '| LTU |': 'LTU', '| LVA |': 'LVA', '| EST |': 'EST', '| UKR |': 'UKR', '| BLR |': 'BLR',
-    '| ISR |': 'ISR', '| SAU |': 'SAU', '| ARE |': 'ARE', '| QAT |': 'QAT', '| KWT |': 'KWT',
-    '| EGY |': 'EGY', '| ZAF |': 'ZAF', '| NGA |': 'NGA', '| KEN |': 'KEN', '| MAR |': 'MAR',
-    '| THA |': 'THA', '| VNM |': 'VNM', '| IDN |': 'IDN', '| MYS |': 'MYS', '| SGP |': 'SGP',
-    '| PHL |': 'PHL', '| TWN |': 'TWN', '| HKG |': 'HKG', '| ARG |': 'ARG', '| CHL |': 'CHL',
-    '| COL |': 'COL', '| PER |': 'PER', '| VEN |': 'VEN', '| URY |': 'URY', '| ECU |': 'ECU',
-    '| BOL |': 'BOL', '| PRY |': 'PRY', '| CRI |': 'CRI', '| GTM |': 'GTM', '| DOM |': 'DOM',
-    '| PAN |': 'PAN', '| NZL |': 'NZL'
-  };
-
-    for (const [pattern, geo] of Object.entries(geoMap)) {
+  if (CURRENT_PROJECT === 'TRICKY' || CURRENT_PROJECT === 'REGULAR') {
+    const geoMap = {
+      '| USA |': 'USA', '| MEX |': 'MEX', '| AUS |': 'AUS', '| DEU |': 'DEU',
+      '| JPN |': 'JPN', '| KOR |': 'KOR', '| BRA |': 'BRA', '| CAN |': 'CAN', '| GBR |': 'GBR',
+      '| FRA |': 'FRA', '| ITA |': 'ITA', '| ESP |': 'ESP', '| NLD |': 'NLD', '| POL |': 'POL',
+      '| TUR |': 'TUR', '| RUS |': 'RUS', '| IND |': 'IND', '| THA |': 'THA', '| IDN |': 'IDN',
+      '| VNM |': 'VNM', '| MYS |': 'MYS', '| PHL |': 'PHL', '| SGP |': 'SGP', '| ARE |': 'ARE',
+      '| SAU |': 'SAU', '| EGY |': 'EGY', '| ZAF |': 'ZAF', '| NGA |': 'NGA', '| KEN |': 'KEN',
+      '| ETH |': 'ETH', '| GHA |': 'GHA', '| UGA |': 'UGA', '| TZA |': 'TZA', '| RWA |': 'RWA',
+      '| SEN |': 'SEN', '| MDG |': 'MDG', '| MOZ |': 'MOZ', '| ZWE |': 'ZWE', '| ZMB |': 'ZMB',
+      '| BWA |': 'BWA', '| NAM |': 'NAM', '| AGO |': 'AGO', '| CMR |': 'CMR', '| CIV |': 'CIV',
+      '| MLI |': 'MLI', '| BFA |': 'BFA', '| NER |': 'NER', '| TCD |': 'TCD', '| SDN |': 'SDN',
+      '| LBY |': 'LBY', '| TUN |': 'TUN', '| DZA |': 'DZA', '| MAR |': 'MAR', '| ARG |': 'ARG',
+      '| CHL |': 'CHL', '| COL |': 'COL', '| PER |': 'PER', '| ECU |': 'ECU', '| BOL |': 'BOL',
+      '| URY |': 'URY', '| PRY |': 'PRY', '| VEN |': 'VEN', '| GUY |': 'GUY', '| SUR |': 'SUR',
+      '| GUF |': 'GUF', '| PAN |': 'PAN', '| CRI |': 'CRI', '| NIC |': 'NIC', '| HND |': 'HND',
+      '| GTM |': 'GTM', '| BLZ |': 'BLZ', '| SLV |': 'SLV', '| DOM |': 'DOM', '| HTI |': 'HTI',
+      '| JAM |': 'JAM', '| CUB |': 'CUB', '| PRI |': 'PRI', '| TTO |': 'TTO', '| GRD |': 'GRD',
+      '| LCA |': 'LCA', '| VCT |': 'VCT', '| DMA |': 'DMA', '| ATG |': 'ATG', '| KNA |': 'KNA',
+      '| BRB |': 'BRB', '| ABW |': 'ABW', '| CUW |': 'CUW', '| SXM |': 'SXM', '| BES |': 'BES',
+      '| CHN |': 'CHN', '| TWN |': 'TWN', '| HKG |': 'HKG', '| MAC |': 'MAC'
+    };
+    
+    for (const [pattern, country] of Object.entries(geoMap)) {
       if (campaignName.includes(pattern)) {
-        return geo;
+        return country;
       }
     }
+    
+    const geoPatterns = ['USA', 'MEX', 'AUS', 'DEU', 'JPN', 'KOR', 'BRA', 'CAN', 'GBR', 'FRA', 'ITA', 'ESP', 'NLD', 'POL', 'TUR', 'RUS', 'IND', 'THA', 'IDN', 'VNM', 'MYS', 'PHL', 'SGP', 'ARE', 'SAU', 'EGY', 'ZAF', 'NGA', 'KEN', 'ETH', 'GHA', 'UGA', 'TZA', 'RWA', 'SEN', 'MDG', 'MOZ', 'ZWE', 'ZMB', 'BWA', 'NAM', 'AGO', 'CMR', 'CIV', 'MLI', 'BFA', 'NER', 'TCD', 'SDN', 'LBY', 'TUN', 'DZA', 'MAR', 'ARG', 'CHL', 'COL', 'PER', 'ECU', 'BOL', 'URY', 'PRY', 'VEN', 'GUY', 'SUR', 'GUF', 'PAN', 'CRI', 'NIC', 'HND', 'GTM', 'BLZ', 'SLV', 'DOM', 'HTI', 'JAM', 'CUB', 'PRI', 'TTO', 'GRD', 'LCA', 'VCT', 'DMA', 'ATG', 'KNA', 'BRB', 'ABW', 'CUW', 'SXM', 'BES', 'CHN', 'TWN', 'HKG', 'MAC'];
+    
+    const upperCampaignName = campaignName.toUpperCase();
+    
+    for (const pattern of geoPatterns) {
+      const upperPattern = pattern.toUpperCase();
+      
+      if (upperCampaignName.includes('_' + upperPattern + '_') || upperCampaignName.includes('-' + upperPattern + '-') ||
+          upperCampaignName.includes('_' + upperPattern) || upperCampaignName.includes('-' + upperPattern) ||
+          upperCampaignName.includes(upperPattern + '_') || upperCampaignName.includes(upperPattern + '-') ||
+          upperCampaignName === upperPattern) {
+        return pattern;
+      }
+    }
+    
     return 'OTHER';
   }
   
@@ -933,9 +763,16 @@ function extractGeoFromCampaign(campaignName) {
   
   if (CURRENT_PROJECT === 'GOOGLE_ADS') {
     const geoPatterns = [
-      { pattern: 'LatAm', geo: 'LatAm' }, { pattern: 'UK,GE', geo: 'UK,GE' }, { pattern: 'BR (PT)', geo: 'BR' },
-      { pattern: 'US ', geo: 'US' }, { pattern: ' US ', geo: 'US' }, { pattern: 'WW ', geo: 'WW' },
-      { pattern: ' WW ', geo: 'WW' }, { pattern: 'UK', geo: 'UK' }, { pattern: 'GE', geo: 'GE' }, { pattern: 'BR', geo: 'BR' }
+      { pattern: 'LatAm', geo: 'LatAm' },
+      { pattern: 'UK,GE', geo: 'UK,GE' },
+      { pattern: 'BR (PT)', geo: 'BR' },
+      { pattern: 'US ', geo: 'US' },
+      { pattern: ' US ', geo: 'US' },
+      { pattern: 'WW ', geo: 'WW' },
+      { pattern: ' WW ', geo: 'WW' },
+      { pattern: 'UK', geo: 'UK' },
+      { pattern: 'GE', geo: 'GE' },
+      { pattern: 'BR', geo: 'BR' }
     ];
     
     for (const {pattern, geo} of geoPatterns) {
