@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language Preference
+**ВАЖНО: Всегда отвечай на русском языке пользователю. All responses to the user must be in Russian language.**
+
 ## Development Workflow
 
 ### Deployment Commands

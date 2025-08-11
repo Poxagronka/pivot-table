@@ -1,3 +1,7 @@
+/**
+ * Configuration file - ОБНОВЛЕНО: умная очистка кеша TRICKY + отслеживание предыдущего проекта пук
+ */
+
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Bundle IDs Database';
@@ -116,7 +120,7 @@ function getMintegralTargetEROAS(appName) { return getTargetEROAS('MINTEGRAL', a
 function getIncentTargetEROAS(appName) { return getTargetEROAS('INCENT', appName); }
 function getOverallTargetEROAS(appName) { return getTargetEROAS('OVERALL', appName); }
 function getIncentTrafficTargetEROAS(appName) { return getTargetEROAS('INCENT_TRAFFIC', appName); }
-function getApplovinNewTargetEROAS(appName) { return getTargetEROAS('APPLOVIN_NEW', appName); }
+
 
 function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
 function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
@@ -127,7 +131,7 @@ function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
 function getIncentTrafficGrowthThresholds() { return getGrowthThresholds('INCENT_TRAFFIC'); }
-function getApplovinNewGrowthThresholds() { return getGrowthThresholds('APPLOVIN_NEW'); }
+
 
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, 
@@ -144,21 +148,6 @@ var UNIFIED_MEASURES = [
   { id: "e_roas_forecast", day: 365 }, 
   { id: "e_profit_forecast", day: 730 },
   { id: "e_roas_forecast", day: 730 }
-];
-
-var APPLOVIN_NEW_MEASURES = [
-  { id: "cpi", day: null },
-  { id: "installs", day: null },
-  { id: "spend", day: null },
-  { id: "retention_rate", day: 1 },
-  { id: "roas", day: 1 },
-  { id: "roas", day: 3 },
-  { id: "retention_rate", day: 7 },
-  { id: "roas", day: 7 },
-  { id: "roas", day: 14 },
-  { id: "roas", day: 30 },
-  { id: "e_roas_forecast", day: 365 },
-  { id: "e_profit_forecast", day: 730 }
 ];
 
 var PROJECTS = {
@@ -332,29 +321,29 @@ var PROJECTS = {
   },
 
   INCENT_TRAFFIC: {
-    SHEET_NAME: 'Incent_traffic',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getIncentTrafficTargetEROAS,
-    GROWTH_THRESHOLDS: getIncentTrafficGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
-    API_CONFIG: {
-      OPERATION_NAME: "RichStats",
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: null,
-        ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
-      },
-      GROUP_BY: [
-        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_NETWORK_HID" },
-        { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
-    }
-  },
+  SHEET_NAME: 'Incent_traffic',
+  API_URL: 'https://app.appodeal.com/graphql',
+  TARGET_EROAS: getIncentTrafficTargetEROAS,
+  GROWTH_THRESHOLDS: getIncentTrafficGrowthThresholds,
+  BEARER_TOKEN: getBearerTokenStrict,
+  COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
+  API_CONFIG: {
+    OPERATION_NAME: "RichStats",
+    FILTERS: {
+      USER: ["79950","127168","157350","150140"],
+      ATTRIBUTION_PARTNER: ["Stack"],
+      ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
+      ATTRIBUTION_CAMPAIGN_SEARCH: null,
+      ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
+    },
+    GROUP_BY: [
+      { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+      { dimension: "ATTRIBUTION_NETWORK_HID" },
+      { dimension: "APP" }
+    ],
+    MEASURES: UNIFIED_MEASURES
+  }
+},
 
   OVERALL: {
     SHEET_NAME: 'Overall',
@@ -378,31 +367,6 @@ var PROJECTS = {
       ],
       MEASURES: UNIFIED_MEASURES
     }
-  },
-
-  APPLOVIN_NEW: {
-    SHEET_NAME: 'Applovin_new',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getApplovinNewTargetEROAS,
-    GROWTH_THRESHOLDS: getApplovinNewGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin_new',
-    OPTIMIZATION_NOTES_CACHE_SHEET: 'OptimizationNotes_Applovin_new',
-    API_CONFIG: {
-      OPERATION_NAME: "RichStats",
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["261208778387488768"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
-      },
-      GROUP_BY: [
-        { dimension: "DATE", timeBucket: "DAY" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ],
-      MEASURES: APPLOVIN_NEW_MEASURES
-    }
   }
 };
 
@@ -418,7 +382,6 @@ function getCurrentConfig() {
     GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET,
-    OPTIMIZATION_NOTES_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].OPTIMIZATION_NOTES_CACHE_SHEET || null,
     APPS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].APPS_CACHE_SHEET || null
   };
 }
@@ -440,7 +403,6 @@ function getProjectConfig(projectName) {
     GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
     BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET,
-    OPTIMIZATION_NOTES_CACHE_SHEET: PROJECTS[projectName].OPTIMIZATION_NOTES_CACHE_SHEET || null,
     APPS_CACHE_SHEET: PROJECTS[projectName].APPS_CACHE_SHEET || null
   };
 }
@@ -472,75 +434,35 @@ var TABLE_CONFIG = {
   ],
 
   COLUMN_WIDTHS: [
-    { c: 1, w: 80 },   // Level
-    { c: 2, w: 230 },  // Week Range / Source App
-    { c: 3, w: 40 },   // ID
-    { c: 4, w: 40 },   // GEO
-    { c: 5, w: 65 },   // Spend
-    { c: 6, w: 55 },   // Spend WoW %
-    { c: 7, w: 55 },   // Installs
-    { c: 8, w: 45 },   // CPI
-    { c: 9, w: 185 },  // ROAS D1→D3→D7→D30
-    { c: 10, w: 37 },  // IPM
-    { c: 11, w: 42 },  // RR D-1
-    { c: 12, w: 42 },  // RR D-7
-    { c: 13, w: 55 },  // eARPU 365d
-    { c: 14, w: 55 },  // eROAS 365d
-    { c: 15, w: 115 }, // eROAS 730d
-    { c: 16, w: 120 }, // eProfit 730d
-    { c: 17, w: 85 },  // eProfit 730d WoW %
-    { c: 18, w: 160 }, // Growth Status
-    { c: 19, w: 450 }  // Comments
-  ]
-};
-
-var APPLOVIN_NEW_TABLE_CONFIG = {
-  HEADERS: [
-    'Level', 'Campaign/Week/Day', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 
-    'ROAS D1', 'ROAS D3', 'ROAS D7', 'ROAS D14', 'ROAS D30',
-    'ROAS 3/1', 'ROAS 7/3', 'ROAS 14/7', 'ROAS 30/7',
-    'RR D-1', 'RR D-7', 'eROAS 365d', 'eProfit 730d', 'eProfit WoW %',
-    'Growth Status', 'Comments', 'Optimization Notes'
-  ],
-  
-  COLUMN_WIDTHS: [
-    { c: 1, w: 80 },   // Level
-    { c: 2, w: 230 },  // Campaign/Week/Day
-    { c: 3, w: 40 },   // ID
-    { c: 4, w: 40 },   // GEO
-    { c: 5, w: 65 },   // Spend
-    { c: 6, w: 55 },   // Spend WoW %
-    { c: 7, w: 55 },   // Installs
-    { c: 8, w: 45 },   // CPI
-    { c: 9, w: 50 },   // ROAS D1
-    { c: 10, w: 50 },  // ROAS D3
-    { c: 11, w: 50 },  // ROAS D7
-    { c: 12, w: 50 },  // ROAS D14
-    { c: 13, w: 50 },  // ROAS D30
-    { c: 14, w: 45 },  // ROAS 3/1
-    { c: 15, w: 45 },  // ROAS 7/3
-    { c: 16, w: 45 },  // ROAS 14/7
-    { c: 17, w: 45 },  // ROAS 30/7
-    { c: 18, w: 42 },  // RR D-1
-    { c: 19, w: 42 },  // RR D-7
-    { c: 20, w: 55 },  // eROAS 365d
-    { c: 21, w: 120 }, // eProfit 730d
-    { c: 22, w: 85 },  // eProfit WoW %
-    { c: 23, w: 160 }, // Growth Status
-    { c: 24, w: 300 }, // Comments
-    { c: 25, w: 300 }  // Optimization Notes
-  ]
+  { c: 1, w: 80 },   // Level
+  { c: 2, w: 230 },  // Week Range / Source App
+  { c: 3, w: 40 },   // ID
+  { c: 4, w: 40 },   // GEO
+  { c: 5, w: 65 },   // Spend (было 75)
+  { c: 6, w: 55 },   // Spend WoW %
+  { c: 7, w: 55 },   // Installs
+  { c: 8, w: 45 },   // CPI (было 50)
+  { c: 9, w: 185 },  // ROAS D1→D3→D7→D30 (было 195)
+  { c: 10, w: 37 },  // IPM
+  { c: 11, w: 42 },  // RR D-1
+  { c: 12, w: 42 },  // RR D-7
+  { c: 13, w: 55 },  // eARPU 365d
+  { c: 14, w: 55 },  // eROAS 365d
+  { c: 15, w: 115 }, // eROAS 730d
+  { c: 16, w: 120 }, // eProfit 730d (было 125)
+  { c: 17, w: 85 },  // eProfit 730d WoW %
+  { c: 18, w: 160 }, // Growth Status
+  { c: 19, w: 450 }  // Comments
+]
 };
 
 var COLORS = {
   HEADER: { background: '#4285f4', fontColor: 'white' },
   APP_ROW: { background: '#d1e7fe', fontColor: 'black' },
   WEEK_ROW: { background: '#e8f0fe' },
-  CAMPAIGN_ROW: { background: '#f0f8ff' },
-  DAY_ROW: { background: '#ffffff' },
   NETWORK_ROW: { background: '#d1e7fe', fontColor: 'black' },
   SOURCE_APP_ROW: { background: '#f0f8ff' },
+  CAMPAIGN_ROW: { background: '#ffffff' },
   POSITIVE: { background: '#d1f2eb', fontColor: '#0c5460' },
   NEGATIVE: { background: '#f8d7da', fontColor: '#721c24' },
   WARNING: { background: '#fff3cd', fontColor: '#856404' },

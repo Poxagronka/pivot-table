@@ -42,7 +42,7 @@ function fetchCampaignData(dateRange) {
     }
   }
   
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL' || CURRENT_PROJECT === 'APPLOVIN_NEW') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -130,7 +130,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     }
   }
   
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL' || projectName === 'APPLOVIN_NEW') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -463,10 +463,6 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
 }
 
 function processApiData(rawData, includeLastWeek = null) {
-  if (CURRENT_PROJECT === 'APPLOVIN_NEW') {
-    return processApplovinNewApiData(rawData, includeLastWeek);
-  }
-  
   const startTime = Date.now();
   const stats = rawData.data.analytics.richStats.stats;
   const appData = {};
@@ -699,122 +695,6 @@ function processApiData(rawData, includeLastWeek = null) {
 
   const endTime = Date.now();
   console.log(`${CURRENT_PROJECT}: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
-  return appData;
-}
-
-function processApplovinNewApiData(rawData, includeLastWeek = null) {
-  const startTime = Date.now();
-  const stats = rawData.data.analytics.richStats.stats;
-  const appData = {};
-
-  const today = new Date();
-  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
-
-  console.log(`Processing ${stats.length} records for APPLOVIN_NEW (including current week)...`);
-
-  let processedCount = 0;
-
-  const BATCH_SIZE = 500;
-  for (let batchStart = 0; batchStart < stats.length; batchStart += BATCH_SIZE) {
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, stats.length);
-    const batch = stats.slice(batchStart, batchEnd);
-    
-    batch.forEach((row, index) => {
-      try {
-        const date = row[0].value;
-        const campaign = row[1];
-        const app = row[2];
-        
-        const metrics = {
-          cpi: parseFloat(row[3].value) || 0,
-          installs: parseInt(row[4].value) || 0,
-          spend: parseFloat(row[5].value) || 0,
-          rrD1: parseFloat(row[6].value) || 0,
-          roasD1: parseFloat(row[7].value) || 0,
-          roasD3: parseFloat(row[8].value) || 0,
-          rrD7: parseFloat(row[9].value) || 0,
-          roasD7: parseFloat(row[10].value) || 0,
-          roasD14: parseFloat(row[11].value) || 0,
-          roasD30: parseFloat(row[12].value) || 0,
-          eRoasForecast: parseFloat(row[13].value) || 0,
-          eProfitForecast: parseFloat(row[14].value) || 0
-        };
-
-        let campaignName = 'Unknown';
-        let campaignId = 'Unknown';
-        
-        if (campaign) {
-          if (campaign.campaignName) {
-            campaignName = campaign.campaignName;
-            campaignId = campaign.campaignId || campaign.id || 'Unknown';
-          } else if (campaign.value) {
-            campaignName = campaign.value;
-            campaignId = campaign.id || 'Unknown';
-          }
-        }
-
-        const monday = getMondayOfWeek(new Date(date));
-        const sunday = getSundayOfWeek(new Date(date));
-        const weekKey = formatDateForAPI(monday);
-        const geo = extractGeoFromCampaign(campaignName);
-        const sourceApp = extractSourceApp(campaignName);
-        const appKey = app.id;
-
-        const campaignData = {
-          date: date,
-          campaignId: campaignId,
-          campaignName: campaignName,
-          ...metrics,
-          status: campaign?.status || 'Unknown',
-          type: campaign?.type || 'Unknown',
-          geo,
-          sourceApp: sourceApp,
-          isAutomated: campaign?.isAutomated || false,
-          roasRatio3to1: metrics.roasD1 > 0 ? metrics.roasD3 / metrics.roasD1 : 0,
-          roasRatio7to3: metrics.roasD3 > 0 ? metrics.roasD7 / metrics.roasD3 : 0,
-          roasRatio14to7: metrics.roasD7 > 0 ? metrics.roasD14 / metrics.roasD7 : 0,
-          roasRatio30to7: metrics.roasD7 > 0 ? metrics.roasD30 / metrics.roasD7 : 0
-        };
-
-        if (!appData[appKey]) {
-          appData[appKey] = {
-            appId: app.id,
-            appName: app.name,
-            platform: app.platform,
-            bundleId: app.bundleId,
-            campaigns: {}
-          };
-        }
-
-        if (!appData[appKey].campaigns[campaignId]) {
-          appData[appKey].campaigns[campaignId] = {
-            campaignId: campaignId,
-            campaignName: campaignName,
-            geo: geo,
-            sourceApp: sourceApp,
-            weeks: {}
-          };
-        }
-
-        if (!appData[appKey].campaigns[campaignId].weeks[weekKey]) {
-          appData[appKey].campaigns[campaignId].weeks[weekKey] = {
-            weekStart: formatDateForAPI(monday),
-            weekEnd: formatDateForAPI(sunday),
-            days: {}
-          };
-        }
-        
-        appData[appKey].campaigns[campaignId].weeks[weekKey].days[date] = campaignData;
-        processedCount++;
-
-      } catch (error) {
-        console.error(`Error processing APPLOVIN_NEW row ${batchStart + index}:`, error);
-      }
-    });
-  }
-
-  const endTime = Date.now();
-  console.log(`APPLOVIN_NEW: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
   return appData;
 }
 
@@ -1057,7 +937,7 @@ function extractSourceApp(campaignName) {
       return campaignName;
     }
     
-    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'APPLOVIN_NEW' || CURRENT_PROJECT === 'MINTEGRAL' || CURRENT_PROJECT === 'INCENT') {
+    if (CURRENT_PROJECT === 'REGULAR' || CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'MINTEGRAL' || CURRENT_PROJECT === 'INCENT') {
       return campaignName;
     }
     

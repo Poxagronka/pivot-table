@@ -8,17 +8,7 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
     const allCreateRequests = [];
     const allCollapseRequests = [];
     
-    if (CURRENT_PROJECT === 'APPLOVIN_NEW') {
-      const sortedApps = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
-      
-      for (const appKey of sortedApps) {
-        const createRequests = buildApplovinNewGroups(data, appKey, sheetId);
-        const collapseRequests = buildApplovinNewCollapseGroups(data, appKey, sheetId);
-        
-        allCreateRequests.push(...createRequests);
-        allCollapseRequests.push(...collapseRequests);
-      }
-    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
       const sortedNetworks = Object.keys(data).sort((a, b) => 
         data[a].networkName.localeCompare(data[b].networkName)
       );
