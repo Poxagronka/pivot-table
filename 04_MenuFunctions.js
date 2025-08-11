@@ -25,21 +25,26 @@ function onOpen() {
 }
 
 function updateSelectedProjects() {
+  var selected = showMultiChoice('Select Projects to Update:', MENU_PROJECTS);
+  if (!selected || selected.length === 0) return;
+  updateProjectsBatch(selected, true);
+}
+
+function updateAllProjects() {
+  updateProjectsBatch(MENU_PROJECTS, false);
+}
+
+function updateProjectsBatch(projects, isSelective = false) {
   if (!isBearerTokenConfigured()) {
     openSettingsSheet();
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  var selected = showMultiChoice('Select Projects to Update:', projects);
-  
-  if (!selected || selected.length === 0) {
-    return;
-  }
-  
   try {
-    preloadSettings();
-    Utilities.sleep(2000);
+    if (isSelective) {
+      preloadSettings();
+      Utilities.sleep(2000);
+    }
   } catch (e) {
     console.error('Error preloading settings:', e);
   }
@@ -47,11 +52,11 @@ function updateSelectedProjects() {
   var successfulProjects = [];
   var failedProjects = [];
   
-  selected.forEach(function(proj, index) {
+  projects.forEach(function(proj, index) {
     try {
       var projectName = proj.toUpperCase();
       
-      if (index > 0) {
+      if (isSelective && index > 0) {
         clearSettingsCache();
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
@@ -60,7 +65,10 @@ function updateSelectedProjects() {
       
       updateProjectDataWithRetry(projectName);
       successfulProjects.push(projectName);
-      Utilities.sleep(2000);
+      
+      if (index < projects.length - 1) {
+        Utilities.sleep(isSelective ? 2000 : 2000);
+      }
       
     } catch (e) {
       console.error(`❌ Failed to update ${proj}:`, e);
@@ -68,71 +76,23 @@ function updateSelectedProjects() {
         project: proj,
         error: e.toString().substring(0, 80)
       });
-      Utilities.sleep(10000);
+      
+      if (index < projects.length - 1) {
+        Utilities.sleep(isSelective ? 10000 : 3000);
+      }
     }
   });
   
   if (successfulProjects.length > 0) {
     try {
-      Utilities.sleep(3000);
+      Utilities.sleep(isSelective ? 3000 : 1000);
       sortProjectSheetsWithRetry();
     } catch (e) {
       console.error('Error sorting sheets:', e);
     }
   }
   
-  console.log(`Update completed: ${successfulProjects.length}/${selected.length} projects updated`);
-}
-
-function updateAllProjects() {
-  if (!isBearerTokenConfigured()) {
-    openSettingsSheet();
-    return;
-  }
-  
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
-  
-  try {
-    var successfulProjects = [];
-    var failedProjects = [];
-    
-    projects.forEach(function(proj, index) {
-      try {
-        var projectName = proj.toUpperCase();
-        updateProjectDataWithRetry(projectName);
-        successfulProjects.push(proj);
-        
-        if (index < projects.length - 1) {
-          Utilities.sleep(2000);
-        }
-        
-      } catch (e) {
-        console.error(`❌ Failed to update ${proj}:`, e);
-        failedProjects.push({
-          project: proj,
-          error: e.toString().substring(0, 50)
-        });
-        
-        if (index < projects.length - 1) {
-          Utilities.sleep(3000);
-        }
-      }
-    });
-    
-    if (successfulProjects.length > 0) {
-      try {
-        Utilities.sleep(1000);
-        sortProjectSheetsWithRetry();
-      } catch (e) {
-        console.error('Error sorting sheets:', e);
-      }
-    }
-    
-    console.log(`Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
-    
-  } catch (e) {
-    console.error(`Update failed: ${e.toString()}`);
-  }
+  console.log(`Update completed: ${successfulProjects.length}/${projects.length} projects updated`);
 }
 
 function refreshSettings() {
@@ -210,7 +170,7 @@ function quickAPICheckAll() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
+  var projects = MENU_PROJECTS;
   var results = '🔍 API CHECK RESULTS\n\n';
   
   projects.forEach(function(proj) {
@@ -260,38 +220,18 @@ function smartReportWizard() {
 }
 
 function generateAllProjects(weeks) {
-  var success = 0;
-  var total = MENU_PROJECTS.length;
-  
-  try {
-    for (var i = 0; i < MENU_PROJECTS.length; i++) {
-      var proj = MENU_PROJECTS[i];
-      try { 
-        generateProjectReportByWeeks(proj.toUpperCase(), weeks); 
-        success++; 
-      } catch(e) { 
-        console.error(`Error generating ${proj}:`, e); 
-      }
-    }
-    
-    sortProjectSheets();
-    console.log(`Generated ${success}/${total} reports for ${weeks} weeks`);
-  } catch(e) {
-    console.error('Error generating all projects:', e);
-  }
+  generateProjectsBatch(MENU_PROJECTS, weeks);
 }
 
 function generateSingleProject(projectName, weeks) {
-  try {
-    generateProjectReportByWeeks(projectName, weeks);
-    sortProjectSheets();
-    console.log(`${projectName} report generated for ${weeks} weeks`);
-  } catch(e) {
-    console.error(`Error generating ${projectName}: ${e.toString()}`);
-  }
+  generateProjectsBatch([projectName], weeks);
 }
 
 function generateMultipleProjects(projects, weeks) {
+  generateProjectsBatch(projects, weeks);
+}
+
+function generateProjectsBatch(projects, weeks) {
   var success = 0;
   
   try {
@@ -308,7 +248,7 @@ function generateMultipleProjects(projects, weeks) {
     sortProjectSheets();
     console.log(`Generated ${success}/${projects.length} reports for ${weeks} weeks`);
   } catch(e) {
-    console.error('Error generating multiple projects:', e);
+    console.error('Error generating projects batch:', e);
   }
 }
 

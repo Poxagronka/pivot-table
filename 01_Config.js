@@ -111,26 +111,6 @@ function isAutoUpdateEnabled() {
   }
 }
 
-function getTrickyTargetEROAS(appName) { return getTargetEROAS('TRICKY', appName); }
-function getMolocoTargetEROAS(appName) { return getTargetEROAS('MOLOCO', appName); }
-function getRegularTargetEROAS(appName) { return getTargetEROAS('REGULAR', appName); }
-function getGoogleAdsTargetEROAS(appName) { return getTargetEROAS('GOOGLE_ADS', appName); }
-function getApplovinTargetEROAS(appName) { return getTargetEROAS('APPLOVIN', appName); }
-function getMintegralTargetEROAS(appName) { return getTargetEROAS('MINTEGRAL', appName); }
-function getIncentTargetEROAS(appName) { return getTargetEROAS('INCENT', appName); }
-function getOverallTargetEROAS(appName) { return getTargetEROAS('OVERALL', appName); }
-function getIncentTrafficTargetEROAS(appName) { return getTargetEROAS('INCENT_TRAFFIC', appName); }
-
-
-function getTrickyGrowthThresholds() { return getGrowthThresholds('TRICKY'); }
-function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
-function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
-function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS'); }
-function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
-function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
-function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
-function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
-function getIncentTrafficGrowthThresholds() { return getGrowthThresholds('INCENT_TRAFFIC'); }
 
 
 var UNIFIED_MEASURES = [
@@ -150,17 +130,25 @@ var UNIFIED_MEASURES = [
   { id: "e_roas_forecast", day: 730 }
 ];
 
+var BASE_PROJECT_CONFIG = {
+  API_URL: 'https://app.appodeal.com/graphql',
+  BEARER_TOKEN: getBearerTokenStrict,
+  API_CONFIG: {
+    OPERATION_NAME: "RichStats",
+    MEASURES: UNIFIED_MEASURES
+  }
+};
+
 var PROJECTS = {
   TRICKY: {
     SHEET_NAME: 'Tricky',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getTrickyTargetEROAS,
-    GROWTH_THRESHOLDS: getTrickyGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
     APPS_CACHE_SHEET: 'AppsCache_Tricky',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -171,20 +159,18 @@ var PROJECTS = {
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
   
   MOLOCO: {
     SHEET_NAME: 'Moloco',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getMolocoTargetEROAS,
-    GROWTH_THRESHOLDS: getMolocoGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -195,20 +181,18 @@ var PROJECTS = {
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   REGULAR: {
     SHEET_NAME: 'Regular',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getRegularTargetEROAS,
-    GROWTH_THRESHOLDS: getRegularGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -219,20 +203,18 @@ var PROJECTS = {
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   GOOGLE_ADS: {
     SHEET_NAME: 'Google_Ads',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getGoogleAdsTargetEROAS,
-    GROWTH_THRESHOLDS: getGoogleAdsGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Google_Ads',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -243,20 +225,18 @@ var PROJECTS = {
         { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   APPLOVIN: {
     SHEET_NAME: 'Applovin',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getApplovinTargetEROAS,
-    GROWTH_THRESHOLDS: getApplovinGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -267,20 +247,18 @@ var PROJECTS = {
         { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   MINTEGRAL: {
     SHEET_NAME: 'Mintegral',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getMintegralTargetEROAS,
-    GROWTH_THRESHOLDS: getMintegralGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Mintegral',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140","11628","233863","239157"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -291,20 +269,18 @@ var PROJECTS = {
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   INCENT: {
     SHEET_NAME: 'Incent',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getIncentTargetEROAS,
-    GROWTH_THRESHOLDS: getIncentGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Incent',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -315,45 +291,41 @@ var PROJECTS = {
         { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   },
 
   INCENT_TRAFFIC: {
-  SHEET_NAME: 'Incent_traffic',
-  API_URL: 'https://app.appodeal.com/graphql',
-  TARGET_EROAS: getIncentTrafficTargetEROAS,
-  GROWTH_THRESHOLDS: getIncentTrafficGrowthThresholds,
-  BEARER_TOKEN: getBearerTokenStrict,
-  COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
-  API_CONFIG: {
-    OPERATION_NAME: "RichStats",
-    FILTERS: {
-      USER: ["79950","127168","157350","150140"],
-      ATTRIBUTION_PARTNER: ["Stack"],
-      ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
-      ATTRIBUTION_CAMPAIGN_SEARCH: null,
-      ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
-    },
-    GROUP_BY: [
-      { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-      { dimension: "ATTRIBUTION_NETWORK_HID" },
-      { dimension: "APP" }
-    ],
-    MEASURES: UNIFIED_MEASURES
-  }
-},
+    SHEET_NAME: 'Incent_traffic',
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
+    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
+    API_CONFIG: {
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
+      FILTERS: {
+        USER: ["79950","127168","157350","150140"],
+        ATTRIBUTION_PARTNER: ["Stack"],
+        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
+        ATTRIBUTION_CAMPAIGN_SEARCH: null,
+        ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
+      },
+      GROUP_BY: [
+        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_NETWORK_HID" },
+        { dimension: "APP" }
+      ]
+    }
+  },
 
   OVERALL: {
     SHEET_NAME: 'Overall',
-    API_URL: 'https://app.appodeal.com/graphql',
-    TARGET_EROAS: getOverallTargetEROAS,
-    GROWTH_THRESHOLDS: getOverallGrowthThresholds,
-    BEARER_TOKEN: getBearerTokenStrict,
+    API_URL: BASE_PROJECT_CONFIG.API_URL,
+    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
     COMMENTS_CACHE_SHEET: 'CommentsCache_Overall',
     API_CONFIG: {
-      OPERATION_NAME: "RichStats",
+      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
+      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
       FILTERS: {
         USER: ["79950","127168","157350","150140"],
         ATTRIBUTION_PARTNER: ["Stack"],
@@ -364,8 +336,7 @@ var PROJECTS = {
         { dimension: "DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_NETWORK_HID" },
         { dimension: "APP" }
-      ],
-      MEASURES: UNIFIED_MEASURES
+      ]
     }
   }
 };
@@ -374,15 +345,16 @@ var CURRENT_PROJECT = 'TRICKY';
 var PREVIOUS_PROJECT = null;
 
 function getCurrentConfig() {
+  const project = PROJECTS[CURRENT_PROJECT];
   return {
     SHEET_ID: MAIN_SHEET_ID,
-    SHEET_NAME: PROJECTS[CURRENT_PROJECT].SHEET_NAME,
-    API_URL: PROJECTS[CURRENT_PROJECT].API_URL,
-    TARGET_EROAS: PROJECTS[CURRENT_PROJECT].TARGET_EROAS(),
-    GROWTH_THRESHOLDS: PROJECTS[CURRENT_PROJECT].GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: PROJECTS[CURRENT_PROJECT].BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].COMMENTS_CACHE_SHEET,
-    APPS_CACHE_SHEET: PROJECTS[CURRENT_PROJECT].APPS_CACHE_SHEET || null
+    SHEET_NAME: project.SHEET_NAME,
+    API_URL: project.API_URL,
+    TARGET_EROAS: (appName) => getTargetEROAS(CURRENT_PROJECT, appName),
+    GROWTH_THRESHOLDS: () => getGrowthThresholds(CURRENT_PROJECT),
+    BEARER_TOKEN: project.BEARER_TOKEN(),
+    COMMENTS_CACHE_SHEET: project.COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: project.APPS_CACHE_SHEET || null
   };
 }
 
@@ -395,15 +367,16 @@ function getProjectConfig(projectName) {
   if (!PROJECTS[projectName]) {
     throw new Error('Unknown project: ' + projectName);
   }
+  const project = PROJECTS[projectName];
   return {
     SHEET_ID: MAIN_SHEET_ID,
-    SHEET_NAME: PROJECTS[projectName].SHEET_NAME,
-    API_URL: PROJECTS[projectName].API_URL,
-    TARGET_EROAS: PROJECTS[projectName].TARGET_EROAS(),
-    GROWTH_THRESHOLDS: PROJECTS[projectName].GROWTH_THRESHOLDS(),
-    BEARER_TOKEN: PROJECTS[projectName].BEARER_TOKEN(),
-    COMMENTS_CACHE_SHEET: PROJECTS[projectName].COMMENTS_CACHE_SHEET,
-    APPS_CACHE_SHEET: PROJECTS[projectName].APPS_CACHE_SHEET || null
+    SHEET_NAME: project.SHEET_NAME,
+    API_URL: project.API_URL,
+    TARGET_EROAS: (appName) => getTargetEROAS(projectName, appName),
+    GROWTH_THRESHOLDS: () => getGrowthThresholds(projectName),
+    BEARER_TOKEN: project.BEARER_TOKEN(),
+    COMMENTS_CACHE_SHEET: project.COMMENTS_CACHE_SHEET,
+    APPS_CACHE_SHEET: project.APPS_CACHE_SHEET || null
   };
 }
 

@@ -7,99 +7,29 @@ var APPS_DB_CACHE_TIME = null;
 var BUNDLE_ID_CACHE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM/edit?gid=754371211#gid=754371211';
 var BUNDLE_ID_CACHE_SHEET_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 
-function fetchCampaignData(dateRange) {
+function fetchCampaignData(dateRange, projectName = null) {
+  const effectiveProject = projectName || CURRENT_PROJECT;
   const startTime = Date.now();
-  const config = getCurrentConfig();
-  const apiConfig = getCurrentApiConfig();
   
-  const filters = [
-    { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
-    { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
-  ];
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID && apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID.length > 0) {
-    filters.push({ dimension: "ATTRIBUTION_NETWORK_HID", values: apiConfig.FILTERS.ATTRIBUTION_NETWORK_HID, include: true });
-  }
-  
-  if (apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH) {
-    const searchPattern = apiConfig.FILTERS.ATTRIBUTION_CAMPAIGN_SEARCH;
-    
-    if (searchPattern.startsWith('!')) {
-      const excludePattern = searchPattern.substring(1);
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: false,
-        searchByString: excludePattern
-      });
-    } else {
-      filters.push({
-        dimension: "ATTRIBUTION_CAMPAIGN_HID", 
-        values: [], 
-        include: true, 
-        searchByString: searchPattern
-      });
-    }
-  }
-  
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
-  
-  const payload = {
-    operationName: apiConfig.OPERATION_NAME,
-    variables: {
-      dateFilters: [{
-        dimension: dateDimension,
-        from: dateRange.from,
-        to: dateRange.to,
-        include: true
-      }],
-      filters: filters,
-      groupBy: apiConfig.GROUP_BY,
-      measures: apiConfig.MEASURES,
-      havingFilters: [{ measure: { id: "spend", day: null }, operator: "MORE", value: 0 }],
-      anonymizationMode: "OFF",
-      topFilter: null,
-      revenuePredictionVersion: "",
-      isMultiMediation: true
-    },
-    query: getGraphQLQuery()
-  };
-
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: `Bearer ${config.BEARER_TOKEN}`,
-      Connection: 'keep-alive',
-      DNT: '1',
-      Origin: 'https://app.appodeal.com',
-      Referer: 'https://app.appodeal.com/analytics/reports?reloadTime=' + Date.now(),
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-      'x-requested-with': 'XMLHttpRequest',
-      'Trace-Id': Utilities.getUuid()
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  return executeApiRequestWithRetry(config.API_URL, options, CURRENT_PROJECT, startTime);
-}
-
-function fetchProjectCampaignData(projectName, dateRange) {
-  const startTime = Date.now();
-  const config = getProjectConfig(projectName);
-  const apiConfig = getProjectApiConfig(projectName);
+  const config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
+  const apiConfig = projectName ? getProjectApiConfig(projectName) : getCurrentApiConfig();
   
   if (!config.BEARER_TOKEN) {
-    throw new Error(`${projectName} project is not configured: missing BEARER_TOKEN`);
+    throw new Error(`${effectiveProject} project is not configured: missing BEARER_TOKEN`);
   }
   
   if (!apiConfig.FILTERS.USER || apiConfig.FILTERS.USER.length === 0) {
-    throw new Error(`${projectName} project is not configured: missing USER filters`);
+    throw new Error(`${effectiveProject} project is not configured: missing USER filters`);
   }
   
+  return buildAndExecuteApiRequest(config, apiConfig, dateRange, effectiveProject, startTime);
+}
+
+function fetchProjectCampaignData(projectName, dateRange) {
+  return fetchCampaignData(dateRange, projectName);
+}
+
+function buildAndExecuteApiRequest(config, apiConfig, dateRange, projectName, startTime) {
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
