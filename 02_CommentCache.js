@@ -348,16 +348,21 @@ class CommentCache {
                sourceAppName.includes(expectedData.sourceAppName);
       
       case 'CAMPAIGN':
-        const campaignSourceApp = row[1] || '';
-        const campaignId = row[2] || '';
-        
-        let extractedId = campaignId;
-        if (typeof campaignId === 'string' && campaignId.includes('HYPERLINK')) {
-          extractedId = this.extractCampaignIdFromHyperlink(campaignId);
-        }
-        
-        return campaignSourceApp === expectedData.sourceAppName && 
-               extractedId === expectedData.campaignId;
+  const campaignSourceApp = row[1] || '';
+  const campaignId = row[2] || '';
+  
+  let extractedId = campaignId;
+  if (typeof campaignId === 'string' && campaignId.includes('HYPERLINK')) {
+    extractedId = this.extractCampaignIdFromHyperlink(campaignId);
+  }
+  
+  if (this.projectName === 'APPLOVIN_TEST') {
+    return campaignSourceApp === expectedData.campaignName && 
+           extractedId === expectedData.campaignId;
+  }
+  
+  return campaignSourceApp === expectedData.sourceAppName && 
+         extractedId === expectedData.campaignId;
       
       case 'NETWORK':
         const networkName = row[1] || '';

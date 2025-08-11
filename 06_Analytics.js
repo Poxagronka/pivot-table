@@ -8,6 +8,10 @@ function calculateWoWMetrics(appData) {
     return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 
+  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+  return calculateApplovinTestWoWMetrics(appData);
+}
+
   try {
     const campaignData = {};
     const appWeekData = {};
@@ -445,6 +449,40 @@ function generateReport(days) {
     SpreadsheetApp.getUi().alert('Error', 'Error generating report: ' + e.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
+function generateReportSilent(days) {
+  try {
+    const dateRange = getDateRange(days);
+    const raw = fetchCampaignData(dateRange);
+    
+    if (!raw.data?.analytics?.richStats?.stats?.length) {
+      console.log('No data found for the specified period.');
+      return;
+    }
+    
+    const processed = processApiData(raw);
+    
+    if (Object.keys(processed).length === 0) {
+      console.log('No valid data to process.');
+      return;
+    }
+    
+    clearAllDataSilent();
+    
+    if (CURRENT_PROJECT === 'OVERALL') {
+      createOverallPivotTable(processed);
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      createIncentTrafficPivotTable(processed);
+    } else {
+      createEnhancedPivotTable(processed);
+    }
+    
+    const cache = new CommentCache();
+    cache.applyCommentsToSheet();
+  } catch (e) {
+    console.error('Error generating report:', e);
+    throw e;
+  }
+}
 
 function generateReportForDateRange(startDate, endDate) {
   const ui = SpreadsheetApp.getUi();
@@ -653,5 +691,100 @@ for (let i = 1; i < data.length; i++) {
   } catch (e) {
     console.error('Error updating data:', e);
     ui.alert('Error', 'Error updating data: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+function calculateApplovinTestWoWMetrics(appData) {
+  try {
+    const campaignWoW = {};
+    const appWeekWoW = {};
+    const sourceAppWoW = {};
+
+    Object.values(appData).forEach(app => {
+      Object.values(app.campaigns).forEach(campaign => {
+        const weeks = Object.values(campaign.weeks).sort((a, b) => 
+          new Date(a.weekStart) - new Date(b.weekStart)
+        );
+
+        weeks.forEach((week, i) => {
+          const weekTotals = calculateWeekTotals(week.data);
+          const campaignWeekKey = `${campaign.campaignId}_${week.weekStart}`;
+          
+          if (i === 0) {
+            campaignWoW[campaignWeekKey] = { 
+              spendChangePercent: 0, 
+              eProfitChangePercent: 0, 
+              growthStatus: 'First Week' 
+            };
+          } else {
+            const prevWeek = weeks[i - 1];
+            const prevTotals = calculateWeekTotals(prevWeek.data);
+            
+            const spendPct = prevTotals.totalSpend ? 
+              ((weekTotals.totalSpend - prevTotals.totalSpend) / Math.abs(prevTotals.totalSpend)) * 100 : 0;
+            const profitPct = prevTotals.totalProfit ? 
+              ((weekTotals.totalProfit - prevTotals.totalProfit) / Math.abs(prevTotals.totalProfit)) * 100 : 0;
+            
+            campaignWoW[campaignWeekKey] = {
+              spendChangePercent: spendPct,
+              eProfitChangePercent: profitPct,
+              growthStatus: calculateGrowthStatus(
+                { spend: prevTotals.totalSpend, eProfitForecast: prevTotals.totalProfit },
+                { spend: weekTotals.totalSpend, eProfitForecast: weekTotals.totalProfit },
+                spendPct, profitPct
+              )
+            };
+          }
+        });
+      });
+
+      // App-level WoW (aggregate all campaigns by week)
+      const appWeekData = {};
+      Object.values(app.campaigns).forEach(campaign => {
+        Object.values(campaign.weeks).forEach(week => {
+          if (!appWeekData[week.weekStart]) {
+            appWeekData[week.weekStart] = [];
+          }
+          appWeekData[week.weekStart].push(...week.data);
+        });
+      });
+
+      const appWeeks = Object.keys(appWeekData).sort();
+      appWeeks.forEach((weekStart, i) => {
+        const appWeekKey = `${app.appName}_${weekStart}`;
+        const weekTotals = calculateWeekTotals(appWeekData[weekStart]);
+        
+        if (i === 0) {
+          appWeekWoW[appWeekKey] = { 
+            spendChangePercent: 0, 
+            eProfitChangePercent: 0, 
+            growthStatus: 'First Week' 
+          };
+        } else {
+          const prevWeekStart = appWeeks[i - 1];
+          const prevTotals = calculateWeekTotals(appWeekData[prevWeekStart]);
+          
+          const spendPct = prevTotals.totalSpend ? 
+            ((weekTotals.totalSpend - prevTotals.totalSpend) / Math.abs(prevTotals.totalSpend)) * 100 : 0;
+          const profitPct = prevTotals.totalProfit ? 
+            ((weekTotals.totalProfit - prevTotals.totalProfit) / Math.abs(prevTotals.totalProfit)) * 100 : 0;
+          
+          appWeekWoW[appWeekKey] = {
+            spendChangePercent: spendPct,
+            eProfitChangePercent: profitPct,
+            growthStatus: calculateGrowthStatus(
+              { spend: prevTotals.totalSpend, eProfitForecast: prevTotals.totalProfit },
+              { spend: weekTotals.totalSpend, eProfitForecast: weekTotals.totalProfit },
+              spendPct, profitPct, 'profit'
+            )
+          };
+        }
+      });
+    });
+
+    return { campaignWoW, appWeekWoW, sourceAppWoW };
+  } catch (e) {
+    console.error('Error calculating APPLOVIN_TEST WoW metrics:', e);
+    return { campaignWoW: {}, appWeekWoW: {}, sourceAppWoW: {} };
   }
 }

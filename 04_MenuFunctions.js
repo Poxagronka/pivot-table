@@ -1,4 +1,4 @@
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
+var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Applovin_test', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
@@ -7,6 +7,10 @@ function onOpen() {
   menu.addItem('📈 Generate Report...', 'smartReportWizard')
       .addItem('🔄 Update All Projects', 'updateAllProjects')
       .addItem('🎯 Update Selected Projects', 'updateSelectedProjects')
+      .addItem('🧪 Applovin Test (6 weeks)', 'generateApplovinTest')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('🎨 Special Reports')
+        .addItem('📊 Applovin Alternative Structure', 'generateApplovingAlternativeWizard'))
       .addSeparator()
       .addSubMenu(ui.createMenu('⚙️ Settings')
         .addItem('📄 Open Settings Sheet', 'openSettingsSheet')
@@ -30,7 +34,7 @@ function updateSelectedProjects() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Applovin_test', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var selected = showMultiChoice('Select Projects to Update:', projects);
   
   if (!selected || selected.length === 0) {
@@ -90,7 +94,7 @@ function updateAllProjects() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Applovin_test', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   
   try {
     var successfulProjects = [];
@@ -210,7 +214,7 @@ function quickAPICheckAll() {
     return;
   }
   
-  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
+  var projects = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Applovin_test', 'Mintegral', 'Incent', 'Incent_Traffic', 'Overall'];
   var results = '🔍 API CHECK RESULTS\n\n';
   
   projects.forEach(function(proj) {
@@ -526,6 +530,37 @@ function clearColumnCache() {
   console.log('Column cache cleared for all projects');
 }
 
+function generateApplovingAlternativeWizard() {
+  if (!isBearerTokenConfigured()) {
+    openSettingsSheet();
+    return;
+  }
+  
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.prompt(
+    '📊 Applovin Alternative Structure',
+    'Генерация отчёта со структурой: Апа → Кампания → Недели\n\n' +
+    'Введите количество недель (1-52):',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  
+  var weeks = parseInt(result.getResponseText());
+  if (isNaN(weeks) || weeks < 1 || weeks > 52) {
+    ui.alert('Ошибка', 'Пожалуйста, введите число от 1 до 52', ui.ButtonSet.OK);
+    return;
+  }
+  
+  try {
+    generateApplovingAlternativeReport(weeks);
+    ui.alert('Успешно', `Отчёт Applovin_test создан для ${weeks} недель`, ui.ButtonSet.OK);
+  } catch (e) {
+    console.error('Error generating alternative Applovin report:', e);
+    ui.alert('Ошибка', 'Не удалось создать отчёт. См. консоль для деталей.', ui.ButtonSet.OK);
+  }
+}
+
 function openGitHubRepo() {
   var ui = SpreadsheetApp.getUi();
   var githubUrl = 'https://github.com/Poxagronka/pivot-table';
@@ -535,4 +570,20 @@ function openGitHubRepo() {
   ).setWidth(400).setHeight(300);
   
   ui.showModalDialog(htmlOutput, 'Opening GitHub Repository...');
+}
+
+function generateApplovinTest() {
+  if (!isBearerTokenConfigured()) {
+    openSettingsSheet();
+    return;
+  }
+  
+  try {
+    setCurrentProject('APPLOVIN_TEST');
+    generateReportSilent(42); // 6 weeks = 42 days
+    sortProjectSheets();
+    console.log('Applovin Test report generated for 6 weeks');
+  } catch(e) {
+    console.error('Error generating Applovin Test:', e);
+  }
 }

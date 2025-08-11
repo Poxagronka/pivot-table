@@ -42,7 +42,7 @@ function fetchCampaignData(dateRange) {
     }
   }
   
-  const dateDimension = (CURRENT_PROJECT === 'GOOGLE_ADS' || CURRENT_PROJECT === 'APPLOVIN' || CURRENT_PROJECT === 'INCENT' || CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'APPLOVIN_TEST' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -130,7 +130,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
     }
   }
   
-  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
+  const dateDimension = (projectName === 'GOOGLE_ADS' || projectName === 'APPLOVIN' || projectName === 'APPLOVIN_TEST' || projectName === 'INCENT' || projectName === 'INCENT_TRAFFIC' || projectName === 'OVERALL') ? 'DATE' : 'INSTALL_DATE';
   
   const payload = {
     operationName: apiConfig.OPERATION_NAME,
@@ -479,8 +479,12 @@ function processApiData(rawData, includeLastWeek = null) {
   let processedCount = 0;
 
   if (CURRENT_PROJECT === 'TRICKY') {
-    return processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
-  }
+  return processTrickyDataOptimized(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+}
+
+if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+  return processApplovinTestData(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+}
 
   const BATCH_SIZE = 500;
   for (let batchStart = 0; batchStart < stats.length; batchStart += BATCH_SIZE) {
@@ -992,4 +996,120 @@ function clearTrickyCaches() {
   APPS_DB_CACHE = null;
   APPS_DB_CACHE_TIME = null;
   console.log('TRICKY caches cleared');
+}
+
+function processApplovinTestData(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+  const startTime = Date.now();
+  const appData = {};
+  let processedCount = 0;
+
+  console.log(`Processing ${stats.length} records for APPLOVIN_TEST (App→Campaign→Week structure)...`);
+
+  const BATCH_SIZE = 500;
+  for (let batchStart = 0; batchStart < stats.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, stats.length);
+    const batch = stats.slice(batchStart, batchEnd);
+    
+    batch.forEach((row, index) => {
+      try {
+        const date = row[0].value;
+        const monday = getMondayOfWeek(new Date(date));
+        const weekKey = formatDateForAPI(monday);
+
+        if (weekKey >= currentWeekStart) return;
+        if (!shouldIncludeLastWeek && weekKey >= lastWeekStart) return;
+
+        const campaign = row[1];
+        const app = row[2];
+        const metricsStartIndex = 3;
+        
+        const metrics = {
+          cpi: parseFloat(row[metricsStartIndex].value) || 0,
+          installs: parseInt(row[metricsStartIndex + 1].value) || 0,
+          ipm: parseFloat(row[metricsStartIndex + 2].value) || 0,
+          spend: parseFloat(row[metricsStartIndex + 3].value) || 0,
+          rrD1: parseFloat(row[metricsStartIndex + 4].value) || 0,
+          roasD1: parseFloat(row[metricsStartIndex + 5].value) || 0,
+          roasD3: parseFloat(row[metricsStartIndex + 6].value) || 0,
+          rrD7: parseFloat(row[metricsStartIndex + 7].value) || 0,
+          roasD7: parseFloat(row[metricsStartIndex + 8].value) || 0,
+          roasD30: parseFloat(row[metricsStartIndex + 9].value) || 0,
+          eArpuForecast: parseFloat(row[metricsStartIndex + 10].value) || 0,
+          eRoasForecast: parseFloat(row[metricsStartIndex + 11].value) || 0,
+          eProfitForecast: parseFloat(row[metricsStartIndex + 12].value) || 0,
+          eRoasForecastD730: parseFloat(row[metricsStartIndex + 13].value) || 0
+        };
+
+        let campaignName = 'Unknown';
+        let campaignId = 'Unknown';
+        
+        if (campaign) {
+          if (campaign.campaignName) {
+            campaignName = campaign.campaignName;
+            campaignId = campaign.campaignId || campaign.id || 'Unknown';
+          } else if (campaign.value) {
+            campaignName = campaign.value;
+            campaignId = campaign.id || 'Unknown';
+          }
+        }
+
+        const geo = extractGeoFromCampaign(campaignName);
+        const sourceApp = extractSourceApp(campaignName);
+        const sunday = getSundayOfWeek(new Date(date));
+
+        const campaignData = {
+          date: date,
+          campaignId: campaignId,
+          campaignName: campaignName,
+          ...metrics,
+          status: campaign?.status || 'Unknown',
+          type: campaign?.type || 'Unknown',
+          geo,
+          sourceApp: sourceApp,
+          isAutomated: campaign?.isAutomated || false
+        };
+
+        const appKey = app.id;
+
+        // App → Campaign → Week structure
+        if (!appData[appKey]) {
+          appData[appKey] = {
+            appId: app.id,
+            appName: app.name,
+            platform: app.platform,
+            bundleId: app.bundleId,
+            campaigns: {}
+          };
+        }
+
+        if (!appData[appKey].campaigns[campaignId]) {
+          appData[appKey].campaigns[campaignId] = {
+            campaignId: campaignId,
+            campaignName: campaignName,
+            geo: geo,
+            sourceApp: sourceApp,
+            weeks: {}
+          };
+        }
+
+        if (!appData[appKey].campaigns[campaignId].weeks[weekKey]) {
+          appData[appKey].campaigns[campaignId].weeks[weekKey] = {
+            weekStart: formatDateForAPI(monday),
+            weekEnd: formatDateForAPI(sunday),
+            data: []
+          };
+        }
+
+        appData[appKey].campaigns[campaignId].weeks[weekKey].data.push(campaignData);
+        processedCount++;
+
+      } catch (error) {
+        console.error(`Error processing APPLOVIN_TEST row ${batchStart + index}:`, error);
+      }
+    });
+  }
+
+  const endTime = Date.now();
+  console.log(`APPLOVIN_TEST: Processing completed in ${(endTime - startTime) / 1000}s - ${processedCount} records processed`);
+  return appData;
 }
