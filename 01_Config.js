@@ -116,7 +116,6 @@ function getMolocoTargetEROAS(appName) { return getTargetEROAS('MOLOCO', appName
 function getRegularTargetEROAS(appName) { return getTargetEROAS('REGULAR', appName); }
 function getGoogleAdsTargetEROAS(appName) { return getTargetEROAS('GOOGLE_ADS', appName); }
 function getApplovinTargetEROAS(appName) { return getTargetEROAS('APPLOVIN', appName); }
-function getApplovinTestTargetEROAS(appName) { return getTargetEROAS('APPLOVIN_TEST', appName); }
 function getMintegralTargetEROAS(appName) { return getTargetEROAS('MINTEGRAL', appName); }
 function getIncentTargetEROAS(appName) { return getTargetEROAS('INCENT', appName); }
 function getOverallTargetEROAS(appName) { return getTargetEROAS('OVERALL', appName); }
@@ -128,7 +127,6 @@ function getMolocoGrowthThresholds() { return getGrowthThresholds('MOLOCO'); }
 function getRegularGrowthThresholds() { return getGrowthThresholds('REGULAR'); }
 function getGoogleAdsGrowthThresholds() { return getGrowthThresholds('GOOGLE_ADS'); }
 function getApplovinGrowthThresholds() { return getGrowthThresholds('APPLOVIN'); }
-function getApplovinTestGrowthThresholds() { return getGrowthThresholds('APPLOVIN_TEST'); }
 function getMintegralGrowthThresholds() { return getGrowthThresholds('MINTEGRAL'); }
 function getIncentGrowthThresholds() { return getGrowthThresholds('INCENT'); }
 function getOverallGrowthThresholds() { return getGrowthThresholds('OVERALL'); }
@@ -273,30 +271,6 @@ var PROJECTS = {
       MEASURES: UNIFIED_MEASURES
     }
   },
-
-  APPLOVIN_TEST: {
-  SHEET_NAME: 'Applovin_test',
-  API_URL: 'https://app.appodeal.com/graphql',
-  TARGET_EROAS: getApplovinTestTargetEROAS,
-  GROWTH_THRESHOLDS: getApplovinTestGrowthThresholds,
-  BEARER_TOKEN: getBearerTokenStrict,
-  COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin_test',
-  API_CONFIG: {
-    OPERATION_NAME: "RichStats",
-    FILTERS: {
-      USER: ["79950","127168","157350","150140"],
-      ATTRIBUTION_PARTNER: ["Stack"],
-      ATTRIBUTION_NETWORK_HID: ["261208778387488768"],
-      ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
-    },
-    GROUP_BY: [
-      { dimension: "DATE", timeBucket: "WEEK" },
-      { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-      { dimension: "APP" }
-    ],
-    MEASURES: UNIFIED_MEASURES
-  }
-},
 
   MINTEGRAL: {
     SHEET_NAME: 'Mintegral',

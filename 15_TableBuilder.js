@@ -9,12 +9,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
 
   clearTableBuilderCaches();
   
-  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-    buildApplovinTestTable(data, tableData, formatData, wow, initialMetricsCache);
-    console.log(`buildApplovinTestTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-    return;
-  }
-  
   precomputeAllTotals(data);
   precomputeWoWCache(wow);
   
@@ -139,113 +133,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
   }
   
   console.log(`buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-}
-
-function buildApplovinTestTable(data, tableData, formatData, wow, initialMetricsCache) {
-  const startTime = Date.now();
-  
-  const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
-  
-  appKeys.forEach(appKey => {
-    const app = data[appKey];
-    
-    formatData.push({ row: tableData.length + 1, type: 'APP' });
-    const emptyRow = new Array(getUnifiedHeaders().length).fill('');
-    emptyRow[0] = 'APP';
-    emptyRow[1] = app.appName;
-    tableData.push(emptyRow);
-    
-    const campaignKeys = Object.keys(app.campaigns).sort((a, b) => {
-      const totalSpendA = Object.values(app.campaigns[a].weeks).reduce((sum, week) => 
-        sum + week.data.reduce((s, d) => s + d.spend, 0), 0);
-      const totalSpendB = Object.values(app.campaigns[b].weeks).reduce((sum, week) => 
-        sum + week.data.reduce((s, d) => s + d.spend, 0), 0);
-      return totalSpendB - totalSpendA;
-    });
-    
-    campaignKeys.forEach(campaignKey => {
-      const campaign = app.campaigns[campaignKey];
-      
-      formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
-      const campaignRow = new Array(getUnifiedHeaders().length).fill('');
-      campaignRow[0] = 'CAMPAIGN';
-      campaignRow[1] = campaign.campaignName;
-      campaignRow[2] = campaign.campaignId;
-      campaignRow[3] = campaign.geo;
-      tableData.push(campaignRow);
-      
-      const weekKeys = Object.keys(campaign.weeks).sort();
-      
-      weekKeys.forEach(weekKey => {
-        const week = campaign.weeks[weekKey];
-        const weekTotals = calculateWeekTotals(week.data);
-        
-        const campaignWeekKey = `${campaign.campaignId}_${week.weekStart}`;
-        const weekWoW = getOptimizedWoW(campaignWeekKey, 'campaignWoW');
-        
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-        const status = weekWoW.growthStatus || '';
-        
-        formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-        
-        let eROAS730Display = `${weekTotals.avgEROASD730.toFixed(0)}%`;
-        let eProfit730Display = formatSmartCurrency(weekTotals.totalProfit);
-        
-        if (initialMetricsCache) {
-          const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-          eROAS730Display = initialMetricsCache.formatEROASWithInitial('WEEK', app.appName, weekRange, weekTotals.avgEROASD730, campaign.campaignId, campaign.campaignName);
-          eProfit730Display = initialMetricsCache.formatProfitWithInitial('WEEK', app.appName, weekRange, weekTotals.totalProfit, campaign.campaignId, campaign.campaignName);
-        }
-        
-        const weekRow = new Array(getUnifiedHeaders().length).fill('');
-        weekRow[0] = 'WEEK';
-        weekRow[1] = `${week.weekStart} - ${week.weekEnd}`;
-        weekRow[4] = formatSmartCurrency(weekTotals.totalSpend);
-        weekRow[5] = spendWoW;
-        weekRow[6] = weekTotals.totalInstalls;
-        weekRow[7] = weekTotals.avgCpi.toFixed(3);
-        weekRow[8] = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
-        weekRow[9] = weekTotals.avgIpm.toFixed(1);
-        weekRow[10] = `${weekTotals.avgRrD1.toFixed(0)}%`;
-        weekRow[11] = `${weekTotals.avgRrD7.toFixed(0)}%`;
-        weekRow[12] = weekTotals.avgArpu.toFixed(3);
-        weekRow[13] = `${weekTotals.avgERoas.toFixed(0)}%`;
-        weekRow[14] = eROAS730Display;
-        weekRow[15] = eProfit730Display;
-        weekRow[16] = profitWoW;
-        weekRow[17] = status;
-        weekRow[18] = '';
-        
-        tableData.push(weekRow);
-      });
-    });
-  });
-  
-  precomputeApplovinTestWoWCache(wow);
-  
-  console.log(`buildApplovinTestTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-}
-
-function precomputeApplovinTestWoWCache(wow) {
-  const startTime = Date.now();
-  let cacheCount = 0;
-  
-  if (wow.campaignWoW) {
-    Object.keys(wow.campaignWoW).forEach(key => {
-      WOW_METRICS_CACHE.set(`campaignWoW_${key}`, wow.campaignWoW[key]);
-      cacheCount++;
-    });
-  }
-  
-  if (wow.appWeekWoW) {
-    Object.keys(wow.appWeekWoW).forEach(key => {
-      WOW_METRICS_CACHE.set(`appWeekWoW_${key}`, wow.appWeekWoW[key]);
-      cacheCount++;
-    });
-  }
-  
-  console.log(`Precomputed ${cacheCount} APPLOVIN_TEST WoW entries in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
 function precomputeAllTotals(data) {

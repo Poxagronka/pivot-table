@@ -105,22 +105,12 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     if (rowTypeMap.app.length > 0) {
       const appRanges = createOptimizedRanges(sheet, rowTypeMap.app, numCols);
       if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-        
         appRanges.forEach(range => {
           range.setBackground('#ffffff')
                .setFontWeight('normal')
                .setFontSize(9);
         });
-      } 
-      if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-  appRanges.forEach(range => {
-    range.setBackground('#d1e7fe')
-         .setFontColor('#000000')
-         .setFontWeight('bold')
-         .setFontSize(10);
-  });
-}
-else {
+      } else {
         appRanges.forEach(range => {
           range.setBackground('#d1e7fe')
                .setFontColor('#000000')
@@ -129,7 +119,6 @@ else {
         });
       }
     }
-
 
     if (rowTypeMap.week.length > 0) {
       const weekRanges = createOptimizedRanges(sheet, rowTypeMap.week, numCols);
@@ -155,25 +144,19 @@ else {
     if (rowTypeMap.network.length > 0) {
       const networkRanges = createOptimizedRanges(sheet, rowTypeMap.network, numCols);
       if (CURRENT_PROJECT === 'OVERALL') {
-  networkRanges.forEach(range => {
-    range.setBackground('#ffffff')
-         .setFontWeight('normal')
-         .setFontSize(9);
-  });
-} else if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-  networkRanges.forEach(range => {
-    range.setBackground('#f0f8ff')
-         .setFontWeight('normal')
-         .setFontSize(9);
-  });
-} else {
-  networkRanges.forEach(range => {
-    range.setBackground('#d1e7fe')
-         .setFontColor('#000000')
-         .setFontWeight('bold')
-         .setFontSize(10);
-  });
-}
+        networkRanges.forEach(range => {
+          range.setBackground('#ffffff')
+               .setFontWeight('normal')
+               .setFontSize(9);
+        });
+      } else {
+        networkRanges.forEach(range => {
+          range.setBackground('#d1e7fe')
+               .setFontColor('#000000')
+               .setFontWeight('bold')
+               .setFontSize(10);
+        });
+      }
     }
 
     if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
@@ -699,15 +682,8 @@ function createProjectPivotTable(projectName, appData) {
   setCurrentProject(projectName);
   
   try {
-  if (projectName === 'APPLOVIN_TEST') {
-    createApplovinTestPivotTable(appData);
-  } else {
     createUnifiedPivotTable(appData);
+  } finally {
+    setCurrentProject(originalProject);
   }
-} finally {
-  setCurrentProject(originalProject);
-}
-}
-function createApplovinTestPivotTable(appData) {
-  createUnifiedPivotTable(appData);
 }
