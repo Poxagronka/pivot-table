@@ -33,7 +33,7 @@ function updateAllProjects() { updateProjectsBatch(MENU_PROJECTS, false); }
 function updateProjectsBatch(projects, isSelective = false) {
   if (!isBearerTokenConfigured()) return openSettingsSheet();
   
-  if (isSelective) try { preloadSettings(); Utilities.sleep(2000); } catch(e) {}
+  if (isSelective) try { preloadSettings(); Utilities.sleep(200); } catch(e) {}
   
   var results = { success: [], failed: [] };
   
@@ -43,19 +43,19 @@ function updateProjectsBatch(projects, isSelective = false) {
         clearSettingsCache();
         clearAllCommentColumnCaches();
         SpreadsheetApp.flush();
-        Utilities.sleep(3000);
+        Utilities.sleep(300);
       }
       updateProjectDataWithRetry(proj.toUpperCase());
       results.success.push(proj);
-      if (i < projects.length - 1) Utilities.sleep(2000);
+      if (i < projects.length - 1) Utilities.sleep(200);
     } catch (e) {
       console.error(`❌ Failed ${proj}:`, e);
       results.failed.push({project: proj, error: e.toString().substring(0, 80)});
-      if (i < projects.length - 1) Utilities.sleep(isSelective ? 10000 : 3000);
+      if (i < projects.length - 1) Utilities.sleep(isSelective ? 1000 : 300);
     }
   });
   
-  if (results.success.length) try { Utilities.sleep(isSelective ? 3000 : 1000); sortProjectSheetsWithRetry(); } catch(e) {}
+  if (results.success.length) try { Utilities.sleep(isSelective ? 300 : 100); sortProjectSheetsWithRetry(); } catch(e) {}
   console.log(`Updated: ${results.success.length}/${projects.length}`);
 }
 
@@ -142,7 +142,7 @@ function updateProjectDataWithRetry(projectName, maxRetries = 1) {
     try {
       clearSettingsCache();
       SpreadsheetApp.flush();
-      Utilities.sleep(1000);
+      Utilities.sleep(100);
       updateProjectData(projectName);
       return;
     } catch(e) {
@@ -151,10 +151,10 @@ function updateProjectDataWithRetry(projectName, maxRetries = 1) {
       if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
         clearSettingsCache();
         clearAllCommentColumnCaches();
-        Utilities.sleep(6000 * (attempt + 1));
+        Utilities.sleep(600 * (attempt + 1));
         SpreadsheetApp.flush();
-        Utilities.sleep(2000);
-      } else Utilities.sleep(3000);
+        Utilities.sleep(200);
+      } else Utilities.sleep(300);
     }
   }
 }
@@ -165,7 +165,7 @@ function sortProjectSheetsWithRetry(maxRetries = 1) {
     catch(e) {
       console.error(`Sort attempt ${attempt+1} failed:`, e);
       if (attempt >= maxRetries) throw e;
-      Utilities.sleep(2000);
+      Utilities.sleep(200);
     }
   }
 }

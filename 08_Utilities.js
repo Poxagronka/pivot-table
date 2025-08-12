@@ -295,7 +295,7 @@ function batchOperation(items, batchSize, operation) {
     results.push(...batchResults);
     
     if (i + batchSize < items.length) {
-      Utilities.sleep(100);
+      Utilities.sleep(50);
     }
   }
   return results;

@@ -32,7 +32,7 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
         requests: allRequests.slice(i, i + BATCH_SIZE)
       }, spreadsheetId);
       
-      if (i + BATCH_SIZE < allRequests.length) Utilities.sleep(50);
+      if (i + BATCH_SIZE < allRequests.length) Utilities.sleep(20);
     }
     
     console.log(`Row grouping completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
