@@ -1,7 +1,3 @@
-/**
- * Utility Functions - ОБНОВЛЕНО: улучшена защита от таймаутов + INCENT_TRAFFIC + умное форматирование валют
- */
-
 // Date Utils
 function getMondayOfWeek(date) {
   const d = new Date(date);
@@ -44,248 +40,84 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date);
 }
 
-// Sheet Utils
-function expandAllGroups(sheet) {
-  try {
-    const maxRows = sheet.getMaxRows();
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        sheet.getRange(1, 1, maxRows, 1).expandGroups();
-      } catch (e) {
-        break;
-      }
-    }
-  } catch (e) {
-    console.log('No groups to expand or error expanding groups:', e);
-  }
-}
-
-function clearAllGroups(sheet) {
-  try {
-    const maxRows = sheet.getMaxRows();
-    let hasGroups = true;
-    let attempts = 0;
-    
-    while (hasGroups && attempts < 10) {
-      try {
-        sheet.getRange(1, 1, maxRows, 1).shiftRowGroupDepth(-1);
-        attempts++;
-      } catch (e) {
-        hasGroups = false;
-      }
-    }
-  } catch (e) {
-    console.log('Error clearing groups:', e);
-  }
-}
-
-function recreateGrouping(sheet) {
-  expandAllGroups(sheet);
-  clearAllGroups(sheet);
-  const data = sheet.getDataRange().getValues();
-  createRowGrouping(sheet, data, null);
-}
-
-function clearAllDataSilent() {
-  const maxRetries = 2;
-  const baseDelay = 3000;
+// Sheet Utils - Unified clear function
+function clearSheetDataSilent(projectName = null) {
+  const maxRetries = projectName ? 3 : 2;
+  const baseDelay = projectName ? 5000 : 3000;
+  const config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const config = getCurrentConfig();
       const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
+      if (!spreadsheet) throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
+      
       const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
       
+      // Try to save comments before clearing
       if (oldSheet && oldSheet.getLastRow() > 1) {
         try {
-          const cache = new CommentCache();
+          const cache = new CommentCache(projectName);
           cache.syncCommentsFromSheet();
-          console.log('Comments cached before clearing sheet');
+          console.log(`${projectName || 'Current'}: Comments cached before clearing sheet`);
         } catch (e) {
-          console.error('Error caching comments:', e);
+          console.error(`${projectName || 'Current'}: Error caching comments:`, e);
         }
       }
       
       Utilities.sleep(1000);
+      SpreadsheetApp.flush();
       
+      // Create new sheet
       const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
       const newSheet = spreadsheet.insertSheet(tempSheetName);
       
-      if (oldSheet) {
-        spreadsheet.deleteSheet(oldSheet);
-      }
-      
-      newSheet.setName(config.SHEET_NAME);
-      
-      console.log(`Sheet ${config.SHEET_NAME} recreated successfully`);
-      return;
-    } catch (e) {
-      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
-      
-      if (attempt === maxRetries) {
-        throw e;
-      }
-      
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      console.log(`Waiting ${delay}ms before retry...`);
-      Utilities.sleep(delay);
-    }
-  }
-}
-
-function clearProjectDataSilent(projectName) {
-  const maxRetries = 3;
-  const baseDelay = 5000;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const config = getProjectConfig(projectName);
-      const spreadsheet = SpreadsheetApp.openById(config.SHEET_ID);
-      
-      if (!spreadsheet) {
-        throw new Error(`Cannot access spreadsheet ${config.SHEET_ID}`);
-      }
-      
-      const oldSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-      
-      if (oldSheet && oldSheet.getLastRow() > 1) {
-        try {
-          const headers = oldSheet.getRange(1, 1, 1, oldSheet.getLastColumn()).getValues()[0];
-          const hasCommentColumn = headers.some(h => 
-            h && (h.toString().toLowerCase() === 'comments' || h.toString().toLowerCase() === 'comment')
-          );
-          
-          if (hasCommentColumn) {
-            console.log(`${projectName}: Found comment column, syncing comments...`);
-            const cache = new CommentCache(projectName);
-            cache.syncCommentsFromSheet();
-            console.log(`${projectName}: Comments cached successfully`);
-          } else {
-            console.log(`${projectName}: No comment column found in headers:`, headers);
-          }
-        } catch (e) {
-          if (e.toString().includes('timed out')) {
-            console.log(`${projectName}: Timeout while caching comments, continuing anyway`);
-          } else {
-            console.error(`${projectName}: Error caching comments:`, e);
-            console.log(`${projectName}: Continuing without comment cache`);
-          }
-        }
-      }
-      
-      Utilities.sleep(2000);
-      SpreadsheetApp.flush();
-      
-      const tempSheetName = config.SHEET_NAME + '_temp_' + Date.now();
-      console.log(`${projectName}: Creating temporary sheet: ${tempSheetName}`);
-      const newSheet = spreadsheet.insertSheet(tempSheetName);
-      
-      Utilities.sleep(1000);
-      SpreadsheetApp.flush();
-      
+      // Delete old sheet if exists
       if (oldSheet) {
         try {
-          console.log(`${projectName}: Attempting to delete old sheet...`);
           spreadsheet.deleteSheet(oldSheet);
-          console.log(`${projectName}: Old sheet deleted successfully`);
-          
           Utilities.sleep(1000);
-          SpreadsheetApp.flush();
-          
-          const checkSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-          if (checkSheet) {
-            throw new Error(`Sheet ${config.SHEET_NAME} still exists after deletion`);
-          }
         } catch (deleteError) {
-          console.error(`${projectName}: Error deleting old sheet:`, deleteError);
-          
-          const allSheets = spreadsheet.getSheets();
-          const existingNames = allSheets.map(s => s.getName());
-          console.log(`${projectName}: Existing sheets:`, existingNames);
-          
-          const tempSheets = allSheets.filter(s => s.getName().startsWith(config.SHEET_NAME + '_temp_'));
-          if (tempSheets.length > 1) {
-            console.log(`${projectName}: Found ${tempSheets.length} temporary sheets, cleaning up...`);
-            tempSheets.slice(1).forEach(sheet => {
-              try {
-                spreadsheet.deleteSheet(sheet);
-                console.log(`${projectName}: Deleted temp sheet: ${sheet.getName()}`);
-              } catch (e) {
-                console.error(`${projectName}: Failed to delete temp sheet: ${sheet.getName()}`);
-              }
-            });
-          }
-          
-          if (existingNames.includes(config.SHEET_NAME)) {
-            const backupName = config.SHEET_NAME + '_backup_' + Date.now();
-            console.log(`${projectName}: Renaming existing sheet to ${backupName}`);
-            const existingSheet = spreadsheet.getSheetByName(config.SHEET_NAME);
-            existingSheet.setName(backupName);
-            
-            Utilities.sleep(1000);
-            SpreadsheetApp.flush();
-          }
+          console.error(`Error deleting old sheet:`, deleteError);
+          // Rename old sheet as backup
+          oldSheet.setName(config.SHEET_NAME + '_backup_' + Date.now());
         }
       }
       
-      Utilities.sleep(1000);
-      SpreadsheetApp.flush();
-      
-      console.log(`${projectName}: Renaming temp sheet to ${config.SHEET_NAME}`);
-      const finalCheck = spreadsheet.getSheetByName(config.SHEET_NAME);
-      if (finalCheck) {
-        const backupName = config.SHEET_NAME + '_old_' + Date.now();
-        console.log(`${projectName}: Sheet still exists, renaming to ${backupName}`);
-        finalCheck.setName(backupName);
-        Utilities.sleep(1000);
-        SpreadsheetApp.flush();
-      }
-      
+      // Rename new sheet
       newSheet.setName(config.SHEET_NAME);
       
-      const allSheetsAfter = spreadsheet.getSheets();
-      const tempSheetsAfter = allSheetsAfter.filter(s => 
-        s.getName().startsWith(config.SHEET_NAME + '_temp_') || 
-        s.getName().startsWith(config.SHEET_NAME + '_backup_') ||
-        s.getName().startsWith(config.SHEET_NAME + '_old_')
-      );
-      
-      if (tempSheetsAfter.length > 0) {
-        console.log(`${projectName}: Cleaning up ${tempSheetsAfter.length} temporary/backup sheets...`);
-        tempSheetsAfter.forEach(sheet => {
+      // Clean up any temp/backup sheets
+      spreadsheet.getSheets()
+        .filter(s => s.getName().includes(config.SHEET_NAME + '_') && 
+                    (s.getName().includes('_temp_') || s.getName().includes('_backup_')))
+        .forEach(sheet => {
           try {
             if (spreadsheet.getSheets().length > 1) {
               spreadsheet.deleteSheet(sheet);
-              console.log(`${projectName}: Deleted: ${sheet.getName()}`);
             }
-          } catch (e) {
-            console.error(`${projectName}: Failed to delete: ${sheet.getName()}`);
-          }
+          } catch (e) {}
         });
-      }
       
-      console.log(`${projectName}: Sheet recreated successfully`);
+      console.log(`${projectName || 'Current'}: Sheet recreated successfully`);
       return;
-    } catch (e) {
-      console.error(`${projectName} sheet recreation attempt ${attempt} failed:`, e);
       
-      if (e.toString().includes('timed out') || e.toString().includes('Service Spreadsheets')) {
-        const timeoutDelay = baseDelay * Math.pow(2, attempt);
-        console.log(`Timeout detected. Waiting ${timeoutDelay}ms before retry...`);
-        Utilities.sleep(timeoutDelay);
-        
-        SpreadsheetApp.flush();
-        Utilities.sleep(2000);
-      } else if (attempt === maxRetries) {
-        throw e;
-      } else {
-        const delay = baseDelay * Math.pow(1.5, attempt - 1);
-        console.log(`Waiting ${delay}ms before retry...`);
-        Utilities.sleep(delay);
-      }
+    } catch (e) {
+      console.error(`Sheet recreation attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) throw e;
+      
+      const delay = e.toString().includes('timed out') ? 
+                    baseDelay * Math.pow(2, attempt) : 
+                    baseDelay * Math.pow(1.5, attempt - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      Utilities.sleep(delay);
+      SpreadsheetApp.flush();
     }
   }
 }
+
+// Legacy functions for compatibility
+function clearAllDataSilent() { clearSheetDataSilent(); }
+function clearProjectDataSilent(projectName) { clearSheetDataSilent(projectName); }
 
 function getOrCreateProjectSheet(projectName) {
   const config = getProjectConfig(projectName);
@@ -328,21 +160,13 @@ function sortProjectSheets() {
       ...otherVisibleSheets.map(item => item.sheet)
     ];
     
-    console.log('Sheet ordering (visible sheets only):');
-    console.log('- Project sheets:', projectSheets.map(s => s.name));
-    console.log('- Other visible sheets:', otherVisibleSheets.map(s => s.name));
-    
     let position = 1;
-    
     finalOrder.forEach((sheet, index) => {
       try {
         spreadsheet.setActiveSheet(sheet);
         spreadsheet.moveActiveSheet(position);
         position++;
-        
-        if (index < finalOrder.length - 1) {
-          Utilities.sleep(200);
-        }
+        if (index < finalOrder.length - 1) Utilities.sleep(200);
       } catch (e) {
         console.error(`Error moving sheet ${sheet.getName()}:`, e);
       }
@@ -363,8 +187,7 @@ function sanitizeString(str) {
 
 function truncateString(str, maxLength = 50) {
   if (!str) return '';
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength - 3) + '...';
+  return str.length <= maxLength ? str : str.substring(0, maxLength - 3) + '...';
 }
 
 // Array Utils
@@ -403,11 +226,11 @@ function formatCurrency(amount, currency = 'USD') {
 
 function formatSmartCurrency(amount) {
   if (Math.abs(amount) >= 10) {
-    return '$' + amount.toFixed(0);  // $1234
+    return '$' + amount.toFixed(0);
   } else if (Math.abs(amount) >= 1) {
-    return '$' + amount.toFixed(1);  // $5.3
+    return '$' + amount.toFixed(1);
   } else {
-    return '$' + amount.toFixed(2);  // $0.75
+    return '$' + amount.toFixed(2);
   }
 }
 
