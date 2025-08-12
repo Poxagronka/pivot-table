@@ -2,6 +2,7 @@ var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Bundle IDs Database';
 var COMMENTS_CACHE_SPREADSHEET_ID = '19A6woiTOP_c7XeKWuLWXKmd-4mO_nZ3aVVxk9ep6mCo';
+var APP_NAME_LEGACY = { 'Block-Tok': 'Brick Blast' }; // старое название для поиска в кэшах
 
 function getBearerToken() {
   try {
