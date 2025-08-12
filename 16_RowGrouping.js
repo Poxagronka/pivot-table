@@ -1,433 +1,203 @@
+/**
+ * Row Grouping - Optimized: single API call
+ */
+
 function createUnifiedRowGrouping(sheet, tableData, data) {
   try {
-    const startTime = new Date().getTime();
-    
+    const startTime = Date.now();
     const sheetId = sheet.getSheetId();
     const spreadsheetId = sheet.getParent().getId();
     
-    const allCreateRequests = [];
-    const allCollapseRequests = [];
+    // Собираем ВСЕ requests сразу
+    const allRequests = [];
     
-    if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-      const sortedNetworks = Object.keys(data).sort((a, b) => 
-        data[a].networkName.localeCompare(data[b].networkName)
-      );
-      
-      for (const networkKey of sortedNetworks) {
-        const createRequests = buildCreateGroupsForEntity(data, networkKey, 'network', sheetId);
-        const collapseRequests = buildCollapseGroupsForEntity(data, networkKey, 'network', sheetId);
-        
-        allCreateRequests.push(...createRequests);
-        allCollapseRequests.push(...collapseRequests);
-      }
-    } else {
-      const sortedApps = Object.keys(data).sort((a, b) => 
-        data[a].appName.localeCompare(data[b].appName)
-      );
-      
-      for (const appKey of sortedApps) {
-        const createRequests = buildCreateGroupsForEntity(data, appKey, 'app', sheetId);
-        const collapseRequests = buildCollapseGroupsForEntity(data, appKey, 'app', sheetId);
-        
-        allCreateRequests.push(...createRequests);
-        allCollapseRequests.push(...collapseRequests);
-      }
-    }
+    const entities = CURRENT_PROJECT === 'INCENT_TRAFFIC' ?
+      Object.keys(data).sort((a, b) => data[a].networkName.localeCompare(data[b].networkName)) :
+      Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     
-    console.log(`Row grouping: ${allCreateRequests.length} create + ${allCollapseRequests.length} collapse requests`);
+    const entityType = CURRENT_PROJECT === 'INCENT_TRAFFIC' ? 'network' : 'app';
     
-    const BATCH_SIZE = 100;
+    // Собираем create и collapse для каждой entity
+    entities.forEach(entityKey => {
+      const requests = buildGroupRequests(data, entityKey, entityType, sheetId);
+      allRequests.push(...requests);
+    });
     
-    for (let i = 0; i < allCreateRequests.length; i += BATCH_SIZE) {
-      const batch = allCreateRequests.slice(i, i + BATCH_SIZE);
+    console.log(`Row grouping: ${allRequests.length} total requests`);
+    
+    // ОДИН batchUpdate для всего
+    const BATCH_SIZE = 5000;
+    for (let i = 0; i < allRequests.length; i += BATCH_SIZE) {
       Sheets.Spreadsheets.batchUpdate({
-        requests: batch
+        requests: allRequests.slice(i, i + BATCH_SIZE)
       }, spreadsheetId);
+      
+      if (i + BATCH_SIZE < allRequests.length) Utilities.sleep(50);
     }
     
-    for (let i = 0; i < allCollapseRequests.length; i += BATCH_SIZE) {
-      const batch = allCollapseRequests.slice(i, i + BATCH_SIZE);
-      Sheets.Spreadsheets.batchUpdate({
-        requests: batch
-      }, spreadsheetId);
-    }
-    
-    console.log(`Row grouping completed in ${(new Date().getTime() - startTime)/1000}s`);
-    
+    console.log(`Row grouping completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
   } catch (e) {
-    console.error('Error in unified row grouping:', e);
+    console.error('Error in row grouping:', e);
   }
 }
 
+function buildGroupRequests(data, entityKey, entityType, sheetId) {
+  const requests = [];
+  let rowPointer = calculateRowPointer(data, entityKey, entityType);
+  const entityStartRow = rowPointer;
+  rowPointer++;
+  
+  let entityTotalRows = 0;
+  const entity = data[entityKey];
+  const weeks = entity.weeks;
+  const sortedWeeks = Object.keys(weeks).sort();
+  
+  // Сначала собираем все позиции и create requests
+  const collapseData = [];
+  
+  sortedWeeks.forEach(weekKey => {
+    const week = weeks[weekKey];
+    const weekStartRow = rowPointer;
+    rowPointer++;
+    let weekContentRows = 0;
+    
+    if (entityType === 'network') {
+      weekContentRows = Object.keys(week.apps).length;
+      rowPointer += weekContentRows;
+      
+      if (weekContentRows > 0) {
+        requests.push({
+          addDimensionGroup: {
+            range: { sheetId, dimension: "ROWS", startIndex: weekStartRow, endIndex: weekStartRow + weekContentRows }
+          }
+        });
+        collapseData.push({ start: weekStartRow, end: weekStartRow + weekContentRows, depth: 2 });
+      }
+    } else {
+      if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+        const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
+          const spendA = week.sourceApps[a].campaigns.reduce((s, c) => s + c.spend, 0);
+          const spendB = week.sourceApps[b].campaigns.reduce((s, c) => s + c.spend, 0);
+          return spendB - spendA;
+        });
+        
+        sourceAppKeys.forEach(sourceAppKey => {
+          const sourceApp = week.sourceApps[sourceAppKey];
+          const sourceAppStartRow = rowPointer;
+          rowPointer++;
+          const campaignCount = sourceApp.campaigns.length;
+          rowPointer += campaignCount;
+          
+          if (campaignCount > 0) {
+            requests.push({
+              addDimensionGroup: {
+                range: { sheetId, dimension: "ROWS", startIndex: sourceAppStartRow, endIndex: sourceAppStartRow + campaignCount }
+              }
+            });
+            collapseData.push({ start: sourceAppStartRow, end: sourceAppStartRow + campaignCount, depth: 3 });
+          }
+          weekContentRows += 1 + campaignCount;
+        });
+      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+        weekContentRows = Object.keys(week.networks).length;
+        rowPointer += weekContentRows;
+      } else if (week.campaigns) {
+        weekContentRows = week.campaigns.length;
+        rowPointer += weekContentRows;
+      }
+      
+      if (weekContentRows > 0) {
+        requests.push({
+          addDimensionGroup: {
+            range: { sheetId, dimension: "ROWS", startIndex: weekStartRow, endIndex: weekStartRow + weekContentRows }
+          }
+        });
+        collapseData.push({ start: weekStartRow, end: weekStartRow + weekContentRows, depth: 2 });
+      }
+    }
+    entityTotalRows += 1 + weekContentRows;
+  });
+  
+  if (entityTotalRows > 0) {
+    requests.push({
+      addDimensionGroup: {
+        range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: entityStartRow + entityTotalRows }
+      }
+    });
+    collapseData.push({ start: entityStartRow, end: entityStartRow + entityTotalRows, depth: 1 });
+  }
+  
+  // Добавляем collapse в обратном порядке (от глубоких к поверхностным)
+  collapseData.sort((a, b) => b.depth - a.depth);
+  collapseData.forEach(item => {
+    requests.push({
+      updateDimensionGroup: {
+        dimensionGroup: {
+          range: { sheetId, dimension: "ROWS", startIndex: item.start, endIndex: item.end },
+          depth: item.depth,
+          collapsed: true
+        },
+        fields: "collapsed"
+      }
+    });
+  });
+  
+  return requests;
+}
+
+function calculateRowPointer(data, targetEntityKey, entityType) {
+  let rowPointer = 2;
+  
+  const entities = entityType === 'network' ?
+    Object.keys(data).sort((a, b) => data[a].networkName.localeCompare(data[b].networkName)) :
+    Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
+  
+  for (const entityKey of entities) {
+    if (entityKey === targetEntityKey) break;
+    
+    const entity = data[entityKey];
+    rowPointer++;
+    
+    Object.keys(entity.weeks).forEach(weekKey => {
+      const week = entity.weeks[weekKey];
+      rowPointer++;
+      
+      if (entityType === 'network') {
+        rowPointer += Object.keys(week.apps).length;
+      } else if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+        Object.values(week.sourceApps).forEach(sourceApp => {
+          rowPointer++;
+          rowPointer += sourceApp.campaigns.length;
+        });
+      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+        rowPointer += Object.keys(week.networks).length;
+      } else if (week.campaigns) {
+        rowPointer += week.campaigns.length;
+      }
+    });
+  }
+  
+  return rowPointer;
+}
+
+// Legacy functions
 function processEntityGroups(spreadsheetId, sheetId, data, entityKey, entityType) {
   try {
-    const createRequests = buildCreateGroupsForEntity(data, entityKey, entityType, sheetId);
-    
-    if (createRequests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: createRequests
-      }, spreadsheetId);
+    const requests = buildGroupRequests(data, entityKey, entityType, sheetId);
+    if (requests.length > 0) {
+      Sheets.Spreadsheets.batchUpdate({ requests }, spreadsheetId);
     }
-    
-    const collapseRequests = buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId);
-    
-    if (collapseRequests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: collapseRequests
-      }, spreadsheetId);
-    }
-    
   } catch (e) {
     console.error(`Error processing ${entityType} ${entityKey}:`, e);
   }
 }
 
 function buildCreateGroupsForEntity(data, entityKey, entityType, sheetId) {
-  const groupRequests = [];
-  let rowPointer = calculateRowPointer(data, entityKey, entityType);
-  
-  if (entityType === 'network') {
-    const network = data[entityKey];
-    const networkStartRow = rowPointer;
-    rowPointer++;
-    let networkTotalRows = 0;
-
-    const sortedWeeks = Object.keys(network.weeks).sort();
-    
-    sortedWeeks.forEach(weekKey => {
-      const week = network.weeks[weekKey];
-      const weekStartRow = rowPointer;
-      rowPointer++;
-      
-      const appCount = Object.keys(week.apps).length;
-      rowPointer += appCount;
-      networkTotalRows += 1 + appCount;
-      
-      if (appCount > 0) {
-        groupRequests.push({
-          addDimensionGroup: {
-            range: {
-              sheetId: sheetId,
-              dimension: "ROWS",
-              startIndex: weekStartRow,
-              endIndex: weekStartRow + appCount
-            }
-          }
-        });
-      }
-    });
-
-    if (networkTotalRows > 0) {
-      groupRequests.push({
-        addDimensionGroup: {
-          range: {
-            sheetId: sheetId,
-            dimension: "ROWS",
-            startIndex: networkStartRow,
-            endIndex: networkStartRow + networkTotalRows
-          }
-        }
-      });
-    }
-  } else {
-    const app = data[entityKey];
-    const appStartRow = rowPointer;
-    rowPointer++;
-    let appTotalRows = 0;
-
-    const sortedWeeks = Object.keys(app.weeks).sort();
-    
-    sortedWeeks.forEach(weekKey => {
-      const week = app.weeks[weekKey];
-      const weekStartRow = rowPointer;
-      rowPointer++;
-      let weekContentRows = 0;
-
-      if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-        const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
-          const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
-          const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
-          return spendB - spendA;
-        });
-        
-        sourceAppKeys.forEach(sourceAppKey => {
-          const sourceApp = week.sourceApps[sourceAppKey];
-          const sourceAppStartRow = rowPointer;
-          rowPointer++;
-          
-          const campaignCount = sourceApp.campaigns.length;
-          rowPointer += campaignCount;
-          
-          if (campaignCount > 0) {
-            groupRequests.push({
-              addDimensionGroup: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: "ROWS",
-                  startIndex: sourceAppStartRow,
-                  endIndex: sourceAppStartRow + campaignCount
-                }
-              }
-            });
-          }
-          
-          weekContentRows += 1 + campaignCount;
-        });
-      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-        const networkCount = Object.keys(week.networks).length;
-        rowPointer += networkCount;
-        weekContentRows = networkCount;
-      } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-        const campaignCount = week.campaigns ? week.campaigns.length : 0;
-        rowPointer += campaignCount;
-        weekContentRows = campaignCount;
-      }
-      
-      if (weekContentRows > 0) {
-        groupRequests.push({
-          addDimensionGroup: {
-            range: {
-              sheetId: sheetId,
-              dimension: "ROWS",
-              startIndex: weekStartRow,
-              endIndex: weekStartRow + weekContentRows
-            }
-          }
-        });
-        
-        appTotalRows += 1 + weekContentRows;
-      } else {
-        appTotalRows += 1;
-      }
-    });
-
-    if (appTotalRows > 0) {
-      groupRequests.push({
-        addDimensionGroup: {
-          range: {
-            sheetId: sheetId,
-            dimension: "ROWS",
-            startIndex: appStartRow,
-            endIndex: appStartRow + appTotalRows
-          }
-        }
-      });
-    }
-  }
-  
-  return groupRequests;
+  return buildGroupRequests(data, entityKey, entityType, sheetId)
+    .filter(r => r.addDimensionGroup);
 }
 
 function buildCollapseGroupsForEntity(data, entityKey, entityType, sheetId) {
-  const collapseRequests = [];
-  let rowPointer = calculateRowPointer(data, entityKey, entityType);
-  
-  if (entityType === 'network') {
-    const network = data[entityKey];
-    const networkStartRow = rowPointer;
-    rowPointer++;
-    let networkTotalRows = 0;
-
-    const sortedWeeks = Object.keys(network.weeks).sort();
-    
-    sortedWeeks.forEach(weekKey => {
-      const week = network.weeks[weekKey];
-      const weekStartRow = rowPointer;
-      rowPointer++;
-      
-      const appCount = Object.keys(week.apps).length;
-      rowPointer += appCount;
-      networkTotalRows += 1 + appCount;
-      
-      if (appCount > 0) {
-        collapseRequests.push({
-          updateDimensionGroup: {
-            dimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + appCount
-              },
-              depth: 2,
-              collapsed: true
-            },
-            fields: "collapsed"
-          }
-        });
-      }
-    });
-
-    if (networkTotalRows > 0) {
-      collapseRequests.push({
-        updateDimensionGroup: {
-          dimensionGroup: {
-            range: {
-              sheetId: sheetId,
-              dimension: "ROWS",
-              startIndex: networkStartRow,
-              endIndex: networkStartRow + networkTotalRows
-            },
-            depth: 1,
-            collapsed: true
-          },
-          fields: "collapsed"
-        }
-      });
-    }
-  } else {
-    const app = data[entityKey];
-    const appStartRow = rowPointer;
-    rowPointer++;
-    let appTotalRows = 0;
-
-    const sortedWeeks = Object.keys(app.weeks).sort();
-    
-    sortedWeeks.forEach(weekKey => {
-      const week = app.weeks[weekKey];
-      const weekStartRow = rowPointer;
-      rowPointer++;
-      let weekContentRows = 0;
-
-      if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-        const sourceAppKeys = Object.keys(week.sourceApps).sort((a, b) => {
-          const spendA = week.sourceApps[a].campaigns.reduce((sum, c) => sum + c.spend, 0);
-          const spendB = week.sourceApps[b].campaigns.reduce((sum, c) => sum + c.spend, 0);
-          return spendB - spendA;
-        });
-        
-        sourceAppKeys.forEach(sourceAppKey => {
-          const sourceApp = week.sourceApps[sourceAppKey];
-          const sourceAppStartRow = rowPointer;
-          rowPointer++;
-          
-          const campaignCount = sourceApp.campaigns.length;
-          rowPointer += campaignCount;
-          
-          if (campaignCount > 0) {
-            collapseRequests.push({
-              updateDimensionGroup: {
-                dimensionGroup: {
-                  range: {
-                    sheetId: sheetId,
-                    dimension: "ROWS",
-                    startIndex: sourceAppStartRow,
-                    endIndex: sourceAppStartRow + campaignCount
-                  },
-                  depth: 3,
-                  collapsed: true
-                },
-                fields: "collapsed"
-              }
-            });
-          }
-          
-          weekContentRows += 1 + campaignCount;
-        });
-      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-        const networkCount = Object.keys(week.networks).length;
-        rowPointer += networkCount;
-        weekContentRows = networkCount;
-      } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-        const campaignCount = week.campaigns ? week.campaigns.length : 0;
-        rowPointer += campaignCount;
-        weekContentRows = campaignCount;
-      }
-      
-      if (weekContentRows > 0) {
-        collapseRequests.push({
-          updateDimensionGroup: {
-            dimensionGroup: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: weekStartRow,
-                endIndex: weekStartRow + weekContentRows
-              },
-              depth: 2,
-              collapsed: true
-            },
-            fields: "collapsed"
-          }
-        });
-        
-        appTotalRows += 1 + weekContentRows;
-      } else {
-        appTotalRows += 1;
-      }
-    });
-
-    if (appTotalRows > 0) {
-      collapseRequests.push({
-        updateDimensionGroup: {
-          dimensionGroup: {
-            range: {
-              sheetId: sheetId,
-              dimension: "ROWS",
-              startIndex: appStartRow,
-              endIndex: appStartRow + appTotalRows
-            },
-            depth: 1,
-            collapsed: true
-          },
-          fields: "collapsed"
-        }
-      });
-    }
-  }
-  
-  return collapseRequests;
-}
-
-function calculateRowPointer(data, entityKey, entityType) {
-  let rowPointer = 2;
-  
-  if (entityType === 'network') {
-    const sortedNetworks = Object.keys(data).sort((a, b) => 
-      data[a].networkName.localeCompare(data[b].networkName)
-    );
-    
-    for (const networkKey of sortedNetworks) {
-      if (networkKey === entityKey) break;
-      
-      const network = data[networkKey];
-      rowPointer++;
-      
-      Object.keys(network.weeks).forEach(weekKey => {
-        const week = network.weeks[weekKey];
-        rowPointer++; 
-        rowPointer += Object.keys(week.apps).length;
-      });
-    }
-  } else {
-    const sortedApps = Object.keys(data).sort((a, b) => 
-      data[a].appName.localeCompare(data[b].appName)
-    );
-    
-    for (const appKey of sortedApps) {
-      if (appKey === entityKey) break;
-      
-      const app = data[appKey];
-      rowPointer++;
-      
-      Object.keys(app.weeks).forEach(weekKey => {
-        const week = app.weeks[weekKey];
-        rowPointer++;
-        
-        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          Object.keys(week.sourceApps).forEach(sourceAppKey => {
-            const sourceApp = week.sourceApps[sourceAppKey];
-            rowPointer++;
-            rowPointer += sourceApp.campaigns.length;
-          });
-        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-          rowPointer += Object.keys(week.networks).length;
-        } else if (CURRENT_PROJECT !== 'OVERALL' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-          rowPointer += week.campaigns ? week.campaigns.length : 0;
-        }
-      });
-    }
-  }
-  
-  return rowPointer;
+  return buildGroupRequests(data, entityKey, entityType, sheetId)
+    .filter(r => r.updateDimensionGroup);
 }
