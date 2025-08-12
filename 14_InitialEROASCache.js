@@ -55,65 +55,45 @@ class InitialMetricsCache {
   }
 
   loadAllInitialValues() {
-  if (this.memoryCache) {
-    return this.memoryCache;
-  }
-  
-  const sheet = this.getOrCreateCacheSheet();
-  const cache = {};
-  this.rowIndexCache = {};
-  
-  if (sheet.getLastRow() <= 1) {
-    this.memoryCache = cache;
-    return cache;
-  }
-  
-  try {
-    const lastCol = Math.max(8, sheet.getLastColumn());
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
-    
-    data.forEach((row, index) => {
-      const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded, initialProfit] = row;
-      if (initialEROAS || initialProfit !== '') {
-        const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
-        cache[key] = {
-          eROAS: (initialEROAS && initialEROAS !== '' && initialEROAS > 0) ? parseFloat(initialEROAS) : null,
-          profit: (initialProfit !== '' && initialProfit !== null && initialProfit !== undefined) ? parseFloat(initialProfit) : null
-        };
-        this.rowIndexCache[key] = index + 2;
-      }
-    });
-    
-    // Добавляем legacy ключи для старых названий
-    if (typeof APP_NAME_LEGACY !== 'undefined') {
-      Object.keys(APP_NAME_LEGACY).forEach(newName => {
-        const oldName = APP_NAME_LEGACY[newName];
-        data.forEach((row, index) => {
-          const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded, initialProfit] = row;
-          if (appName === oldName && (initialEROAS || initialProfit !== '')) {
-            const legacyKey = this.createKey(level, newName, weekRange, identifier, sourceApp);
-            if (!cache[legacyKey]) {
-              cache[legacyKey] = {
-                eROAS: (initialEROAS && initialEROAS !== '' && initialEROAS > 0) ? parseFloat(initialEROAS) : null,
-                profit: (initialProfit !== '' && initialProfit !== null && initialProfit !== undefined) ? parseFloat(initialProfit) : null
-              };
-              // Не добавляем в rowIndexCache, так как это виртуальная запись
-            }
-          }
-        });
-      });
+    if (this.memoryCache) {
+      return this.memoryCache;
     }
     
-    this.memoryCache = cache;
-    console.log(`Loaded ${Object.keys(cache).length} initial metrics values for ${this.projectName}`);
-  } catch (e) {
-    console.error('Error loading initial metrics values:', e);
-    this.memoryCache = {};
+    const sheet = this.getOrCreateCacheSheet();
+    const cache = {};
     this.rowIndexCache = {};
+    
+    if (sheet.getLastRow() <= 1) {
+      this.memoryCache = cache;
+      return cache;
+    }
+    
+    try {
+      const lastCol = Math.max(8, sheet.getLastColumn());
+      const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+      
+      data.forEach((row, index) => {
+        const [level, appName, weekRange, identifier, sourceApp, initialEROAS, dateRecorded, initialProfit] = row;
+        if (initialEROAS || initialProfit !== '') {
+          const key = this.createKey(level, appName, weekRange, identifier, sourceApp);
+          cache[key] = {
+            eROAS: (initialEROAS && initialEROAS !== '' && initialEROAS > 0) ? parseFloat(initialEROAS) : null,
+            profit: (initialProfit !== '' && initialProfit !== null && initialProfit !== undefined) ? parseFloat(initialProfit) : null
+          };
+          this.rowIndexCache[key] = index + 2;
+        }
+      });
+      
+      this.memoryCache = cache;
+      console.log(`Loaded ${Object.keys(cache).length} initial metrics values for ${this.projectName}`);
+    } catch (e) {
+      console.error('Error loading initial metrics values:', e);
+      this.memoryCache = {};
+      this.rowIndexCache = {};
+    }
+    
+    return this.memoryCache;
   }
-  
-  return this.memoryCache;
-}
 
   saveInitialValue(level, appName, weekRange, currentEROAS, currentProfit, identifier = '', sourceApp = '') {
     if ((!currentEROAS || currentEROAS <= 0) && (currentProfit === null || currentProfit === undefined || currentProfit === '')) return;

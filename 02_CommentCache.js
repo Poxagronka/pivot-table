@@ -154,113 +154,88 @@ class CommentCache {
   }
 
   loadAllComments() {
-  this.getOrCreateCacheSheet();
-  const comments = {};
-  
-  try {
-    const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`);
-    if (!response.values || response.values.length <= 1) return comments;
+    this.getOrCreateCacheSheet();
+    const comments = {};
     
-    response.values.slice(1).forEach(row => {
-      if (row.length >= 7 && row[6]) {
-        comments[this.getCommentKey(...row.slice(0, 6))] = row[6];
-      }
-    });
-    
-    // Добавляем legacy ключи для обратной совместимости
-    if (typeof APP_NAME_LEGACY !== 'undefined') {
-      Object.keys(APP_NAME_LEGACY).forEach(newName => {
-        const oldName = APP_NAME_LEGACY[newName];
-        response.values.slice(1).forEach(row => {
-          if (row.length >= 7 && row[6] && row[0] === oldName) {
-            const legacyKey = this.getCommentKey(newName, row[1], row[2], row[3], row[4], row[5]);
-            if (!comments[legacyKey]) comments[legacyKey] = row[6];
-          }
-        });
+    try {
+      const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`);
+      if (!response.values || response.values.length <= 1) return comments;
+      
+      response.values.slice(1).forEach(row => {
+        if (row.length >= 7 && row[6]) {
+          comments[this.getCommentKey(...row.slice(0, 6))] = row[6];
+        }
       });
+    } catch (e) {
+      console.error('Error loading comments:', e);
     }
-  } catch (e) {
-    console.error('Error loading comments:', e);
+    
+    return comments;
   }
-  
-  return comments;
-}
 
   batchSaveComments(commentsArray) {
-  if (!commentsArray?.length) return;
-  
-  this.getOrCreateCacheSheet();
-  
-  // Нормализация названий приложений - заменяем старые названия на новые
-  if (typeof APP_NAME_LEGACY !== 'undefined') {
-    commentsArray = commentsArray.map(item => {
-      // Ищем, не является ли appName старым названием
-      const newName = Object.keys(APP_NAME_LEGACY).find(key => APP_NAME_LEGACY[key] === item.appName);
-      return {
-        ...item,
-        appName: newName || item.appName // Если нашли - заменяем на новое, иначе оставляем как есть
-      };
-    });
-  }
-  
-  try {
-    const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`).values || [];
-    const existingMap = new Map();
+    if (!commentsArray?.length) return;
     
-    existing.slice(1).forEach((row, i) => {
-      if (row.length >= 6) {
-        existingMap.set(this.getCommentKey(...row.slice(0, 6)), {
-          rowIndex: i + 2,
-          comment: row[6] || ''
-        });
-      }
-    });
+    this.getOrCreateCacheSheet();
     
-    const timestamp = new Date().toISOString();
-    const updates = [];
-    const newRows = [];
-    
-    commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign }) => {
-      const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign);
-      const existing = existingMap.get(key);
+    try {
+      const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`).values || [];
+      const existingMap = new Map();
       
-      if (existing) {
-        if (comment.length > existing.comment.length) {
-          updates.push({
-            range: `${this.cacheSheetName}!G${existing.rowIndex}:H${existing.rowIndex}`,
-            values: [[comment, timestamp]]
+      existing.slice(1).forEach((row, i) => {
+        if (row.length >= 6) {
+          existingMap.set(this.getCommentKey(...row.slice(0, 6)), {
+            rowIndex: i + 2,
+            comment: row[6] || ''
           });
         }
-      } else {
-        newRows.push([appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', 
-                     campaign || 'N/A', comment, timestamp]);
-      }
-    });
-    
-    const requests = [...updates];
-    if (newRows.length) {
-      const start = existing.length + 1;
-      requests.push({
-        range: `${this.cacheSheetName}!A${start}:H${start + newRows.length - 1}`,
-        values: newRows
       });
-    }
-    
-    if (requests.length) {
-      Sheets.Spreadsheets.Values.batchUpdate({
-        valueInputOption: 'RAW',
-        data: requests
-      }, this.cacheSpreadsheetId);
       
-      delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:H`];
+      const timestamp = new Date().toISOString();
+      const updates = [];
+      const newRows = [];
+      
+      commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign }) => {
+        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign);
+        const existing = existingMap.get(key);
+        
+        if (existing) {
+          if (comment.length > existing.comment.length) {
+            updates.push({
+              range: `${this.cacheSheetName}!G${existing.rowIndex}:H${existing.rowIndex}`,
+              values: [[comment, timestamp]]
+            });
+          }
+        } else {
+          newRows.push([appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', 
+                       campaign || 'N/A', comment, timestamp]);
+        }
+      });
+      
+      const requests = [...updates];
+      if (newRows.length) {
+        const start = existing.length + 1;
+        requests.push({
+          range: `${this.cacheSheetName}!A${start}:H${start + newRows.length - 1}`,
+          values: newRows
+        });
+      }
+      
+      if (requests.length) {
+        Sheets.Spreadsheets.Values.batchUpdate({
+          valueInputOption: 'RAW',
+          data: requests
+        }, this.cacheSpreadsheetId);
+        
+        delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:H`];
+      }
+      
+      console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
+    } catch (e) {
+      console.error('Error saving comments:', e);
+      throw e;
     }
-    
-    console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
-  } catch (e) {
-    console.error('Error saving comments:', e);
-    throw e;
   }
-}
 
   // Упрощенные методы валидации и синхронизации
   validateRowContent(row, level, expected) {

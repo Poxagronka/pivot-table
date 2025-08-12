@@ -1,4 +1,4 @@
-
+// Вместо 550 строк debug.js оставить 10 строк:
 function debugSingleProject() {
   const project = showChoice('Select Project:', MENU_PROJECTS);
   if (!project) return;
