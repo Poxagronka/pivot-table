@@ -1,7 +1,3 @@
-/**
- * Configuration file - ОБНОВЛЕНО: умная очистка кеша TRICKY + отслеживание предыдущего проекта пук
- */
-
 var MAIN_SHEET_ID = '1sU3G0HYgv-xX1UGK4Qa_4jhpc7vndtRyKsojyVx9iaE';
 var APPS_DATABASE_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 var APPS_DATABASE_SHEET = 'Bundle IDs Database';
@@ -19,9 +15,7 @@ function getBearerToken() {
 
 function getBearerTokenStrict() {
   const token = getBearerToken();
-  if (!token || token.length < 50) {
-    throw new Error('Bearer token not configured. Please set it in Settings sheet.');
-  }
+  if (!token || token.length < 50) throw new Error('Bearer token not configured. Please set it in Settings sheet.');
   return token;
 }
 
@@ -34,28 +28,13 @@ function getTargetEROAS(projectName, appName = null) {
   projectName = projectName.toUpperCase();
   try {
     const settings = loadSettingsFromSheet();
-    
-    if (projectName === 'TRICKY') {
-      return settings.targetEROAS.tricky || 250;
-    }
-    
-    if (appName && appName.toLowerCase().includes('business')) {
-      return settings.targetEROAS.business || 140;
-    }
-    
+    if (projectName === 'TRICKY') return settings.targetEROAS.tricky || 250;
+    if (appName && appName.toLowerCase().includes('business')) return settings.targetEROAS.business || 140;
     return settings.targetEROAS.ceg || 150;
-    
   } catch (e) {
     console.error('Error loading target eROAS:', e);
-    
-    if (projectName === 'TRICKY') {
-      return 250;
-    }
-    
-    if (appName && appName.toLowerCase().includes('business')) {
-      return 140;
-    }
-    
+    if (projectName === 'TRICKY') return 250;
+    if (appName && appName.toLowerCase().includes('business')) return 140;
     return 150;
   }
 }
@@ -94,251 +73,88 @@ function getDefaultGrowthThresholds() {
 }
 
 function isAutoCacheEnabled() {
-  try {
-    const settings = loadSettingsFromSheet();
-    return settings.automation.autoCache;
-  } catch (e) {
-    return false;
-  }
+  try { return loadSettingsFromSheet().automation.autoCache; } catch (e) { return false; }
 }
 
 function isAutoUpdateEnabled() {
-  try {
-    const settings = loadSettingsFromSheet();
-    return settings.automation.autoUpdate;
-  } catch (e) {
-    return false;
-  }
+  try { return loadSettingsFromSheet().automation.autoUpdate; } catch (e) { return false; }
 }
 
-
-
 var UNIFIED_MEASURES = [
-  { id: "cpi", day: null }, 
-  { id: "installs", day: null }, 
-  { id: "ipm", day: null },
-  { id: "spend", day: null }, 
-  { id: "retention_rate", day: 1 }, 
-  { id: "roas", day: 1 }, 
-  { id: "roas", day: 3 }, 
-  { id: "retention_rate", day: 7 },
-  { id: "roas", day: 7 }, 
-  { id: "roas", day: 30 }, 
-  { id: "e_arpu_forecast", day: 365 },
-  { id: "e_roas_forecast", day: 365 }, 
-  { id: "e_profit_forecast", day: 730 },
+  { id: "cpi", day: null }, { id: "installs", day: null }, { id: "ipm", day: null },
+  { id: "spend", day: null }, { id: "retention_rate", day: 1 }, { id: "roas", day: 1 }, 
+  { id: "roas", day: 3 }, { id: "retention_rate", day: 7 }, { id: "roas", day: 7 }, 
+  { id: "roas", day: 30 }, { id: "e_arpu_forecast", day: 365 },
+  { id: "e_roas_forecast", day: 365 }, { id: "e_profit_forecast", day: 730 },
   { id: "e_roas_forecast", day: 730 }
 ];
 
+// Общие настройки для всех проектов
+const API_URL = 'https://app.appodeal.com/graphql';
+const OPERATION_NAME = "RichStats";
+const ATTRIBUTION_PARTNER = ["Stack"];
+const COMMON_USERS = ["79950","127168","157350","150140"];
+const EXTENDED_USERS = [...COMMON_USERS,"11628","233863","239157"];
+
+// Фабрика для создания проекта
+function createProject(name, network, search, users = EXTENDED_USERS, dateDim = "INSTALL_DATE", extraCfg = {}) {
+  return {
+    SHEET_NAME: name,
+    API_URL,
+    BEARER_TOKEN: getBearerTokenStrict,
+    COMMENTS_CACHE_SHEET: `CommentsCache_${name}`,
+    APPS_CACHE_SHEET: name === 'Tricky' ? 'AppsCache_Tricky' : undefined,
+    API_CONFIG: {
+      OPERATION_NAME,
+      MEASURES: UNIFIED_MEASURES,
+      FILTERS: {
+        USER: users,
+        ATTRIBUTION_PARTNER,
+        ATTRIBUTION_NETWORK_HID: Array.isArray(network) ? network : [network],
+        ATTRIBUTION_CAMPAIGN_SEARCH: search,
+        ...extraCfg.filters
+      },
+      GROUP_BY: extraCfg.groupBy || [
+        { dimension: dateDim, timeBucket: "WEEK" },
+        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+        { dimension: "APP" }
+      ]
+    }
+  };
+}
+
 var BASE_PROJECT_CONFIG = {
-  API_URL: 'https://app.appodeal.com/graphql',
+  API_URL,
   BEARER_TOKEN: getBearerTokenStrict,
-  API_CONFIG: {
-    OPERATION_NAME: "RichStats",
-    MEASURES: UNIFIED_MEASURES
-  }
+  API_CONFIG: { OPERATION_NAME, MEASURES: UNIFIED_MEASURES }
 };
 
 var PROJECTS = {
-  TRICKY: {
-    SHEET_NAME: 'Tricky',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Tricky',
-    APPS_CACHE_SHEET: 'AppsCache_Tricky',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140","11628","233863","239157"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "/tricky/i"
-      },
-      GROUP_BY: [
-        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-  
-  MOLOCO: {
-    SHEET_NAME: 'Moloco',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Moloco',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140","11628","233863","239157"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["445856363109679104"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: null
-      },
-      GROUP_BY: [
-        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  REGULAR: {
-    SHEET_NAME: 'Regular',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Regular',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140","11628","233863","239157"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["234187180623265792"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/tricky/i"
-      },
-      GROUP_BY: [
-        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  GOOGLE_ADS: {
-    SHEET_NAME: 'Google_Ads',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Google_Ads',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["378302368699121664"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
-      },
-      GROUP_BY: [
-        { dimension: "DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  APPLOVIN: {
-    SHEET_NAME: 'Applovin',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Applovin',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["261208778387488768"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
-      },
-      GROUP_BY: [
-        { dimension: "DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  MINTEGRAL: {
-    SHEET_NAME: 'Mintegral',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Mintegral',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140","11628","233863","239157"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["756604737398243328"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: null
-      },
-      GROUP_BY: [
-        { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  INCENT: {
-    SHEET_NAME: 'Incent',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: "!/test_creo|creo_test|SL|TL|RnD|adq/i"
-      },
-      GROUP_BY: [
-        { dimension: "DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  },
-
-  INCENT_TRAFFIC: {
-    SHEET_NAME: 'Incent_traffic',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Incent_traffic',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
-        ATTRIBUTION_CAMPAIGN_SEARCH: null,
-        ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"]
-      },
-      GROUP_BY: [
+  TRICKY: createProject('Tricky', "234187180623265792", "/tricky/i"),
+  MOLOCO: createProject('Moloco', "445856363109679104", null),
+  REGULAR: createProject('Regular', "234187180623265792", "!/tricky/i"),
+  GOOGLE_ADS: createProject('Google_Ads', "378302368699121664", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
+  APPLOVIN: createProject('Applovin', "261208778387488768", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
+  MINTEGRAL: createProject('Mintegral', "756604737398243328", null),
+  INCENT: createProject('Incent', ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"], 
+    "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
+  INCENT_TRAFFIC: createProject('Incent_traffic', 
+    ["1580763469207044096","5354779956943519744","6958061424287416320","932245122865692672","6070852297695428608"],
+    null, COMMON_USERS, "INSTALL_DATE", {
+      filters: { ATTRIBUTION_CAMPAIGN_EXCLUDE: ["3359685322857250816"] },
+      groupBy: [
         { dimension: "INSTALL_DATE", timeBucket: "WEEK" },
         { dimension: "ATTRIBUTION_NETWORK_HID" },
         { dimension: "APP" }
       ]
-    }
-  },
-
-  OVERALL: {
-    SHEET_NAME: 'Overall',
-    API_URL: BASE_PROJECT_CONFIG.API_URL,
-    BEARER_TOKEN: BASE_PROJECT_CONFIG.BEARER_TOKEN,
-    COMMENTS_CACHE_SHEET: 'CommentsCache_Overall',
-    API_CONFIG: {
-      OPERATION_NAME: BASE_PROJECT_CONFIG.API_CONFIG.OPERATION_NAME,
-      MEASURES: BASE_PROJECT_CONFIG.API_CONFIG.MEASURES,
-      FILTERS: {
-        USER: ["79950","127168","157350","150140"],
-        ATTRIBUTION_PARTNER: ["Stack"],
-        ATTRIBUTION_NETWORK_HID: [],
-        ATTRIBUTION_CAMPAIGN_SEARCH: null
-      },
-      GROUP_BY: [
-        { dimension: "DATE", timeBucket: "WEEK" },
-        { dimension: "ATTRIBUTION_NETWORK_HID" },
-        { dimension: "APP" }
-      ]
-    }
-  }
+    }),
+  OVERALL: createProject('Overall', [], null, COMMON_USERS, "DATE", {
+    groupBy: [
+      { dimension: "DATE", timeBucket: "WEEK" },
+      { dimension: "ATTRIBUTION_NETWORK_HID" },
+      { dimension: "APP" }
+    ]
+  })
 };
 
 var CURRENT_PROJECT = 'TRICKY';
@@ -358,15 +174,11 @@ function getCurrentConfig() {
   };
 }
 
-function getCurrentApiConfig() {
-  return PROJECTS[CURRENT_PROJECT].API_CONFIG;
-}
+function getCurrentApiConfig() { return PROJECTS[CURRENT_PROJECT].API_CONFIG; }
 
 function getProjectConfig(projectName) {
   projectName = projectName.toUpperCase();
-  if (!PROJECTS[projectName]) {
-    throw new Error('Unknown project: ' + projectName);
-  }
+  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
   const project = PROJECTS[projectName];
   return {
     SHEET_ID: MAIN_SHEET_ID,
@@ -382,51 +194,30 @@ function getProjectConfig(projectName) {
 
 function getProjectApiConfig(projectName) {
   projectName = projectName.toUpperCase();
-  if (!PROJECTS[projectName]) {
-    throw new Error('Unknown project: ' + projectName);
-  }
+  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
   return PROJECTS[projectName].API_CONFIG;
 }
 
 function setCurrentProject(projectName) {
   projectName = projectName.toUpperCase();
-  if (!PROJECTS[projectName]) {
-    throw new Error('Unknown project: ' + projectName);
-  }
-  
+  if (!PROJECTS[projectName]) throw new Error('Unknown project: ' + projectName);
   PREVIOUS_PROJECT = CURRENT_PROJECT;
-  
   CURRENT_PROJECT = projectName;
 }
 
 var TABLE_CONFIG = {
   HEADERS: [
-    'Level', 'Week Range / Source App', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
+    'Level', 'Week Range / Source App', 'ID', 'GEO', 'Spend', 'Spend WoW %', 'Installs', 'CPI', 
+    'ROAS D1→D3→D7→D30', 'IPM', 'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 
+    'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 
+    'Growth Status', 'Comments'
   ],
-
   COLUMN_WIDTHS: [
-  { c: 1, w: 80 },   // Level
-  { c: 2, w: 230 },  // Week Range / Source App
-  { c: 3, w: 40 },   // ID
-  { c: 4, w: 40 },   // GEO
-  { c: 5, w: 65 },   // Spend (было 75)
-  { c: 6, w: 55 },   // Spend WoW %
-  { c: 7, w: 55 },   // Installs
-  { c: 8, w: 45 },   // CPI (было 50)
-  { c: 9, w: 185 },  // ROAS D1→D3→D7→D30 (было 195)
-  { c: 10, w: 37 },  // IPM
-  { c: 11, w: 42 },  // RR D-1
-  { c: 12, w: 42 },  // RR D-7
-  { c: 13, w: 55 },  // eARPU 365d
-  { c: 14, w: 55 },  // eROAS 365d
-  { c: 15, w: 115 }, // eROAS 730d
-  { c: 16, w: 120 }, // eProfit 730d (было 125)
-  { c: 17, w: 85 },  // eProfit 730d WoW %
-  { c: 18, w: 160 }, // Growth Status
-  { c: 19, w: 450 }  // Comments
-]
+    { c: 1, w: 80 }, { c: 2, w: 230 }, { c: 3, w: 40 }, { c: 4, w: 40 }, { c: 5, w: 65 },
+    { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 45 }, { c: 9, w: 185 }, { c: 10, w: 37 },
+    { c: 11, w: 42 }, { c: 12, w: 42 }, { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 115 },
+    { c: 16, w: 120 }, { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 450 }
+  ]
 };
 
 var COLORS = {
