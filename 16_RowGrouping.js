@@ -49,6 +49,67 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   
   let entityTotalRows = 0;
   const entity = data[entityKey];
+  
+  // Обработка для APPLOVIN_TEST
+  if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
+    const campaignKeys = Object.keys(entity.campaignGroups).sort((a, b) => {
+      const spendA = Object.values(entity.campaignGroups[a].weeks).reduce((sum, w) => 
+        sum + (w.campaigns[0]?.spend || 0), 0);
+      const spendB = Object.values(entity.campaignGroups[b].weeks).reduce((sum, w) => 
+        sum + (w.campaigns[0]?.spend || 0), 0);
+      return spendB - spendA;
+    });
+    
+    const collapseData = [];
+    
+    campaignKeys.forEach(campaignKey => {
+      const campaignGroup = entity.campaignGroups[campaignKey];
+      const campaignStartRow = rowPointer;
+      rowPointer++; // Campaign header row
+      
+      const weekCount = Object.keys(campaignGroup.weeks).length;
+      rowPointer += weekCount;
+      
+      if (weekCount > 0) {
+        requests.push({
+          addDimensionGroup: {
+            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: campaignStartRow + weekCount }
+          }
+        });
+        collapseData.push({ start: campaignStartRow, end: campaignStartRow + weekCount, depth: 2 });
+      }
+      
+      entityTotalRows += 1 + weekCount;
+    });
+    
+    if (entityTotalRows > 0) {
+      requests.push({
+        addDimensionGroup: {
+          range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: entityStartRow + entityTotalRows }
+        }
+      });
+      collapseData.push({ start: entityStartRow, end: entityStartRow + entityTotalRows, depth: 1 });
+    }
+    
+    // Добавляем collapse в обратном порядке
+    collapseData.sort((a, b) => b.depth - a.depth);
+    collapseData.forEach(item => {
+      requests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: { sheetId, dimension: "ROWS", startIndex: item.start, endIndex: item.end },
+            depth: item.depth,
+            collapsed: true
+          },
+          fields: "collapsed"
+        }
+      });
+    });
+    
+    return requests;
+  }
+  
+  // Оригинальный код для остальных проектов
   const weeks = entity.weeks;
   const sortedWeeks = Object.keys(weeks).sort();
   
@@ -158,23 +219,32 @@ function calculateRowPointer(data, targetEntityKey, entityType) {
     const entity = data[entityKey];
     rowPointer++;
     
-    Object.keys(entity.weeks).forEach(weekKey => {
-      const week = entity.weeks[weekKey];
-      rowPointer++;
-      
-      if (entityType === 'network') {
-        rowPointer += Object.keys(week.apps).length;
-      } else if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-        Object.values(week.sourceApps).forEach(sourceApp => {
-          rowPointer++;
-          rowPointer += sourceApp.campaigns.length;
-        });
-      } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-        rowPointer += Object.keys(week.networks).length;
-      } else if (week.campaigns) {
-        rowPointer += week.campaigns.length;
-      }
-    });
+    // Обработка для APPLOVIN_TEST
+    if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
+      Object.values(entity.campaignGroups).forEach(campaignGroup => {
+        rowPointer++; // Campaign row
+        rowPointer += Object.keys(campaignGroup.weeks).length; // Week rows
+      });
+    } else {
+      // Оригинальная логика
+      Object.keys(entity.weeks).forEach(weekKey => {
+        const week = entity.weeks[weekKey];
+        rowPointer++;
+        
+        if (entityType === 'network') {
+          rowPointer += Object.keys(week.apps).length;
+        } else if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+          Object.values(week.sourceApps).forEach(sourceApp => {
+            rowPointer++;
+            rowPointer += sourceApp.campaigns.length;
+          });
+        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+          rowPointer += Object.keys(week.networks).length;
+        } else if (week.campaigns) {
+          rowPointer += week.campaigns.length;
+        }
+      });
+    }
   }
   
   return rowPointer;

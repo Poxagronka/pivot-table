@@ -23,6 +23,94 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
     }
   }
   
+  // Добавляем обработку для APPLOVIN_TEST
+  // В функции buildUnifiedTable, заменяем блок обработки APPLOVIN_TEST:
+  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+    const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
+    
+    appKeys.forEach(appKey => {
+      const app = data[appKey];
+      
+      formatData.push({ row: tableData.length + 1, type: 'APP' });
+      const emptyRow = new Array(getUnifiedHeaders().length).fill('');
+      emptyRow[0] = 'APP';
+      emptyRow[1] = app.appName;
+      tableData.push(emptyRow);
+      
+      // Итерация по кампаниям вместо недель
+      const campaignKeys = Object.keys(app.campaignGroups || {}).sort((a, b) => {
+        const spendA = Object.values(app.campaignGroups[a].weeks).reduce((sum, w) => 
+          sum + (w.campaigns[0]?.spend || 0), 0);
+        const spendB = Object.values(app.campaignGroups[b].weeks).reduce((sum, w) => 
+          sum + (w.campaigns[0]?.spend || 0), 0);
+        return spendB - spendA;
+      });
+      
+      campaignKeys.forEach(campaignKey => {
+        const campaignGroup = app.campaignGroups[campaignKey];
+        
+        formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
+        const campaignRow = new Array(getUnifiedHeaders().length).fill('');
+        campaignRow[0] = 'CAMPAIGN';
+        campaignRow[1] = campaignGroup.campaignName;
+        campaignRow[2] = campaignGroup.campaignId;
+        campaignRow[3] = campaignGroup.geo;
+        tableData.push(campaignRow);
+        
+        // Недели внутри кампании
+        const weekKeys = Object.keys(campaignGroup.weeks).sort();
+        weekKeys.forEach(weekKey => {
+          const week = campaignGroup.weeks[weekKey];
+          const campaign = week.campaigns[0];
+          
+          if (!campaign) {
+            console.error('No campaign data for week:', weekKey);
+            return;
+          }
+          
+          const weekWoW = getOptimizedWoW(`${campaign.campaignId}_${weekKey}`, 'campaignWoW');
+          const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+          const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+          const status = weekWoW.growthStatus || '';
+          
+          formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+          
+          // Создаем строку с данными кампании, а не totals
+          const weekRow = new Array(getUnifiedHeaders().length).fill('');
+          weekRow[0] = 'WEEK';
+          weekRow[1] = `${week.weekStart} - ${week.weekEnd}`;
+          weekRow[2] = ''; // ID пустой для недели
+          weekRow[3] = campaign.geo || '';
+          weekRow[4] = formatSmartCurrency(campaign.spend || 0);
+          weekRow[5] = spendWoW;
+          weekRow[6] = campaign.installs || 0;
+          weekRow[7] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
+          
+          // Комбинированный ROAS
+          const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
+          weekRow[8] = combinedRoas;
+          
+          weekRow[9] = (campaign.ipm || 0).toFixed(1);
+          weekRow[10] = `${(campaign.rrD1 || 0).toFixed(0)}%`;
+          weekRow[11] = `${(campaign.rrD7 || 0).toFixed(0)}%`;
+          weekRow[12] = (campaign.eArpuForecast || 0).toFixed(3);
+          weekRow[13] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
+          weekRow[14] = `${(campaign.eRoasForecastD730 || 0).toFixed(0)}%`;
+          weekRow[15] = formatSmartCurrency(campaign.eProfitForecast || 0);
+          weekRow[16] = profitWoW;
+          weekRow[17] = status;
+          weekRow[18] = '';
+          
+          tableData.push(weekRow);
+        });
+      });
+    });
+    
+    console.log(`buildUnifiedTable completed: ${tableData.length} rows in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+    return;
+  }
+  
+  // Далее идет оригинальный код для INCENT_TRAFFIC
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
     const networkKeys = Object.keys(data).sort((a, b) => 
       data[a].networkName.localeCompare(data[b].networkName)
@@ -85,6 +173,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
     });
     
   } else {
+    // Оригинальный код для остальных проектов
     const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     
     appKeys.forEach((appKey, appIndex) => {

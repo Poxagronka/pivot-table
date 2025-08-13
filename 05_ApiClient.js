@@ -53,13 +53,19 @@ const GEO_CONFIGS = {
 // Main API functions (keep signatures!)
 function fetchCampaignData(dateRange, projectName = null) {
   const project = projectName || CURRENT_PROJECT;
-  const config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
-  const apiConfig = projectName ? getProjectApiConfig(projectName) : getCurrentApiConfig();
+  
+  // ВАЖНО: APPLOVIN_TEST должен использовать конфиг от APPLOVIN для API запроса
+  const configProject = project === 'APPLOVIN_TEST' ? 'APPLOVIN' : project;
+  
+  const config = configProject !== project ? getProjectConfig(configProject) : 
+                  projectName ? getProjectConfig(projectName) : getCurrentConfig();
+  const apiConfig = configProject !== project ? getProjectApiConfig(configProject) :
+                    projectName ? getProjectApiConfig(projectName) : getCurrentApiConfig();
   
   if (!config.BEARER_TOKEN) throw new Error(`${project} missing BEARER_TOKEN`);
   if (!apiConfig.FILTERS.USER?.length) throw new Error(`${project} missing USER filters`);
   
-  const payload = buildPayload(apiConfig, dateRange, project);
+  const payload = buildPayload(apiConfig, dateRange, configProject); // используем configProject
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -79,7 +85,7 @@ function fetchCampaignData(dateRange, projectName = null) {
     muteHttpExceptions: true
   };
 
-  return executeWithRetry(config.API_URL, options, project);
+  return executeWithRetry(config.API_URL, options, configProject); // используем configProject
 }
 
 function fetchProjectCampaignData(projectName, dateRange) {
@@ -160,7 +166,6 @@ function executeWithRetry(url, options, project, maxRetries = 3) {
   throw lastError || new Error('API request failed');
 }
 
-// Unified data processor
 function processApiData(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const today = new Date();
@@ -172,7 +177,14 @@ function processApiData(rawData, includeLastWeek = null) {
   
   // Data processor strategy
   const processor = CURRENT_PROJECT === 'TRICKY' ? processTrickyStrategy : processStandardStrategy;
-  return processor(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+  const appData = processor(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+  
+  // Добавляем обработку для APPLOVIN_TEST
+  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+    return restructureToCampaignFirst(appData);
+  }
+  
+  return CURRENT_PROJECT === 'INCENT_TRAFFIC' ? convertToNetworkStructure(appData) : appData;
 }
 
 function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
@@ -236,6 +248,60 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
   });
   
   return CURRENT_PROJECT === 'INCENT_TRAFFIC' ? convertToNetworkStructure(appData) : appData;
+}
+
+function restructureToCampaignFirst(appData) {
+  console.log('APPLOVIN_TEST: Starting restructure, apps count:', Object.keys(appData).length);
+  
+  const restructured = {};
+  
+  Object.keys(appData).forEach(appKey => {
+    const app = appData[appKey];
+    const campaignGroups = {};
+    
+    console.log(`Processing app: ${app.appName}, weeks: ${Object.keys(app.weeks).length}`);
+    
+    // Собираем все кампании из всех недель
+    Object.keys(app.weeks).forEach(weekKey => {
+      const week = app.weeks[weekKey];
+      if (!week.campaigns) {
+        console.log(`WARNING: No campaigns in week ${weekKey}`);
+        return;
+      }
+      
+      week.campaigns.forEach(campaign => {
+        if (!campaignGroups[campaign.campaignId]) {
+          campaignGroups[campaign.campaignId] = {
+            campaignId: campaign.campaignId,
+            campaignName: campaign.campaignName || 'Unknown',
+            sourceApp: campaign.sourceApp || 'Unknown',
+            geo: campaign.geo || 'OTHER',
+            weeks: {}
+          };
+        }
+        // Добавляем неделю в кампанию
+        campaignGroups[campaign.campaignId].weeks[weekKey] = {
+          weekStart: week.weekStart,
+          weekEnd: week.weekEnd,
+          campaigns: [campaign]
+        };
+      });
+    });
+    
+    console.log(`App ${app.appName}: found ${Object.keys(campaignGroups).length} unique campaigns`);
+    
+    restructured[appKey] = {
+      appId: app.appId,
+      appName: app.appName,
+      platform: app.platform,
+      bundleId: app.bundleId,
+      weeks: {}, // Пустой для совместимости
+      campaignGroups
+    };
+  });
+  
+  console.log('APPLOVIN_TEST: Restructure complete');
+  return restructured;
 }
 
 function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {

@@ -1,3 +1,5 @@
+// 06_Analytics.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 // Unified WoW calculation
 function calculateWoWMetrics(appData) {
   if (!appData || typeof appData !== 'object') {
@@ -20,7 +22,58 @@ function calculateWoWMetrics(appData) {
       return calculateIncentTrafficWoWMetrics(appData);
     }
     
-    // Standard processing
+    // Добавляем обработку для APPLOVIN_TEST
+    if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+      Object.values(appData).forEach(app => {
+        // Обрабатываем campaignGroups
+        if (app.campaignGroups) {
+          Object.values(app.campaignGroups).forEach(campaignGroup => {
+            const weekKeys = Object.keys(campaignGroup.weeks).sort();
+            
+            weekKeys.forEach((weekKey, index) => {
+              const week = campaignGroup.weeks[weekKey];
+              const campaign = week.campaigns[0];
+              const key = `${campaign.campaignId}_${weekKey}`;
+              
+              if (index === 0) {
+                // Первая неделя кампании
+                results.campaignWoW[key] = {
+                  spendChangePercent: 0,
+                  eProfitChangePercent: 0,
+                  growthStatus: 'First Week'
+                };
+              } else {
+                // Сравниваем с предыдущей неделей этой же кампании
+                const prevWeekKey = weekKeys[index - 1];
+                const prevWeek = campaignGroup.weeks[prevWeekKey];
+                const prevCampaign = prevWeek.campaigns[0];
+                
+                const spendPct = prevCampaign.spend ? 
+                  ((campaign.spend - prevCampaign.spend) / Math.abs(prevCampaign.spend)) * 100 : 0;
+                const profitPct = prevCampaign.eProfitForecast ? 
+                  ((campaign.eProfitForecast - prevCampaign.eProfitForecast) / Math.abs(prevCampaign.eProfitForecast)) * 100 : 0;
+                
+                results.campaignWoW[key] = {
+                  spendChangePercent: spendPct,
+                  eProfitChangePercent: profitPct,
+                  growthStatus: calculateGrowthStatus(
+                    prevCampaign, 
+                    campaign, 
+                    spendPct, 
+                    profitPct, 
+                    'eProfitForecast'
+                  )
+                };
+              }
+            });
+          });
+        }
+      });
+      
+      return results;
+    }
+    
+    // Standard processing для остальных проектов
     const dataCollections = {
       campaign: {},
       appWeek: {},

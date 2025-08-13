@@ -2,7 +2,7 @@
  * Auto Functions - Unified automation system
  */
 
-const ALL_PROJECTS = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
+const ALL_PROJECTS = getAllProjectNames().map(name => name.toUpperCase());
 
 const TRIGGER_CONFIG = {
   autoCache: {

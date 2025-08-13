@@ -93,15 +93,28 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     }
 
     const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
-    formatData.forEach(item => {
-      if (item.type === 'APP') rowTypeMap.app.push(item.row);
-      if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
-      if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
-      if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
-      if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
-      if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
-    });
+    
+    // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ APPLOVIN_TEST
+    if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+      formatData.forEach(item => {
+        if (item.type === 'APP') rowTypeMap.app.push(item.row);
+        // Меняем местами форматирование для CAMPAIGN и WEEK
+        if (item.type === 'CAMPAIGN') rowTypeMap.week.push(item.row);  // Кампании форматируем как недели
+        if (item.type === 'WEEK') rowTypeMap.campaign.push(item.row);  // Недели форматируем как кампании
+      });
+    } else {
+      // Стандартная обработка для остальных проектов
+      formatData.forEach(item => {
+        if (item.type === 'APP') rowTypeMap.app.push(item.row);
+        if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
+        if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
+        if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
+        if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
+        if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
+      });
+    }
 
+    // Далее идет стандартный код применения форматирования без изменений
     if (rowTypeMap.app.length > 0) {
       const appRanges = createOptimizedRanges(sheet, rowTypeMap.app, numCols);
       if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
@@ -159,6 +172,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       }
     }
 
+    // Остальной код остается без изменений...
     if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
       try {
         const validHyperlinkRows = rowTypeMap.hyperlink.filter(row => row >= 2 && row <= numRows);
@@ -192,10 +206,16 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     
     applyOptimizedEROASFormatting(sheet, numRows);
     
+    // Существующий код скрытия колонок
     sheet.hideColumns(1);
     sheet.hideColumns(13, 1);
     sheet.hideColumns(14, 1);
     sheet.hideColumns(3);
+    
+    // Добавляем скрытие GEO для APPLOVIN_TEST
+    if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+      sheet.hideColumns(4); // Скрываем колонку GEO (4-я колонка)
+    }
     
     console.log(`Formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     

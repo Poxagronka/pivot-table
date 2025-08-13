@@ -1,4 +1,4 @@
-var MENU_PROJECTS = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall'];
+var MENU_PROJECTS = getAllProjectNames();
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();

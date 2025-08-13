@@ -134,7 +134,7 @@ function sortProjectSheets() {
     const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
     const sheets = spreadsheet.getSheets();
     
-    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall', 'Settings', 'To do'];
+    const projectOrder = ['Tricky', 'Moloco', 'Regular', 'Google_Ads', 'Applovin', 'Applovin_test', 'Mintegral', 'Incent', 'Incent_traffic', 'Overall', 'Settings', 'To do'];
     
     const visibleSheets = sheets.filter(sheet => !sheet.isSheetHidden());
     
