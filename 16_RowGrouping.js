@@ -45,13 +45,12 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   const requests = [];
   let rowPointer = calculateRowPointer(data, entityKey, entityType);
   const entityStartRow = rowPointer;
-  const entityStartRowInitial = rowPointer;
   rowPointer++;
   
   const entity = data[entityKey];
   
   if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
-    // ИСПРАВЛЕННАЯ логика для APPLOVIN_TEST - используем rowPointer как в TRICKY
+    // УНИФИЦИРОВАННАЯ логика для APPLOVIN_TEST - точно как в TRICKY
     const campaignKeys = Object.keys(entity.campaignGroups).sort((a, b) => {
       const spendA = Object.values(entity.campaignGroups[a].weeks).reduce((sum, w) => 
         sum + Object.values(w.countries || {}).reduce((s, country) => 
@@ -63,21 +62,27 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
     });
     
     const collapseData = [];
+    let entityTotalRows = 0;
     
     campaignKeys.forEach(campaignKey => {
       const campaignGroup = entity.campaignGroups[campaignKey];
       const campaignStartRow = rowPointer;
       rowPointer++; // Campaign header row
+      let campaignContentRows = 0;
       
-      Object.keys(campaignGroup.weeks).forEach(weekKey => {
+      const weekKeys = Object.keys(campaignGroup.weeks).sort();
+      
+      weekKeys.forEach(weekKey => {
         const week = campaignGroup.weeks[weekKey];
         const weekStartRow = rowPointer;
         rowPointer++; // Week header row
         
-        const countryCount = Object.keys(week.countries || {}).length;
+        // УНИФИЦИРОВАНО: считаем countries как campaigns в TRICKY
+        const countries = week.countries || {};
+        const countryCount = Object.keys(countries).length;
         rowPointer += countryCount;
         
-        // Группа для стран внутри недели (depth 3)
+        // Группа для стран внутри недели (depth 3) - аналог sourceApp в TRICKY
         if (countryCount > 0) {
           requests.push({
             addDimensionGroup: {
@@ -86,32 +91,31 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
           });
           collapseData.push({ start: weekStartRow, end: weekStartRow + countryCount, depth: 3 });
         }
+        
+        campaignContentRows += 1 + countryCount; // 1 week header + countries
       });
       
-      // ИСПРАВЛЕНО: используем реальную разницу rowPointer
-      const campaignEndRow = rowPointer - 1; // последняя строка кампании
-      const campaignRowCount = campaignEndRow - campaignStartRow + 1;
-      
-      // Группа для всей кампании (depth 2)
-      if (campaignRowCount > 1) {
+      // Группа для всей кампании (depth 2) - аналог week в TRICKY
+      if (campaignContentRows > 0) {
         requests.push({
           addDimensionGroup: {
-            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: rowPointer - 1 }
+            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: campaignStartRow + campaignContentRows }
           }
         });
-        collapseData.push({ start: campaignStartRow, end: rowPointer - 1, depth: 2 });
+        collapseData.push({ start: campaignStartRow, end: campaignStartRow + campaignContentRows, depth: 2 });
       }
+      
+      entityTotalRows += 1 + campaignContentRows; // 1 campaign header + content
     });
     
     // Группа для всего приложения (depth 1)
-    const entityTotalRows = rowPointer - entityStartRowInitial - 1;
     if (entityTotalRows > 0) {
       requests.push({
         addDimensionGroup: {
-          range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: rowPointer - 1 }
+          range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: entityStartRow + entityTotalRows }
         }
       });
-      collapseData.push({ start: entityStartRow, end: rowPointer - 1, depth: 1 });
+      collapseData.push({ start: entityStartRow, end: entityStartRow + entityTotalRows, depth: 1 });
     }
     
     // Добавляем collapse в обратном порядке
@@ -136,7 +140,6 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   const weeks = entity.weeks;
   const sortedWeeks = Object.keys(weeks).sort();
   
-  // Сначала собираем все позиции и create requests
   const collapseData = [];
   let entityTotalRows = 0;
   
