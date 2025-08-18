@@ -45,12 +45,13 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   const requests = [];
   let rowPointer = calculateRowPointer(data, entityKey, entityType);
   const entityStartRow = rowPointer;
+  const entityStartRowInitial = rowPointer;
   rowPointer++;
   
-  let entityTotalRows = 0;
   const entity = data[entityKey];
   
   if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
+    // ИСПРАВЛЕННАЯ логика для APPLOVIN_TEST - используем rowPointer как в TRICKY
     const campaignKeys = Object.keys(entity.campaignGroups).sort((a, b) => {
       const spendA = Object.values(entity.campaignGroups[a].weeks).reduce((sum, w) => 
         sum + Object.values(w.countries || {}).reduce((s, country) => 
@@ -76,6 +77,7 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
         const countryCount = Object.keys(week.countries || {}).length;
         rowPointer += countryCount;
         
+        // Группа для стран внутри недели (depth 3)
         if (countryCount > 0) {
           requests.push({
             addDimensionGroup: {
@@ -86,29 +88,30 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
         }
       });
       
-      const campaignTotalRows = 1 + Object.keys(campaignGroup.weeks).reduce((sum, weekKey) => {
-        return sum + 1 + Object.keys(campaignGroup.weeks[weekKey].countries || {}).length;
-      }, 0);
+      // ИСПРАВЛЕНО: используем реальную разницу rowPointer
+      const campaignEndRow = rowPointer - 1; // последняя строка кампании
+      const campaignRowCount = campaignEndRow - campaignStartRow + 1;
       
-      if (campaignTotalRows > 1) {
+      // Группа для всей кампании (depth 2)
+      if (campaignRowCount > 1) {
         requests.push({
           addDimensionGroup: {
-            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: campaignStartRow + campaignTotalRows - 1 }
+            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: rowPointer - 1 }
           }
         });
-        collapseData.push({ start: campaignStartRow, end: campaignStartRow + campaignTotalRows - 1, depth: 2 });
+        collapseData.push({ start: campaignStartRow, end: rowPointer - 1, depth: 2 });
       }
-      
-      entityTotalRows += campaignTotalRows;
     });
     
+    // Группа для всего приложения (depth 1)
+    const entityTotalRows = rowPointer - entityStartRowInitial - 1;
     if (entityTotalRows > 0) {
       requests.push({
         addDimensionGroup: {
-          range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: entityStartRow + entityTotalRows }
+          range: { sheetId, dimension: "ROWS", startIndex: entityStartRow, endIndex: rowPointer - 1 }
         }
       });
-      collapseData.push({ start: entityStartRow, end: entityStartRow + entityTotalRows, depth: 1 });
+      collapseData.push({ start: entityStartRow, end: rowPointer - 1, depth: 1 });
     }
     
     // Добавляем collapse в обратном порядке
@@ -135,6 +138,7 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   
   // Сначала собираем все позиции и create requests
   const collapseData = [];
+  let entityTotalRows = 0;
   
   sortedWeeks.forEach(weekKey => {
     const week = weeks[weekKey];
