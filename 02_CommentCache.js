@@ -304,21 +304,40 @@ class CommentCache {
           if (comment) comments.push({ appName: currentApp, weekRange: currentWeek, level: 'WEEK', 
                                        comment, identifier: 'N/A', sourceApp: 'N/A', campaign: 'N/A' });
         } else if (comment && currentApp && currentWeek) {
-          const config = {
-            NETWORK: { identifier: idOrEmpty || 'N/A', sourceApp: 'N/A', campaign: nameOrRange || 'N/A' },
-            SOURCE_APP: { identifier: nameOrRange || 'N/A', sourceApp: nameOrRange || 'N/A', campaign: 'N/A' },
-            CAMPAIGN: { 
-              identifier: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty) : 'N/A',
-              sourceApp: nameOrRange || 'N/A',
-              campaign: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty || 'Unknown') : (nameOrRange || 'Unknown')
-            },
-            COUNTRY: { 
-              identifier: idOrEmpty || 'N/A',
-              sourceApp: nameOrRange || 'N/A',
-              campaign: 'N/A',
-              country: nameOrRange || 'N/A'
+          let config = null;
+          
+          if (level === 'COUNTRY' && this.projectName === 'APPLOVIN_TEST') {
+            // Для APPLOVIN_TEST найдем текущую кампанию
+            let currentCampaign = '';
+            for (let j = data.indexOf(row) - 1; j >= 0; j--) {
+              if (data[j] && data[j][cols.level - 1] === 'CAMPAIGN') {
+                currentCampaign = data[j][cols.name - 1];
+                break;
+              }
             }
-          }[level];
+            config = {
+              identifier: idOrEmpty || 'N/A',
+              sourceApp: currentCampaign || 'N/A',
+              campaign: nameOrRange || 'N/A', // Название страны
+              country: nameOrRange || 'N/A'
+            };
+          } else {
+            config = {
+              NETWORK: { identifier: idOrEmpty || 'N/A', sourceApp: 'N/A', campaign: nameOrRange || 'N/A' },
+              SOURCE_APP: { identifier: nameOrRange || 'N/A', sourceApp: nameOrRange || 'N/A', campaign: 'N/A' },
+              CAMPAIGN: { 
+                identifier: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty) : 'N/A',
+                sourceApp: nameOrRange || 'N/A',
+                campaign: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty || 'Unknown') : (nameOrRange || 'Unknown')
+              },
+              COUNTRY: { 
+                identifier: idOrEmpty || 'N/A',
+                sourceApp: nameOrRange || 'N/A',
+                campaign: 'N/A',
+                country: nameOrRange || 'N/A'
+              }
+            }[level];
+          }
           
           if (config) comments.push({ appName: currentApp, weekRange: currentWeek, level, comment, ...config });
         }
@@ -370,7 +389,20 @@ class CommentCache {
                                      this.projectName === 'TRICKY' ? id : 'N/A', nameOrRange, name);
           },
           NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange),
-          COUNTRY: () => this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', nameOrRange, 'N/A', nameOrRange)
+          COUNTRY: () => {
+            // Для APPLOVIN_TEST страны связаны с кампаниями
+            if (this.projectName === 'APPLOVIN_TEST') {
+              // Нужно найти текущую кампанию - ищем вверх до ближайшей кампании
+              for (let j = i - 1; j >= 0; j--) {
+                const prevRow = data[j];
+                if (prevRow && prevRow[cols.level - 1] === 'CAMPAIGN') {
+                  const campaignName = prevRow[cols.name - 1];
+                  return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', campaignName, nameOrRange);
+                }
+              }
+            }
+            return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', nameOrRange, 'N/A', nameOrRange);
+          }
         };
         
         const key = keys[level]?.();

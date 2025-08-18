@@ -256,39 +256,114 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       emptyRow[1] = app.appName;
       tableData.push(emptyRow);
 
-      const weekKeys = Object.keys(app.weeks).sort();
-      
-      weekKeys.forEach((weekKey, weekIndex) => {
-        const week = app.weeks[weekKey];
+      // Для APPLOVIN_TEST структура другая: app.campaignGroups вместо app.weeks
+      if (CURRENT_PROJECT === 'APPLOVIN_TEST' && app.campaignGroups) {
+        // Сортируем кампании по общему spend
+        const campaignKeys = Object.keys(app.campaignGroups).sort((a, b) => {
+          const getTotalSpend = (campaign) => {
+            return Object.values(campaign.weeks).reduce((sum, week) => {
+              return sum + Object.values(week.countries || {}).reduce((wSum, country) => {
+                return wSum + (country.campaigns || []).reduce((cSum, c) => cSum + c.spend, 0);
+              }, 0);
+            }, 0);
+          };
+          return getTotalSpend(app.campaignGroups[b]) - getTotalSpend(app.campaignGroups[a]);
+        });
         
-        formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-        
-        let allCampaigns = [];
-        if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
-          Object.values(week.sourceApps).forEach(sourceApp => {
-            allCampaigns.push(...sourceApp.campaigns);
+        campaignKeys.forEach(campaignKey => {
+          const campaignGroup = app.campaignGroups[campaignKey];
+          
+          // Добавляем строку кампании
+          formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
+          const campaignEmptyRow = new Array(getUnifiedHeaders().length).fill('');
+          campaignEmptyRow[0] = 'CAMPAIGN';
+          campaignEmptyRow[1] = campaignGroup.campaignName;
+          tableData.push(campaignEmptyRow);
+          
+          // Обрабатываем недели для каждой кампании
+          const weekKeys = Object.keys(campaignGroup.weeks).sort();
+          
+          weekKeys.forEach(weekKey => {
+            const week = campaignGroup.weeks[weekKey];
+            
+            // Собираем все данные недели для totals
+            const allWeekCampaigns = [];
+            Object.values(week.countries || {}).forEach(country => {
+              allWeekCampaigns.push(...(country.campaigns || []));
+            });
+            
+            const weekTotals = getPrecomputedTotals(allWeekCampaigns, `applovin_test_week_${campaignKey}_${weekKey}`);
+            const campaignWoWKey = `${campaignGroup.campaignId}_${weekKey}`;
+            const weekWoW = getOptimizedWoW(campaignWoWKey, 'campaignWoW');
+            
+            const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+            const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+            const status = weekWoW.growthStatus || '';
+            
+            formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+            const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialMetricsCache);
+            tableData.push(weekRow);
+            
+            // Добавляем страны для недели
+            if (week.countries) {
+              const countryKeys = Object.keys(week.countries).sort((a, b) => {
+                const getCountrySpend = (country) => (country.campaigns || []).reduce((sum, c) => sum + c.spend, 0);
+                return getCountrySpend(week.countries[b]) - getCountrySpend(week.countries[a]);
+              });
+              
+              countryKeys.forEach(countryCode => {
+                const country = week.countries[countryCode];
+                const countryTotals = getPrecomputedTotals(country.campaigns || [], `applovin_test_country_${campaignKey}_${weekKey}_${countryCode}`);
+                const countryWoWKey = `${campaignGroup.campaignId}_${weekKey}_${countryCode}`;
+                const countryWoW = getOptimizedWoW(countryWoWKey, 'countryWoW');
+                
+                const countrySpendWoW = countryWoW.spendChangePercent !== undefined ? `${countryWoW.spendChangePercent.toFixed(0)}%` : '';
+                const countryProfitWoW = countryWoW.eProfitChangePercent !== undefined ? `${countryWoW.eProfitChangePercent.toFixed(0)}%` : '';
+                const countryStatus = countryWoW.growthStatus || '';
+                
+                formatData.push({ row: tableData.length + 1, type: 'COUNTRY' });
+                const countryRow = createUnifiedRow('COUNTRY', week, countryTotals, countrySpendWoW, countryProfitWoW, countryStatus, app.appName, initialMetricsCache, countryCode, country.countryName);
+                tableData.push(countryRow);
+              });
+            }
           });
-        } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
-          Object.values(week.networks).forEach(network => {
-            allCampaigns.push(...network.campaigns);
-          });
-        } else {
-          allCampaigns = week.campaigns || [];
-        }
+        });
+      } else {
+        // Стандартная обработка для других проектов
+        const weekKeys = Object.keys(app.weeks).sort();
         
-        const weekTotals = getPrecomputedTotals(allCampaigns, `app_${appKey}_${weekKey}`);
-        const appWeekKey = `${app.appName}_${weekKey}`;
-        const weekWoW = getOptimizedWoW(appWeekKey, 'appWeekWoW');
-        
-        const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
-        const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
-        const status = weekWoW.growthStatus || '';
-        
-        const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialMetricsCache);
-        tableData.push(weekRow);
-        
-        addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialMetricsCache, appsDbCache);
-      });
+        weekKeys.forEach((weekKey, weekIndex) => {
+          const week = app.weeks[weekKey];
+          
+          formatData.push({ row: tableData.length + 1, type: 'WEEK' });
+          
+          let allCampaigns = [];
+          if (CURRENT_PROJECT === 'TRICKY' && week.sourceApps) {
+            Object.values(week.sourceApps).forEach(sourceApp => {
+              allCampaigns.push(...sourceApp.campaigns);
+            });
+          } else if (CURRENT_PROJECT === 'OVERALL' && week.networks) {
+            Object.values(week.networks).forEach(network => {
+              allCampaigns.push(...network.campaigns);
+            });
+          } else {
+            allCampaigns = week.campaigns || [];
+          }
+          
+          const weekTotals = getPrecomputedTotals(allCampaigns, `app_${appKey}_${weekKey}`);
+          const appWeekKey = `${app.appName}_${weekKey}`;
+          const weekWoW = getOptimizedWoW(appWeekKey, 'appWeekWoW');
+          
+          const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
+          const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
+          const status = weekWoW.growthStatus || '';
+          
+          const weekRow = createUnifiedRow('WEEK', week, weekTotals, spendWoW, profitWoW, status, app.appName, initialMetricsCache);
+          tableData.push(weekRow);
+          
+          addOptimizedSubRows(tableData, week, weekKey, formatData, app.appName, initialMetricsCache, appsDbCache);
+        });
+      }
     });
   }
   

@@ -171,113 +171,11 @@ function processApiData(rawData, includeLastWeek = null) {
   
   console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
   
-  // ДЕТАЛЬНАЯ ОТЛАДКА для APPLOVIN_TEST
-  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-    console.log('=== APPLOVIN_TEST RAW DATA ANALYSIS ===');
-    console.log('Total stats records:', stats.length);
-    
-    if (stats.length > 0) {
-      // Показываем ПОЛНЫЙ первый объект для отладки
-      console.log('\n=== FULL FIRST RECORD DEBUG ===');
-      console.log('First record complete object:');
-      console.log(JSON.stringify(stats[0], null, 2));
-      console.log('=== END FULL RECORD ===\n');
-      
-      // Проверяем первые 3 записи
-      for (let i = 0; i < Math.min(3, stats.length); i++) {
-        console.log(`\nRecord ${i + 1}:`);
-        const row = stats[i];
-        console.log('  Row length:', row.length);
-        
-        row.forEach((item, index) => {
-          if (item && typeof item === 'object') {
-            console.log(`  [${index}]: __typename = ${item.__typename}`);
-            
-            // Детально логируем каждый тип
-            if (item.__typename === 'UaCampaignCountry') {
-              console.log(`    >>> COUNTRY FOUND! code: "${item.code}", country: "${item.country}"`);
-            } else if (item.__typename === 'UaCampaign') {
-              console.log(`    Campaign: "${item.campaignName}", hid: ${item.hid}`);
-            } else if (item.__typename === 'AppInfo') {
-              console.log(`    App: "${item.name}"`);
-            } else if (item.__typename === 'StatsValue') {
-              console.log(`    Value: ${item.value}`);
-            }
-          }
-        });
-      }
-    }
-    console.log('=== END RAW DATA ANALYSIS ===\n');
-  }
-  
   // Data processor strategy
   const processor = CURRENT_PROJECT === 'TRICKY' ? processTrickyStrategy : processStandardStrategy;
   const appData = processor(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
   
-  // Добавить отладку для APPLOVIN_TEST
   if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-    console.log('APPLOVIN_TEST Debug: Before restructure');
-    console.log('Total apps in appData:', Object.keys(appData).length);
-    
-    // Собираем статистику по странам
-    const countryStats = {};
-    let totalRecords = 0;
-    let recordsWithCountry = 0;
-    let recordsWithoutCountry = 0;
-    
-    Object.values(appData).forEach(app => {
-      Object.values(app.weeks).forEach(week => {
-        week.campaigns.forEach(c => {
-          totalRecords++;
-          
-          if (c.countryCode && c.countryCode !== 'OTHER') {
-            recordsWithCountry++;
-          } else {
-            recordsWithoutCountry++;
-          }
-          
-          const cc = c.countryCode || 'OTHER';
-          const cn = c.countryName || 'Other';
-          
-          if (!countryStats[cc]) {
-            countryStats[cc] = { name: cn, count: 0, spend: 0 };
-          }
-          countryStats[cc].count++;
-          countryStats[cc].spend += c.spend;
-        });
-      });
-    });
-    
-    console.log(`Total records: ${totalRecords}, With country: ${recordsWithCountry}, Without: ${recordsWithoutCountry}`);
-    console.log('Country distribution by spend:');
-    
-    const sortedCountries = Object.entries(countryStats)
-      .sort((a, b) => b[1].spend - a[1].spend);
-        
-    sortedCountries.slice(0, 15).forEach(([code, stats]) => {
-      console.log(`  ${code} (${stats.name}): ${stats.count} records, ${stats.spend.toFixed(2)}`);
-    });
-    
-    if (sortedCountries.length > 15) {
-      console.log(`  ... and ${sortedCountries.length - 15} more countries`);
-    }
-    
-    // Детальная проверка первых записей
-    const firstApp = Object.values(appData)[0];
-    if (firstApp) {
-      const firstWeek = Object.values(firstApp.weeks)[0];
-      if (firstWeek && firstWeek.campaigns.length > 0) {
-        console.log('First 3 campaign records:');
-        firstWeek.campaigns.slice(0, 3).forEach((c, i) => {
-          console.log(`  Record ${i + 1}:`);
-          console.log(`    Campaign: ${c.campaignName}`);
-          console.log(`    Country Code: ${c.countryCode}`);
-          console.log(`    Country Name: ${c.countryName}`);
-          console.log(`    Spend: ${c.spend}`);
-        });
-      }
-    }
-    
     return restructureToCampaignFirst(appData);
   }
   
@@ -360,51 +258,11 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
 }
 
 function restructureToCampaignFirst(appData) {
-  console.log('APPLOVIN_TEST: Starting restructure, apps count:', Object.keys(appData).length);
-  
-  // КРИТИЧЕСКАЯ ОТЛАДКА: проверяем наличие стран в данных
-  let countriesFound = new Set();
-  let samplesWithCountry = [];
-  let samplesWithoutCountry = [];
-  
-  Object.values(appData).forEach(app => {
-    Object.values(app.weeks).forEach(week => {
-      week.campaigns.forEach(c => {
-        if (c.countryCode && c.countryCode !== 'OTHER') {
-          countriesFound.add(`${c.countryCode}:${c.countryName}`);
-          if (samplesWithCountry.length < 3) {
-            samplesWithCountry.push({
-              campaign: c.campaignName,
-              country: `${c.countryCode} - ${c.countryName}`,
-              spend: c.spend
-            });
-          }
-        } else if (samplesWithoutCountry.length < 3) {
-          samplesWithoutCountry.push({
-            campaign: c.campaignName,
-            countryCode: c.countryCode,
-            countryName: c.countryName
-          });
-        }
-      });
-    });
-  });
-  
-  console.log('Countries found in data:', Array.from(countriesFound));
-  if (samplesWithCountry.length > 0) {
-    console.log('Sample records WITH country:', samplesWithCountry);
-  }
-  if (samplesWithoutCountry.length > 0) {
-    console.log('Sample records WITHOUT country:', samplesWithoutCountry);
-  }
-  
   const restructured = {};
   
   Object.keys(appData).forEach(appKey => {
     const app = appData[appKey];
     const campaignGroups = {};
-    
-    console.log(`Processing app: ${app.appName}, weeks: ${Object.keys(app.weeks).length}`);
     
     // Собираем все уникальные кампании
     const allCampaigns = new Map();
@@ -412,7 +270,6 @@ function restructureToCampaignFirst(appData) {
     Object.keys(app.weeks).forEach(weekKey => {
       const week = app.weeks[weekKey];
       if (!week.campaigns) {
-        console.log(`WARNING: No campaigns in week ${weekKey}`);
         return;
       }
       
@@ -524,8 +381,6 @@ function restructureToCampaignFirst(appData) {
       });
     });
     
-    console.log(`App ${app.appName}: found ${Object.keys(campaignGroups).length} unique campaigns`);
-    
     restructured[appKey] = {
       appId: app.appId,
       appName: app.appName,
@@ -536,7 +391,6 @@ function restructureToCampaignFirst(appData) {
     };
   });
   
-  console.log('APPLOVIN_TEST: Restructure complete');
   return restructured;
 }
 
