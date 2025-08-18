@@ -50,13 +50,14 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
   let entityTotalRows = 0;
   const entity = data[entityKey];
   
-  // Обработка для APPLOVIN_TEST
   if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
     const campaignKeys = Object.keys(entity.campaignGroups).sort((a, b) => {
       const spendA = Object.values(entity.campaignGroups[a].weeks).reduce((sum, w) => 
-        sum + (w.campaigns[0]?.spend || 0), 0);
+        sum + Object.values(w.countries || {}).reduce((s, country) => 
+          s + country.campaigns.reduce((cs, c) => cs + c.spend, 0), 0), 0);
       const spendB = Object.values(entity.campaignGroups[b].weeks).reduce((sum, w) => 
-        sum + (w.campaigns[0]?.spend || 0), 0);
+        sum + Object.values(w.countries || {}).reduce((s, country) => 
+          s + country.campaigns.reduce((cs, c) => cs + c.spend, 0), 0), 0);
       return spendB - spendA;
     });
     
@@ -67,19 +68,38 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
       const campaignStartRow = rowPointer;
       rowPointer++; // Campaign header row
       
-      const weekCount = Object.keys(campaignGroup.weeks).length;
-      rowPointer += weekCount;
+      Object.keys(campaignGroup.weeks).forEach(weekKey => {
+        const week = campaignGroup.weeks[weekKey];
+        const weekStartRow = rowPointer;
+        rowPointer++; // Week header row
+        
+        const countryCount = Object.keys(week.countries || {}).length;
+        rowPointer += countryCount;
+        
+        if (countryCount > 0) {
+          requests.push({
+            addDimensionGroup: {
+              range: { sheetId, dimension: "ROWS", startIndex: weekStartRow, endIndex: weekStartRow + countryCount }
+            }
+          });
+          collapseData.push({ start: weekStartRow, end: weekStartRow + countryCount, depth: 3 });
+        }
+      });
       
-      if (weekCount > 0) {
+      const campaignTotalRows = 1 + Object.keys(campaignGroup.weeks).reduce((sum, weekKey) => {
+        return sum + 1 + Object.keys(campaignGroup.weeks[weekKey].countries || {}).length;
+      }, 0);
+      
+      if (campaignTotalRows > 1) {
         requests.push({
           addDimensionGroup: {
-            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: campaignStartRow + weekCount }
+            range: { sheetId, dimension: "ROWS", startIndex: campaignStartRow, endIndex: campaignStartRow + campaignTotalRows - 1 }
           }
         });
-        collapseData.push({ start: campaignStartRow, end: campaignStartRow + weekCount, depth: 2 });
+        collapseData.push({ start: campaignStartRow, end: campaignStartRow + campaignTotalRows - 1, depth: 2 });
       }
       
-      entityTotalRows += 1 + weekCount;
+      entityTotalRows += campaignTotalRows;
     });
     
     if (entityTotalRows > 0) {
@@ -219,11 +239,13 @@ function calculateRowPointer(data, targetEntityKey, entityType) {
     const entity = data[entityKey];
     rowPointer++;
     
-    // Обработка для APPLOVIN_TEST
     if (CURRENT_PROJECT === 'APPLOVIN_TEST' && entity.campaignGroups) {
       Object.values(entity.campaignGroups).forEach(campaignGroup => {
         rowPointer++; // Campaign row
-        rowPointer += Object.keys(campaignGroup.weeks).length; // Week rows
+        Object.values(campaignGroup.weeks).forEach(week => {
+          rowPointer++; // Week row
+          rowPointer += Object.keys(week.countries || {}).length; // Country rows
+        });
       });
     } else {
       // Оригинальная логика

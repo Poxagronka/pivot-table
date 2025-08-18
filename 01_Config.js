@@ -136,7 +136,14 @@ var PROJECTS = {
   REGULAR: createProject('Regular', "234187180623265792", "!/tricky/i"),
   GOOGLE_ADS: createProject('Google_Ads', "378302368699121664", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
   APPLOVIN: createProject('Applovin', "261208778387488768", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
-  APPLOVIN_TEST: createProject('Applovin_test', "261208778387488768", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),
+  APPLOVIN_TEST: createProject('Applovin_test', "261208778387488768", "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE", {
+    groupBy: [
+      { dimension: "DATE", timeBucket: "WEEK" },
+      { dimension: "COUNTRY" },
+      { dimension: "ATTRIBUTION_CAMPAIGN_HID" },
+      { dimension: "APP" }
+    ]
+  }),
   MINTEGRAL: createProject('Mintegral', "756604737398243328", null),
   INCENT: createProject('Incent', ["1580763469207044096","932245122865692672","6958061424287416320","6070852297695428608","5354779956943519744"], 
     "!/test_creo|creo_test|SL|TL|RnD|adq/i", COMMON_USERS, "DATE"),

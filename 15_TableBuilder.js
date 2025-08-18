@@ -23,8 +23,6 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
     }
   }
   
-  // Добавляем обработку для APPLOVIN_TEST
-  // В функции buildUnifiedTable, заменяем блок обработки APPLOVIN_TEST:
   if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
     const appKeys = Object.keys(data).sort((a, b) => data[a].appName.localeCompare(data[b].appName));
     
@@ -37,12 +35,15 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       emptyRow[1] = app.appName;
       tableData.push(emptyRow);
       
-      // Итерация по кампаниям вместо недель
       const campaignKeys = Object.keys(app.campaignGroups || {}).sort((a, b) => {
-        const spendA = Object.values(app.campaignGroups[a].weeks).reduce((sum, w) => 
-          sum + (w.campaigns[0]?.spend || 0), 0);
-        const spendB = Object.values(app.campaignGroups[b].weeks).reduce((sum, w) => 
-          sum + (w.campaigns[0]?.spend || 0), 0);
+        const spendA = Object.values(app.campaignGroups[a].weeks).reduce((sum, w) => {
+          return sum + Object.values(w.countries || {}).reduce((s, country) => 
+            s + country.campaigns.reduce((cs, c) => cs + c.spend, 0), 0);
+        }, 0);
+        const spendB = Object.values(app.campaignGroups[b].weeks).reduce((sum, w) => {
+          return sum + Object.values(w.countries || {}).reduce((s, country) => 
+            s + country.campaigns.reduce((cs, c) => cs + c.spend, 0), 0);
+        }, 0);
         return spendB - spendA;
       });
       
@@ -54,54 +55,124 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
         campaignRow[0] = 'CAMPAIGN';
         campaignRow[1] = campaignGroup.campaignName;
         campaignRow[2] = campaignGroup.campaignId;
-        campaignRow[3] = campaignGroup.geo;
+        campaignRow[3] = ''; // Не показываем GEO на уровне кампании для APPLOVIN_TEST
         tableData.push(campaignRow);
         
-        // Недели внутри кампании
         const weekKeys = Object.keys(campaignGroup.weeks).sort();
         weekKeys.forEach(weekKey => {
           const week = campaignGroup.weeks[weekKey];
-          const campaign = week.campaigns[0];
           
-          if (!campaign) {
-            console.error('No campaign data for week:', weekKey);
-            return;
-          }
+          // Агрегируем данные всех стран для недели
+          const allCountryCampaigns = [];
+          Object.values(week.countries || {}).forEach(country => {
+            allCountryCampaigns.push(...country.campaigns);
+          });
           
-          const weekWoW = getOptimizedWoW(`${campaign.campaignId}_${weekKey}`, 'campaignWoW');
+          const weekTotals = calculateWeekTotals(allCountryCampaigns);
+          const weekWoWKey = `${campaignGroup.campaignId}_${weekKey}`;
+          const weekWoW = getOptimizedWoW(weekWoWKey, 'campaignWoW');
           const spendWoW = weekWoW.spendChangePercent !== undefined ? `${weekWoW.spendChangePercent.toFixed(0)}%` : '';
           const profitWoW = weekWoW.eProfitChangePercent !== undefined ? `${weekWoW.eProfitChangePercent.toFixed(0)}%` : '';
           const status = weekWoW.growthStatus || '';
           
           formatData.push({ row: tableData.length + 1, type: 'WEEK' });
-          
-          // Создаем строку с данными кампании, а не totals
           const weekRow = new Array(getUnifiedHeaders().length).fill('');
           weekRow[0] = 'WEEK';
           weekRow[1] = `${week.weekStart} - ${week.weekEnd}`;
-          weekRow[2] = ''; // ID пустой для недели
-          weekRow[3] = campaign.geo || '';
-          weekRow[4] = formatSmartCurrency(campaign.spend || 0);
+          weekRow[2] = '';
+          weekRow[3] = '';
+          weekRow[4] = formatSmartCurrency(weekTotals.totalSpend);
           weekRow[5] = spendWoW;
-          weekRow[6] = campaign.installs || 0;
-          weekRow[7] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
+          weekRow[6] = weekTotals.totalInstalls;
+          weekRow[7] = weekTotals.avgCpi.toFixed(3);
           
-          // Комбинированный ROAS
-          const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
+          const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
           weekRow[8] = combinedRoas;
           
-          weekRow[9] = (campaign.ipm || 0).toFixed(1);
-          weekRow[10] = `${(campaign.rrD1 || 0).toFixed(0)}%`;
-          weekRow[11] = `${(campaign.rrD7 || 0).toFixed(0)}%`;
-          weekRow[12] = (campaign.eArpuForecast || 0).toFixed(3);
-          weekRow[13] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
-          weekRow[14] = `${(campaign.eRoasForecastD730 || 0).toFixed(0)}%`;
-          weekRow[15] = formatSmartCurrency(campaign.eProfitForecast || 0);
+          weekRow[9] = weekTotals.avgIpm.toFixed(1);
+          weekRow[10] = `${weekTotals.avgRrD1.toFixed(0)}%`;
+          weekRow[11] = `${weekTotals.avgRrD7.toFixed(0)}%`;
+          weekRow[12] = weekTotals.avgArpu.toFixed(3);
+          weekRow[13] = `${weekTotals.avgERoas.toFixed(0)}%`;
+          // Вместо простого форматирования, используем initialMetricsCache
+          let weekEROAS730Display = `${weekTotals.avgEROASD730.toFixed(0)}%`;
+          let weekEProfit730Display = formatSmartCurrency(weekTotals.totalProfit);
+
+          if (initialMetricsCache && app.appName) {
+            const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+            weekEROAS730Display = initialMetricsCache.formatEROASWithInitial(
+              'WEEK', app.appName, weekRange, weekTotals.avgEROASD730, 
+              campaignGroup.campaignId, campaignGroup.campaignName
+            );
+            weekEProfit730Display = initialMetricsCache.formatProfitWithInitial(
+              'WEEK', app.appName, weekRange, weekTotals.totalProfit,
+              campaignGroup.campaignId, campaignGroup.campaignName
+            );
+          }
+
+          weekRow[14] = weekEROAS730Display;
+          weekRow[15] = weekEProfit730Display;
           weekRow[16] = profitWoW;
           weekRow[17] = status;
           weekRow[18] = '';
           
           tableData.push(weekRow);
+          
+          // Страны уже отсортированы в restructureToCampaignFirst
+          Object.values(week.countries || {}).forEach(country => {
+            if (!country.campaigns || country.campaigns.length === 0) return;
+            const campaign = country.campaigns[0];
+            
+            const countryWoWKey = `${campaignGroup.campaignId}_${weekKey}_${country.countryCode}`;
+            const countryWoW = getOptimizedWoW(countryWoWKey, 'countryWoW');
+            const spendWoW = countryWoW.spendChangePercent !== undefined ? `${countryWoW.spendChangePercent.toFixed(0)}%` : '';
+            const profitWoW = countryWoW.eProfitChangePercent !== undefined ? `${countryWoW.eProfitChangePercent.toFixed(0)}%` : '';
+            const status = countryWoW.growthStatus || '';
+            
+            formatData.push({ row: tableData.length + 1, type: 'COUNTRY' });
+            
+            const countryRow = new Array(getUnifiedHeaders().length).fill('');
+            countryRow[0] = 'COUNTRY';
+            countryRow[1] = country.countryName;
+            countryRow[2] = '';
+            countryRow[3] = country.countryCode || 'OTHER';
+            countryRow[4] = formatSmartCurrency(campaign.spend || 0);
+            countryRow[5] = spendWoW;
+            countryRow[6] = campaign.installs || 0;
+            countryRow[7] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
+            
+            const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
+            countryRow[8] = combinedRoas;
+            
+            countryRow[9] = (campaign.ipm || 0).toFixed(1);
+            countryRow[10] = `${(campaign.rrD1 || 0).toFixed(0)}%`;
+            countryRow[11] = `${(campaign.rrD7 || 0).toFixed(0)}%`;
+            countryRow[12] = (campaign.eArpuForecast || 0).toFixed(3);
+            countryRow[13] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
+            // Для каждой страны добавить обработку initial метрик
+            let countryEROAS730Display = `${(campaign.eRoasForecastD730 || 0).toFixed(0)}%`;
+            let countryEProfit730Display = formatSmartCurrency(campaign.eProfitForecast || 0);
+
+            if (initialMetricsCache && app.appName) {
+              const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+              countryEROAS730Display = initialMetricsCache.formatEROASWithInitial(
+                'COUNTRY', app.appName, weekRange, campaign.eRoasForecastD730 || 0,
+                `${campaignGroup.campaignId}_${country.countryCode}`, country.countryName
+              );
+              countryEProfit730Display = initialMetricsCache.formatProfitWithInitial(
+                'COUNTRY', app.appName, weekRange, campaign.eProfitForecast || 0,
+                `${campaignGroup.campaignId}_${country.countryCode}`, country.countryName
+              );
+            }
+
+            countryRow[14] = countryEROAS730Display;
+            countryRow[15] = countryEProfit730Display;
+            countryRow[16] = profitWoW;
+            countryRow[17] = status;
+            countryRow[18] = '';
+            
+            tableData.push(countryRow);
+          });
         });
       });
     });
@@ -352,6 +423,13 @@ function precomputeWoWCache(wow) {
   if (wow.networkWoW) {
     Object.keys(wow.networkWoW).forEach(key => {
       WOW_METRICS_CACHE.set(`networkWoW_${key}`, wow.networkWoW[key]);
+      cacheCount++;
+    });
+  }
+  
+  if (wow.countryWoW) {
+    Object.keys(wow.countryWoW).forEach(key => {
+      WOW_METRICS_CACHE.set(`countryWoW_${key}`, wow.countryWoW[key]);
       cacheCount++;
     });
   }

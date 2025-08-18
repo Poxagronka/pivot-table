@@ -289,6 +289,82 @@ class InitialMetricsCache {
           });
         });
       });
+    } else if (this.projectName === 'APPLOVIN_TEST') {
+      // Обработка APPLOVIN_TEST с группировкой по странам
+      Object.values(appData).forEach(app => {
+        if (app.campaignGroups) {
+          Object.values(app.campaignGroups).forEach(campaignGroup => {
+            Object.entries(campaignGroup.weeks).forEach(([weekKey, week]) => {
+              const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+              
+              // Уровень недели (агрегация всех стран)
+              if (week.countries) {
+                const allCampaigns = [];
+                Object.values(week.countries).forEach(country => {
+                  allCampaigns.push(...country.campaigns);
+                });
+                const weekTotals = calculateWeekTotals(allCampaigns);
+                
+                const weekKey = this.createKey('WEEK', app.appName, weekRange, campaignGroup.campaignId, campaignGroup.campaignName);
+                const existingEntry = this.memoryCache[weekKey];
+                
+                if (!existingEntry) {
+                  if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                    newValues.push(['WEEK', app.appName, weekRange, campaignGroup.campaignId, campaignGroup.campaignName, 
+                      weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                      new Date(), 
+                      weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                    ]);
+                  }
+                } else {
+                  const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                     (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+                  if (needsUpdate) {
+                    updateRequests.push({
+                      key: weekKey,
+                      rowIndex: this.rowIndexCache[weekKey],
+                      eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                      profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                    });
+                  }
+                }
+                
+                // Уровень стран
+                Object.entries(week.countries).forEach(([countryCode, country]) => {
+                  const countryCampaigns = country.campaigns || [];
+                  const countryTotals = calculateWeekTotals(countryCampaigns);
+                  
+                  const countryKey = this.createKey('COUNTRY', app.appName, weekRange, 
+                    `${campaignGroup.campaignId}_${countryCode}`, country.countryName);
+                  const existingEntry = this.memoryCache[countryKey];
+                  
+                  if (!existingEntry) {
+                    if (countryTotals.avgEROASD730 > 0 || countryTotals.totalProfit !== 0) {
+                      newValues.push(['COUNTRY', app.appName, weekRange, 
+                        `${campaignGroup.campaignId}_${countryCode}`, country.countryName, 
+                        countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : '', 
+                        new Date(), 
+                        countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : ''
+                      ]);
+                    }
+                  } else {
+                    const needsUpdate = (countryTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                       (countryTotals.totalProfit !== 0 && !existingEntry.profit);
+                    if (needsUpdate) {
+                      updateRequests.push({
+                        key: countryKey,
+                        rowIndex: this.rowIndexCache[countryKey],
+                        eROAS: existingEntry.eROAS || (countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : null),
+                        profit: existingEntry.profit || (countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : null)
+                      });
+                    }
+                  }
+                });
+              }
+            });
+          });
+        }
+      });
     } else {
       Object.values(appData).forEach(app => {
         Object.values(app.weeks).forEach(week => {

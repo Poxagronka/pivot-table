@@ -149,8 +149,8 @@ class CommentCache {
   getNameColumn(sheetName) { return this.getColumns().name; }
   getIdColumn(sheetName) { return this.getColumns().id; }
 
-  getCommentKey(appName, weekRange, level, identifier = null, sourceApp = null, campaign = null) {
-    return [appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', campaign || 'N/A'].join('|||');
+  getCommentKey(appName, weekRange, level, identifier = null, sourceApp = null, campaign = null, country = null) {
+    return [appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', campaign || 'N/A', country || 'N/A'].join('|||');
   }
 
   loadAllComments() {
@@ -311,6 +311,12 @@ class CommentCache {
               identifier: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty) : 'N/A',
               sourceApp: nameOrRange || 'N/A',
               campaign: this.projectName === 'TRICKY' ? (this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty || 'Unknown') : (nameOrRange || 'Unknown')
+            },
+            COUNTRY: { 
+              identifier: idOrEmpty || 'N/A',
+              sourceApp: nameOrRange || 'N/A',
+              campaign: 'N/A',
+              country: nameOrRange || 'N/A'
             }
           }[level];
           
@@ -363,7 +369,8 @@ class CommentCache {
             return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', 
                                      this.projectName === 'TRICKY' ? id : 'N/A', nameOrRange, name);
           },
-          NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange)
+          NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange),
+          COUNTRY: () => this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', nameOrRange, 'N/A', nameOrRange)
         };
         
         const key = keys[level]?.();

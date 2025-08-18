@@ -92,7 +92,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       eprofitRange.setHorizontalAlignment('right');
     }
 
-    const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [] };
+    const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [], country: [] };
     
     // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ APPLOVIN_TEST
     if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
@@ -101,6 +101,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
         // Меняем местами форматирование для CAMPAIGN и WEEK
         if (item.type === 'CAMPAIGN') rowTypeMap.week.push(item.row);  // Кампании форматируем как недели
         if (item.type === 'WEEK') rowTypeMap.campaign.push(item.row);  // Недели форматируем как кампании
+        if (item.type === 'COUNTRY') rowTypeMap.country.push(item.row);
       });
     } else {
       // Стандартная обработка для остальных проектов
@@ -110,6 +111,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
         if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
         if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
         if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
+        if (item.type === 'COUNTRY') rowTypeMap.country.push(item.row);
         if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
       });
     }
@@ -150,6 +152,15 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     if (rowTypeMap.campaign.length > 0) {
       const campaignRanges = createOptimizedRanges(sheet, rowTypeMap.campaign, numCols);
       campaignRanges.forEach(range => {
+        // Для APPLOVIN_TEST в campaign попадают недели (должен быть размер 10)
+        const fontSize = CURRENT_PROJECT === 'APPLOVIN_TEST' ? 10 : 9;
+        range.setBackground('#ffffff').setFontSize(fontSize);
+      });
+    }
+
+    if (rowTypeMap.country && rowTypeMap.country.length > 0) {
+      const countryRanges = createOptimizedRanges(sheet, rowTypeMap.country, numCols);
+      countryRanges.forEach(range => {
         range.setBackground('#ffffff').setFontSize(9);
       });
     }

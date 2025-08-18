@@ -24,46 +24,132 @@ function calculateWoWMetrics(appData) {
     
     // Добавляем обработку для APPLOVIN_TEST
     if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
+      // Инициализируем результаты
+      results.countryWoW = {};
+      
       Object.values(appData).forEach(app => {
         // Обрабатываем campaignGroups
         if (app.campaignGroups) {
           Object.values(app.campaignGroups).forEach(campaignGroup => {
             const weekKeys = Object.keys(campaignGroup.weeks).sort();
             
+            // Для кампаний (уровень кампании)
             weekKeys.forEach((weekKey, index) => {
               const week = campaignGroup.weeks[weekKey];
-              const campaign = week.campaigns[0];
-              const key = `${campaign.campaignId}_${weekKey}`;
+              
+              // Агрегируем данные недели для уровня кампании
+              let weekSpend = 0;
+              let weekProfit = 0;
+              
+              if (week.countries) {
+                Object.values(week.countries).forEach(country => {
+                  country.campaigns.forEach(c => {
+                    weekSpend += c.spend;
+                    weekProfit += c.eProfitForecast;
+                  });
+                });
+              }
+              
+              const campaignWoWKey = `${campaignGroup.campaignId}_${weekKey}`;
               
               if (index === 0) {
-                // Первая неделя кампании
-                results.campaignWoW[key] = {
+                results.campaignWoW[campaignWoWKey] = {
                   spendChangePercent: 0,
                   eProfitChangePercent: 0,
                   growthStatus: 'First Week'
                 };
               } else {
-                // Сравниваем с предыдущей неделей этой же кампании
                 const prevWeekKey = weekKeys[index - 1];
                 const prevWeek = campaignGroup.weeks[prevWeekKey];
-                const prevCampaign = prevWeek.campaigns[0];
                 
-                const spendPct = prevCampaign.spend ? 
-                  ((campaign.spend - prevCampaign.spend) / Math.abs(prevCampaign.spend)) * 100 : 0;
-                const profitPct = prevCampaign.eProfitForecast ? 
-                  ((campaign.eProfitForecast - prevCampaign.eProfitForecast) / Math.abs(prevCampaign.eProfitForecast)) * 100 : 0;
+                let prevWeekSpend = 0;
+                let prevWeekProfit = 0;
                 
-                results.campaignWoW[key] = {
+                if (prevWeek && prevWeek.countries) {
+                  Object.values(prevWeek.countries).forEach(country => {
+                    country.campaigns.forEach(c => {
+                      prevWeekSpend += c.spend;
+                      prevWeekProfit += c.eProfitForecast;
+                    });
+                  });
+                }
+                
+                const spendPct = prevWeekSpend ? 
+                  ((weekSpend - prevWeekSpend) / Math.abs(prevWeekSpend)) * 100 : 0;
+                const profitPct = prevWeekProfit ? 
+                  ((weekProfit - prevWeekProfit) / Math.abs(prevWeekProfit)) * 100 : 0;
+                
+                results.campaignWoW[campaignWoWKey] = {
                   spendChangePercent: spendPct,
                   eProfitChangePercent: profitPct,
                   growthStatus: calculateGrowthStatus(
-                    prevCampaign, 
-                    campaign, 
-                    spendPct, 
-                    profitPct, 
+                    { spend: prevWeekSpend, eProfitForecast: prevWeekProfit },
+                    { spend: weekSpend, eProfitForecast: weekProfit },
+                    spendPct,
+                    profitPct,
                     'eProfitForecast'
                   )
                 };
+              }
+              
+              // Для каждой страны
+              if (week.countries) {
+                Object.keys(week.countries).forEach(countryCode => {
+                  const country = week.countries[countryCode];
+                  const countryKey = `${campaignGroup.campaignId}_${weekKey}_${countryCode}`;
+                  
+                  // Агрегируем данные страны
+                  let countrySpend = 0;
+                  let countryProfit = 0;
+                  country.campaigns.forEach(c => {
+                    countrySpend += c.spend;
+                    countryProfit += c.eProfitForecast;
+                  });
+                  
+                  if (index === 0) {
+                    results.countryWoW[countryKey] = {
+                      spendChangePercent: 0,
+                      eProfitChangePercent: 0,
+                      growthStatus: 'First Week'
+                    };
+                  } else {
+                    const prevWeekKey = weekKeys[index - 1];
+                    const prevWeek = campaignGroup.weeks[prevWeekKey];
+                    const prevCountry = prevWeek?.countries?.[countryCode];
+                    
+                    if (prevCountry && prevCountry.campaigns) {
+                      let prevCountrySpend = 0;
+                      let prevCountryProfit = 0;
+                      prevCountry.campaigns.forEach(c => {
+                        prevCountrySpend += c.spend;
+                        prevCountryProfit += c.eProfitForecast;
+                      });
+                      
+                      const spendPct = prevCountrySpend ? 
+                        ((countrySpend - prevCountrySpend) / Math.abs(prevCountrySpend)) * 100 : 0;
+                      const profitPct = prevCountryProfit ? 
+                        ((countryProfit - prevCountryProfit) / Math.abs(prevCountryProfit)) * 100 : 0;
+                      
+                      results.countryWoW[countryKey] = {
+                        spendChangePercent: spendPct,
+                        eProfitChangePercent: profitPct,
+                        growthStatus: calculateGrowthStatus(
+                          { spend: prevCountrySpend, eProfitForecast: prevCountryProfit },
+                          { spend: countrySpend, eProfitForecast: countryProfit },
+                          spendPct,
+                          profitPct,
+                          'eProfitForecast'
+                        )
+                      };
+                    } else {
+                      results.countryWoW[countryKey] = {
+                        spendChangePercent: 0,
+                        eProfitChangePercent: 0,
+                        growthStatus: 'First Week'
+                      };
+                    }
+                  }
+                });
               }
             });
           });
