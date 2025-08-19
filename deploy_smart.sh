@@ -14,39 +14,50 @@ fi
 CHANGED_FILES=$(git diff --name-only)
 CHANGED_JS_FILES=$(git diff --name-only | grep "\.js$" || true)
 
-# Создаем умное описание коммита
-COMMIT_MSG="Code updates:"
+# Создаем предложение для коммита на основе изменений
+SUGGESTED_MSG="Code updates:"
 
 # Проверяем типы изменений
 if echo "$CHANGED_FILES" | grep -q "06_Analytics.js"; then
-    COMMIT_MSG="$COMMIT_MSG Analytics improvements,"
+    SUGGESTED_MSG="$SUGGESTED_MSG Analytics improvements,"
 fi
 
 if echo "$CHANGED_FILES" | grep -q "01_Config.js"; then
-    COMMIT_MSG="$COMMIT_MSG Configuration updates,"
+    SUGGESTED_MSG="$SUGGESTED_MSG Configuration updates,"
 fi
 
 if echo "$CHANGED_FILES" | grep -q "15_TableBuilder.js"; then
-    COMMIT_MSG="$COMMIT_MSG Table builder enhancements,"
+    SUGGESTED_MSG="$SUGGESTED_MSG Table builder enhancements,"
 fi
 
 if echo "$CHANGED_FILES" | grep -q "16_RowGrouping.js"; then
-    COMMIT_MSG="$COMMIT_MSG Row grouping improvements,"
+    SUGGESTED_MSG="$SUGGESTED_MSG Row grouping improvements,"
 fi
 
 if echo "$CHANGED_FILES" | grep -q "05_ApiClient.js"; then
-    COMMIT_MSG="$COMMIT_MSG API client updates,"
+    SUGGESTED_MSG="$SUGGESTED_MSG API client updates,"
 fi
 
 # Убираем последнюю запятую
-COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/,$//')
+SUGGESTED_MSG=$(echo "$SUGGESTED_MSG" | sed 's/,$//')
 
 # Добавляем количество измененных файлов
 FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l)
-COMMIT_MSG="$COMMIT_MSG (${FILE_COUNT} files)"
+SUGGESTED_MSG="$SUGGESTED_MSG (${FILE_COUNT} files)"
+
+echo "💡 Предложенный коммит: $SUGGESTED_MSG"
+echo "📁 Измененные файлы: $(echo $CHANGED_FILES | tr '\n' ' ')"
+echo ""
+echo "💬 Введите сообщение коммита (Enter = использовать предложенное):"
+read -r USER_INPUT
+
+if [ -n "$USER_INPUT" ]; then
+    COMMIT_MSG="$USER_INPUT"
+else
+    COMMIT_MSG="$SUGGESTED_MSG"
+fi
 
 echo "📝 Коммит: $COMMIT_MSG"
-echo "📁 Файлы: $(echo $CHANGED_FILES | tr '\n' ' ')"
 
 # Деплой на GAS
 echo "📤 Отправка на Google Apps Script..."
