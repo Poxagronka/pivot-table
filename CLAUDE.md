@@ -10,7 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Deployment Commands
 - **Deploy to Google Apps Script**: `clasp push --force` (pushes all local changes to GAS)
 - **Deploy and Sync**: `./sync_gas.sh` (interactive script that handles GAS deployment and git sync)
+- **Auto Deploy**: `./deploy_smart.sh` (automatic deployment to both GAS and GitHub with smart commit messages)
 - **Open in Browser**: `clasp open` (opens the GAS project in web editor)
+
+### Auto-deployment Configuration
+The project is configured with Claude Code hooks for automatic deployment:
+- Changes are automatically pushed to GAS via `clasp push --force`
+- Git commits are created with intelligent messages based on changed files
+- Changes are automatically pushed to GitHub
+- Configured in `.claudecode/settings.json` with post-edit hooks
 
 ### Testing Commands
 No automated tests - this is a Google Apps Script project. Testing is done manually through the Google Sheets interface.
