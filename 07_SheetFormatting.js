@@ -148,7 +148,7 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       const weekRanges = createOptimizedRanges(sheet, rowTypeMap.week, numCols);
       weekRanges.forEach(range => {
         if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-          // Для INCENT_TRAFFIC в week попадают кампании - белый фон, размер 10
+          // Для INCENT_TRAFFIC в week попадают кампании - белый фон, размер 10  
           range.setBackground('#ffffff').setFontSize(10);
         } else {
           // Стандартное форматирование недель - синий фон, размер 10
