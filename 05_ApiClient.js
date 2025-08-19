@@ -179,12 +179,79 @@ function processApiData(rawData, includeLastWeek = null) {
     return restructureToCampaignFirst(appData);
   }
   
-  return CURRENT_PROJECT === 'INCENT_TRAFFIC' ? convertToNetworkStructure(appData) : appData;
+  return appData;
 }
 
 function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+  // Специальная обработка для INCENT_TRAFFIC
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    const networkData = {};
+    
+    stats.forEach(row => {
+      const date = row[0].value;
+      const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
+      
+      if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+      
+      const data = parseRow(row, true);
+      const networkId = data.networkId;
+      const countryCode = data.countryCode;
+      const campaignId = data.campaignId;
+      
+      // Инициализация структуры: network -> country -> campaign -> week
+      if (!networkData[networkId]) {
+        networkData[networkId] = {
+          networkId: data.networkId,
+          networkName: data.networkName,
+          countries: {}
+        };
+      }
+      
+      if (!networkData[networkId].countries[countryCode]) {
+        networkData[networkId].countries[countryCode] = {
+          countryCode: data.countryCode,
+          countryName: data.countryName,
+          campaigns: {}
+        };
+      }
+      
+      if (!networkData[networkId].countries[countryCode].campaigns[campaignId]) {
+        networkData[networkId].countries[countryCode].campaigns[campaignId] = {
+          campaignId: data.campaignId,
+          campaignName: data.campaignName,
+          sourceApp: data.sourceApp,
+          geo: data.geo,
+          weeks: {}
+        };
+      }
+      
+      if (!networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey]) {
+        const monday = getMondayOfWeek(new Date(date));
+        const sunday = getSundayOfWeek(new Date(date));
+        networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey] = {
+          weekStart: formatDateForAPI(monday),
+          weekEnd: formatDateForAPI(sunday),
+          data: []
+        };
+      }
+      
+      // Добавляем данные
+      networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey].data.push({
+        date,
+        ...data.metrics,
+        appId: data.app.id,
+        appName: data.app.name,
+        status: data.status,
+        type: data.type,
+        isAutomated: data.isAutomated
+      });
+    });
+    
+    return networkData;
+  }
+  
   const appData = {};
-  const isOverallOrIncent = ['OVERALL','INCENT_TRAFFIC'].includes(CURRENT_PROJECT);
+  const isOverallOrIncent = ['OVERALL'].includes(CURRENT_PROJECT);
   
   stats.forEach(row => {
     const date = row[0].value;
@@ -485,6 +552,53 @@ function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldInc
 
 // Simplified row parser
 function parseRow(row, isOverallOrIncent) {
+  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ INCENT_TRAFFIC
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    // Структура: [0] - дата, [1] - страна, [2] - сеть, [3] - кампания, [4] - приложение, [5+] - метрики
+    const countryObj = row[1];
+    const network = row[2];
+    const campaign = row[3];
+    const app = row[4];
+    
+    const campaignName = campaign ? (campaign.campaignName || campaign.value || 'Unknown') : 'Unknown';
+    const campaignId = campaign ? (campaign.hid || campaign.id || 'Unknown') : 'Unknown';
+    
+    const metrics = {
+      cpi: parseFloat(row[5]?.value || 0) || 0,
+      installs: parseInt(row[6]?.value || 0) || 0,
+      ipm: parseFloat(row[7]?.value || 0) || 0,
+      spend: parseFloat(row[8]?.value || 0) || 0,
+      rrD1: parseFloat(row[9]?.value || 0) || 0,
+      roasD1: parseFloat(row[10]?.value || 0) || 0,
+      roasD3: parseFloat(row[11]?.value || 0) || 0,
+      rrD7: parseFloat(row[12]?.value || 0) || 0,
+      roasD7: parseFloat(row[13]?.value || 0) || 0,
+      roasD30: parseFloat(row[14]?.value || 0) || 0,
+      eArpuForecast: parseFloat(row[15]?.value || 0) || 0,
+      eRoasForecast: parseFloat(row[16]?.value || 0) || 0,
+      eProfitForecast: parseFloat(row[17]?.value || 0) || 0,
+      eRoasForecastD730: parseFloat(row[18]?.value || 0) || 0
+    };
+    
+    return {
+      campaign,
+      network,
+      app,
+      campaignName,
+      campaignId,
+      metrics,
+      countryCode: countryObj?.code || 'OTHER',
+      countryName: countryObj?.country || 'Other',
+      networkId: network?.hid || network?.id || 'unknown',
+      networkName: network?.value || network?.name || 'Unknown Network',
+      geo: extractGeoFromCampaign(campaignName),
+      sourceApp: extractSourceApp(campaignName),
+      status: campaign?.status || 'Unknown',
+      type: campaign?.type || 'Unknown',
+      isAutomated: campaign?.isAutomated || false
+    };
+  }
+  
   // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ APPLOVIN_TEST
   if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
     // В новой структуре: [0] - дата, [1] - страна, [2] - кампания, [3] - приложение, [4+] - метрики
@@ -535,8 +649,8 @@ function parseRow(row, isOverallOrIncent) {
   // ОРИГИНАЛЬНАЯ ЛОГИКА ДЛЯ ДРУГИХ ПРОЕКТОВ
   const hasCountry = false; // Для других проектов стран нет
   const country = null;
-  const campaign = isOverallOrIncent ? null : row[1];
-  const network = isOverallOrIncent ? row[1] : null;
+  const campaign = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? null : row[1];
+  const network = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? row[1] : null;
   const app = row[2];
   const metricsStartIndex = 3;
   
@@ -577,37 +691,8 @@ function parseRow(row, isOverallOrIncent) {
   };
 }
 
-function convertToNetworkStructure(appData) {
-  const networkData = {};
-  
-  Object.values(appData).forEach(app => {
-    Object.values(app.weeks).forEach(week => {
-      if (week.networks) {
-        Object.values(week.networks).forEach(network => {
-          const key = network.networkId;
-          
-          if (!networkData[key]) {
-            networkData[key] = { networkId: network.networkId, networkName: network.networkName, weeks: {} };
-          }
-          
-          if (!networkData[key].weeks[week.weekStart]) {
-            networkData[key].weeks[week.weekStart] = {
-              weekStart: week.weekStart, weekEnd: week.weekEnd, apps: {}
-            };
-          }
-          
-          networkData[key].weeks[week.weekStart].apps[app.appId] = {
-            appId: app.appId, appName: app.appName,
-            platform: app.platform, bundleId: app.bundleId,
-            campaigns: network.campaigns
-          };
-        });
-      }
-    });
-  });
-  
-  return networkData;
-}
+// convertToNetworkStructure больше не используется, структура для INCENT_TRAFFIC 
+// формируется напрямую в processStandardStrategy
 
 // GEO extraction (keep signature!)
 function extractGeoFromCampaign(campaignName) {

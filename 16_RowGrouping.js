@@ -136,6 +136,101 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
     return requests;
   }
   
+  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ НОВОЙ СТРУКТУРЫ INCENT_TRAFFIC
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && entity.countries) {
+    const collapseData = [];
+    let networkTotalRows = 0;
+    
+    const countryKeys = Object.keys(entity.countries).sort((a, b) =>
+      entity.countries[a].countryName.localeCompare(entity.countries[b].countryName)
+    );
+    
+    countryKeys.forEach(countryCode => {
+      const country = entity.countries[countryCode];
+      const countryStartRow = rowPointer;
+      rowPointer++; // Country header
+      let countryContentRows = 0;
+      
+      const campaignKeys = Object.keys(country.campaigns).sort((a, b) => {
+        const spendA = Object.values(country.campaigns[a].weeks).reduce((sum, w) => 
+          sum + w.data.reduce((s, d) => s + d.spend, 0), 0);
+        const spendB = Object.values(country.campaigns[b].weeks).reduce((sum, w) => 
+          sum + w.data.reduce((s, d) => s + d.spend, 0), 0);
+        return spendB - spendA;
+      });
+      
+      campaignKeys.forEach(campaignId => {
+        const campaign = country.campaigns[campaignId];
+        const campaignStartRow = rowPointer;
+        rowPointer++; // Campaign header
+        
+        const weekCount = Object.keys(campaign.weeks).length;
+        rowPointer += weekCount;
+        
+        // Группа для недель внутри кампании (depth 4)
+        if (weekCount > 0) {
+          requests.push({
+            addDimensionGroup: {
+              range: { sheetId, dimension: "ROWS", 
+                      startIndex: campaignStartRow, 
+                      endIndex: campaignStartRow + weekCount }
+            }
+          });
+          collapseData.push({ start: campaignStartRow, 
+                             end: campaignStartRow + weekCount, depth: 4 });
+        }
+        
+        countryContentRows += 1 + weekCount; // 1 campaign header + weeks
+      });
+      
+      // Группа для всех кампаний в стране (depth 3)
+      if (countryContentRows > 0) {
+        requests.push({
+          addDimensionGroup: {
+            range: { sheetId, dimension: "ROWS", 
+                    startIndex: countryStartRow, 
+                    endIndex: countryStartRow + countryContentRows }
+          }
+        });
+        collapseData.push({ start: countryStartRow, 
+                           end: countryStartRow + countryContentRows, depth: 3 });
+      }
+      
+      networkTotalRows += 1 + countryContentRows; // 1 country header + content
+    });
+    
+    // Группа для всех стран в сети (depth 2)
+    if (networkTotalRows > 0) {
+      requests.push({
+        addDimensionGroup: {
+          range: { sheetId, dimension: "ROWS", 
+                  startIndex: entityStartRow, 
+                  endIndex: entityStartRow + networkTotalRows }
+        }
+      });
+      collapseData.push({ start: entityStartRow, 
+                         end: entityStartRow + networkTotalRows, depth: 2 });
+    }
+    
+    // Добавляем collapse в обратном порядке (от самого глубокого к самому высокому)
+    collapseData.sort((a, b) => b.depth - a.depth);
+    collapseData.forEach(item => {
+      requests.push({
+        updateDimensionGroup: {
+          dimensionGroup: {
+            range: { sheetId, dimension: "ROWS", 
+                    startIndex: item.start, endIndex: item.end },
+            depth: item.depth,
+            collapsed: true
+          },
+          fields: "collapsed"
+        }
+      });
+    });
+    
+    return requests;
+  }
+  
   // Оригинальный код для остальных проектов
   const weeks = entity.weeks;
   const sortedWeeks = Object.keys(weeks).sort();
@@ -254,8 +349,17 @@ function calculateRowPointer(data, targetEntityKey, entityType) {
           rowPointer += Object.keys(week.countries || {}).length; // Country rows
         });
       });
+    } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && entity.countries) {
+      // Новая структура для INCENT_TRAFFIC: network -> country -> campaign -> week
+      Object.values(entity.countries).forEach(country => {
+        rowPointer++; // Country row
+        Object.values(country.campaigns).forEach(campaign => {
+          rowPointer++; // Campaign row
+          rowPointer += Object.keys(campaign.weeks).length; // Week rows
+        });
+      });
     } else {
-      // Оригинальная логика
+      // Оригинальная логика для других проектов
       Object.keys(entity.weeks).forEach(weekKey => {
         const week = entity.weeks[weekKey];
         rowPointer++;

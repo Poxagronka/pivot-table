@@ -115,6 +115,15 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
         if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
       });
     }
+    
+    // Скрытие колонки GEO для INCENT_TRAFFIC
+    if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+      try {
+        sheet.hideColumns(4); // Скрываем колонку GEO (4-я колонка)
+      } catch (e) {
+        console.error('Error hiding GEO column:', e);
+      }
+    }
 
     // Далее идет стандартный код применения форматирования без изменений
     if (rowTypeMap.app.length > 0) {
@@ -160,9 +169,17 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
 
     if (rowTypeMap.country && rowTypeMap.country.length > 0) {
       const countryRanges = createOptimizedRanges(sheet, rowTypeMap.country, numCols);
-      countryRanges.forEach(range => {
-        range.setBackground('#ffffff').setFontSize(9);
-      });
+      if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+        countryRanges.forEach(range => {
+          range.setBackground('#f0f8ff')
+               .setFontSize(10)
+               .setFontWeight('normal');
+        });
+      } else {
+        countryRanges.forEach(range => {
+          range.setBackground('#ffffff').setFontSize(9);
+        });
+      }
     }
 
     if (rowTypeMap.network.length > 0) {

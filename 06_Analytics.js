@@ -298,64 +298,57 @@ function calculateWoWMetrics(appData) {
 }
 
 function calculateIncentTrafficWoWMetrics(networkData) {
-  const results = { weekWoW: {}, appWoW: {}, networkWoW: {} };
+  const results = { weekWoW: {} };
   
   Object.keys(networkData).forEach(networkKey => {
     const network = networkData[networkKey];
-    const weeks = Object.values(network.weeks).sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
     
-    const appHistory = {};
-    
-    weeks.forEach((week, i) => {
-      const weekKey = `${networkKey}_${week.weekStart}`;
-      const allCampaigns = [];
-      Object.values(week.apps).forEach(app => allCampaigns.push(...app.campaigns));
+    Object.values(network.countries).forEach(country => {
+      const campaignHistory = {};
       
-      const spend = allCampaigns.reduce((s, c) => s + c.spend, 0);
-      const profit = allCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-      
-      if (i === 0) {
-        results.weekWoW[weekKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-      } else {
-        const prevWeek = weeks[i - 1];
-        const prevCampaigns = [];
-        Object.values(prevWeek.apps).forEach(app => prevCampaigns.push(...app.campaigns));
-        const prevSpend = prevCampaigns.reduce((s, c) => s + c.spend, 0);
-        const prevProfit = prevCampaigns.reduce((s, c) => s + c.eProfitForecast, 0);
+      Object.values(country.campaigns).forEach(campaign => {
+        const weekKeys = Object.keys(campaign.weeks).sort();
         
-        const spendPct = prevSpend ? ((spend - prevSpend) / Math.abs(prevSpend)) * 100 : 0;
-        const profitPct = prevProfit ? ((profit - prevProfit) / Math.abs(prevProfit)) * 100 : 0;
-        
-        results.weekWoW[weekKey] = {
-          spendChangePercent: spendPct,
-          eProfitChangePercent: profitPct,
-          growthStatus: calculateGrowthStatus({ spend: prevSpend, profit: prevProfit }, { spend, profit }, spendPct, profitPct, 'profit')
-        };
-      }
-      
-      // App level WoW
-      Object.keys(week.apps).forEach(appId => {
-        const appData = week.apps[appId];
-        const appKey = `${networkKey}_${week.weekStart}_${appId}`;
-        const appSpend = appData.campaigns.reduce((s, c) => s + c.spend, 0);
-        const appProfit = appData.campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
-        
-        if (appHistory[appId]?.length > 0) {
-          const prevAppData = appHistory[appId][appHistory[appId].length - 1];
-          const spendPct = prevAppData.spend ? ((appSpend - prevAppData.spend) / Math.abs(prevAppData.spend)) * 100 : 0;
-          const profitPct = prevAppData.profit ? ((appProfit - prevAppData.profit) / Math.abs(prevAppData.profit)) * 100 : 0;
+        weekKeys.forEach((weekKey, index) => {
+          const week = campaign.weeks[weekKey];
+          const weekData = week.data || [];
           
-          results.appWoW[appKey] = {
-            spendChangePercent: spendPct,
-            eProfitChangePercent: profitPct,
-            growthStatus: calculateGrowthStatus({ spend: prevAppData.spend, profit: prevAppData.profit }, { spend: appSpend, profit: appProfit }, spendPct, profitPct, 'profit')
-          };
-        } else {
-          results.appWoW[appKey] = { spendChangePercent: 0, eProfitChangePercent: 0, growthStatus: 'First Week' };
-        }
-        
-        if (!appHistory[appId]) appHistory[appId] = [];
-        appHistory[appId].push({ weekStart: week.weekStart, spend: appSpend, profit: appProfit });
+          // Агрегируем метрики недели
+          const spend = weekData.reduce((s, d) => s + d.spend, 0);
+          const profit = weekData.reduce((s, d) => s + d.eProfitForecast, 0);
+          
+          const wowKey = `${networkKey}_${country.countryCode}_${campaign.campaignId}_${weekKey}`;
+          
+          if (index === 0) {
+            results.weekWoW[wowKey] = {
+              spendChangePercent: 0,
+              eProfitChangePercent: 0,
+              growthStatus: 'First Week'
+            };
+          } else {
+            const prevWeekKey = weekKeys[index - 1];
+            const prevWeek = campaign.weeks[prevWeekKey];
+            const prevWeekData = prevWeek.data || [];
+            
+            const prevSpend = prevWeekData.reduce((s, d) => s + d.spend, 0);
+            const prevProfit = prevWeekData.reduce((s, d) => s + d.eProfitForecast, 0);
+            
+            const spendPct = prevSpend ? ((spend - prevSpend) / Math.abs(prevSpend)) * 100 : 0;
+            const profitPct = prevProfit ? ((profit - prevProfit) / Math.abs(prevProfit)) * 100 : 0;
+            
+            results.weekWoW[wowKey] = {
+              spendChangePercent: spendPct,
+              eProfitChangePercent: profitPct,
+              growthStatus: calculateGrowthStatus(
+                { spend: prevSpend, profit: prevProfit },
+                { spend, profit },
+                spendPct,
+                profitPct,
+                'profit'
+              )
+            };
+          }
+        });
       });
     });
   });

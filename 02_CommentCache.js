@@ -321,6 +321,28 @@ class CommentCache {
               campaign: nameOrRange || 'N/A', // Название страны
               country: nameOrRange || 'N/A'
             };
+          } else if (this.projectName === 'INCENT_TRAFFIC') {
+            // Специальная обработка для новой структуры INCENT_TRAFFIC
+            if (level === 'COUNTRY') {
+              config = {
+                identifier: idOrEmpty || 'N/A', // код страны из колонки GEO
+                sourceApp: 'N/A',
+                campaign: nameOrRange || 'N/A', // полное название страны
+                country: idOrEmpty || 'N/A' // код страны
+              };
+            } else if (level === 'CAMPAIGN') {
+              config = {
+                identifier: idOrEmpty || 'N/A', // campaign ID
+                sourceApp: nameOrRange || 'N/A', // campaign name
+                campaign: idOrEmpty || 'N/A' // campaign ID
+              };
+            } else {
+              config = {
+                identifier: idOrEmpty || 'N/A',
+                sourceApp: 'N/A',
+                campaign: nameOrRange || 'N/A'
+              };
+            }
           } else {
             config = {
               NETWORK: { identifier: idOrEmpty || 'N/A', sourceApp: 'N/A', campaign: nameOrRange || 'N/A' },
@@ -383,6 +405,9 @@ class CommentCache {
           WEEK: () => this.getCommentKey(currentApp, currentWeek, 'WEEK', 'N/A', 'N/A', 'N/A'),
           SOURCE_APP: () => this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', nameOrRange, nameOrRange, 'N/A'),
           CAMPAIGN: () => {
+            if (this.projectName === 'INCENT_TRAFFIC') {
+              return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', idOrEmpty || 'N/A', nameOrRange, idOrEmpty);
+            }
             const id = this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty;
             const name = this.projectName === 'TRICKY' ? id : nameOrRange;
             return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', 
@@ -390,8 +415,12 @@ class CommentCache {
           },
           NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange),
           COUNTRY: () => {
+            // Для INCENT_TRAFFIC страны имеют свою структуру
+            if (this.projectName === 'INCENT_TRAFFIC') {
+              return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', 'N/A', nameOrRange, idOrEmpty);
+            }
             // Для APPLOVIN_TEST страны связаны с кампаниями
-            if (this.projectName === 'APPLOVIN_TEST') {
+            else if (this.projectName === 'APPLOVIN_TEST') {
               // Нужно найти текущую кампанию - ищем вверх до ближайшей кампании
               for (let j = i - 1; j >= 0; j--) {
                 const prevRow = data[j];
