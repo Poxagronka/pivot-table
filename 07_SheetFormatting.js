@@ -1,6 +1,176 @@
-function createEnhancedPivotTable(appData) { createUnifiedPivotTable(appData); }
-function createOverallPivotTable(appData) { createUnifiedPivotTable(appData); }
-function createIncentTrafficPivotTable(networkData) { createUnifiedPivotTable(networkData); }
+// ========== ДЕКЛАРАТИВНАЯ КОНФИГУРАЦИЯ ФОРМАТИРОВАНИЯ ==========
+// Формат: [fontSize, background, fontWeight, fontColor]
+const FORMAT_RULES = {
+  INCENT_TRAFFIC: {
+    types: {
+      APP: [9, '#ffffff'],
+      NETWORK: [10, '#d1e7fe', 'bold', '#000000'],
+      COUNTRY: [10, '#f0f8ff'],
+      CAMPAIGN: [10, '#ffffff'],
+      WEEK: [9, '#ffffff']
+    },
+    hideColumns: [4], // GEO
+    remapping: null
+  },
+  
+  APPLOVIN_TEST: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      CAMPAIGN: [10, '#e8f0fe'], // форматируется как week
+      WEEK: [10, '#ffffff'],      // форматируется как campaign
+      COUNTRY: [9, '#ffffff']
+    },
+    hideColumns: [4], // GEO
+    remapping: { CAMPAIGN: 'week', WEEK: 'campaign', COUNTRY: 'country' }
+  },
+  
+  OVERALL: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      NETWORK: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  },
+  
+  TRICKY: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      SOURCE_APP: [10, '#f0f8ff'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null,
+    hyperlinkFormatting: true
+  },
+  
+  MOLOCO: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  },
+  
+  REGULAR: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null,
+    hyperlinkFormatting: true
+  },
+  
+  GOOGLE_ADS: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  },
+  
+  APPLOVIN: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  },
+  
+  MINTEGRAL: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      CAMPAIGN: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  },
+  
+  DEFAULT: {
+    types: {
+      APP: [10, '#d1e7fe', 'bold', '#000000'],
+      WEEK: [10, '#e8f0fe'],
+      SOURCE_APP: [10, '#f0f8ff'],
+      CAMPAIGN: [9, '#ffffff'],
+      NETWORK: [10, '#d1e7fe', 'bold', '#000000'],
+      COUNTRY: [9, '#ffffff']
+    },
+    hideColumns: [],
+    remapping: null
+  }
+};
+
+// Конфигурация условного форматирования
+const CONDITIONAL_CONFIG = {
+  statusColors: {
+    "🟢 Healthy Growth": ["#d4edda", "#155724"],
+    "🟢 Efficiency Improvement": ["#d1f2eb", "#0c5460"],
+    "🔴 Inefficient Growth": ["#f8d7da", "#721c24"],
+    "🟠 Declining Efficiency": ["#ff9800", "white"],
+    "🔵 Scaling Down": ["#cce7ff", "#004085"],
+    "🔵 Scaling Down - Efficient": ["#b8e6b8", "#2d5a2d"],
+    "🔵 Scaling Down - Moderate": ["#d1ecf1", "#0c5460"],
+    "🔵 Scaling Down - Problematic": ["#ffcc99", "#cc5500"],
+    "🟡 Moderate Growth": ["#fff3cd", "#856404"],
+    "🟡 Moderate Decline - Efficiency Drop": ["#ffe0cc", "#cc6600"],
+    "🟡 Moderate Decline - Spend Optimization": ["#e6f3ff", "#0066cc"],
+    "🟡 Moderate Decline - Proportional": ["#f0f0f0", "#666666"],
+    "🟡 Efficiency Improvement": ["#e8f5e8", "#2d5a2d"],
+    "🟡 Minimal Growth": ["#fff8e1", "#f57f17"],
+    "🟡 Moderate Decline": ["#fff3cd", "#856404"],
+    "⚪ Stable": ["#f5f5f5", "#616161"],
+    "First Week": ["#e0e0e0", "#757575"]
+  },
+  columns: {
+    spend: 6,
+    eROAS: 15,
+    eProfit: 16,
+    profit: 17,
+    growth: 18
+  },
+  numberFormats: [
+    { col: 8, format: '$0.0' },   // CPI
+    { col: 10, format: '0.0' },   // IPM
+    { col: 13, format: '$0.0' },  // eARPU
+    { col: 16, format: '$0.0' }   // eProfit
+  ],
+  standardHiddenColumns: [1, 13, 14, 3] // Level, eARPU 365d, eROAS 365d, ID
+};
+
+// ========== ПУБЛИЧНЫЕ ФУНКЦИИ (для совместимости) ==========
+function createEnhancedPivotTable(appData) { 
+  createUnifiedPivotTable(appData); 
+}
+
+function createOverallPivotTable(appData) { 
+  createUnifiedPivotTable(appData); 
+}
+
+function createIncentTrafficPivotTable(networkData) { 
+  createUnifiedPivotTable(networkData); 
+}
+
+function createProjectPivotTable(projectName, appData) {
+  const originalProject = CURRENT_PROJECT;
+  setCurrentProject(projectName);
+  
+  try {
+    createUnifiedPivotTable(appData);
+  } finally {
+    setCurrentProject(originalProject);
+  }
+}
 
 function createUnifiedPivotTable(data) {
   const startTime = Date.now();
@@ -41,15 +211,7 @@ function createUnifiedPivotTable(data) {
   console.log(`Pivot table created in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 }
 
-function hexToRgb(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    red: parseInt(result[1], 16) / 255,
-    green: parseInt(result[2], 16) / 255,
-    blue: parseInt(result[3], 16) / 255
-  } : { red: 1, green: 1, blue: 1 };
-}
-
+// ========== ГЛАВНАЯ ФУНКЦИЯ ФОРМАТИРОВАНИЯ ==========
 function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) {
   const startTime = Date.now();
   
@@ -57,204 +219,20 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
-    const columnWidths = TABLE_CONFIG.COLUMN_WIDTHS;
-    columnWidths.forEach(col => {
-      sheet.setColumnWidth(col.c, col.w);
-    });
-
-    const headerRange = sheet.getRange(1, 1, 1, numCols);
-    headerRange
-      .setBackground('#4285f4')
-      .setFontColor('white')
-      .setFontWeight('bold')
-      .setHorizontalAlignment('center')
-      .setVerticalAlignment('middle')
-      .setFontSize(10)
-      .setWrap(true);
-
-    if (numRows > 1) {
-      const allDataRange = sheet.getRange(2, 1, numRows - 1, numCols);
-      allDataRange.setVerticalAlignment('middle');
-      
-      const roasRange = sheet.getRange(2, 9, numRows - 1, 1);
-      roasRange.setWrap(true).setHorizontalAlignment('center');
-      
-      const commentsRange = sheet.getRange(2, numCols, numRows - 1, 1);
-      commentsRange.setWrap(true).setHorizontalAlignment('left');
-      
-      const growthStatusRange = sheet.getRange(2, numCols - 1, numRows - 1, 1);
-      growthStatusRange.setWrap(true).setHorizontalAlignment('left');
-
-      const eroasRange = sheet.getRange(2, 15, numRows - 1, 1);
-      eroasRange.setHorizontalAlignment('right');
-
-      const eprofitRange = sheet.getRange(2, 16, numRows - 1, 1);
-      eprofitRange.setHorizontalAlignment('right');
-    }
-
-    const rowTypeMap = { app: [], week: [], sourceApp: [], campaign: [], hyperlink: [], network: [], country: [] };
+    // 1. Базовое форматирование
+    applyBaseFormatting(sheet, numRows, numCols);
     
-    // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ APPLOVIN_TEST
-    if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-      formatData.forEach(item => {
-        if (item.type === 'APP') rowTypeMap.app.push(item.row);
-        // Меняем местами форматирование для CAMPAIGN и WEEK
-        if (item.type === 'CAMPAIGN') rowTypeMap.week.push(item.row);  // Кампании форматируем как недели
-        if (item.type === 'WEEK') rowTypeMap.campaign.push(item.row);  // Недели форматируем как кампании
-        if (item.type === 'COUNTRY') rowTypeMap.country.push(item.row);
-      });
-    } else {
-      // Стандартная обработка для остальных проектов
-      formatData.forEach(item => {
-        if (item.type === 'APP') rowTypeMap.app.push(item.row);
-        if (item.type === 'WEEK') rowTypeMap.week.push(item.row);
-        if (item.type === 'SOURCE_APP') rowTypeMap.sourceApp.push(item.row);
-        if (item.type === 'CAMPAIGN') rowTypeMap.campaign.push(item.row);
-        if (item.type === 'NETWORK') rowTypeMap.network.push(item.row);
-        if (item.type === 'COUNTRY') rowTypeMap.country.push(item.row);
-        if (item.type === 'HYPERLINK') rowTypeMap.hyperlink.push(item.row);
-      });
-    }
+    // 2. Форматирование по типам строк
+    applyTypeFormatting(sheet, formatData, numCols);
     
-    // Скрытие колонки GEO для INCENT_TRAFFIC
-    if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-      try {
-        sheet.hideColumns(4); // Скрываем колонку GEO (4-я колонка)
-      } catch (e) {
-        console.error('Error hiding GEO column:', e);
-      }
-    }
-
-    // Далее идет стандартный код применения форматирования без изменений
-    if (rowTypeMap.app.length > 0) {
-      const appRanges = createOptimizedRanges(sheet, rowTypeMap.app, numCols);
-      if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-        appRanges.forEach(range => {
-          range.setBackground('#ffffff')
-               .setFontWeight('normal')
-               .setFontSize(9);
-        });
-      } else {
-        appRanges.forEach(range => {
-          range.setBackground('#d1e7fe')
-               .setFontColor('#000000')
-               .setFontWeight('bold')
-               .setFontSize(10);
-        });
-      }
-    }
-
-    if (rowTypeMap.week.length > 0) {
-      const weekRanges = createOptimizedRanges(sheet, rowTypeMap.week, numCols);
-      weekRanges.forEach(range => {
-        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-          // Для INCENT_TRAFFIC в week попадают кампании - белый фон, размер 10  
-          range.setBackground('#ffffff').setFontSize(10);
-        } else {
-          // Стандартное форматирование недель - синий фон, размер 10
-          range.setBackground('#e8f0fe').setFontSize(10);
-        }
-      });
-    }
-
-    if (rowTypeMap.sourceApp.length > 0) {
-      const sourceAppRanges = createOptimizedRanges(sheet, rowTypeMap.sourceApp, numCols);
-      sourceAppRanges.forEach(range => {
-        range.setBackground('#f0f8ff').setFontSize(10);
-      });
-    }
-
-    if (rowTypeMap.campaign.length > 0) {
-      const campaignRanges = createOptimizedRanges(sheet, rowTypeMap.campaign, numCols);
-      campaignRanges.forEach(range => {
-        // Для APPLOVIN_TEST в campaign попадают недели (должен быть размер 10)
-        // Для INCENT_TRAFFIC в campaign попадают недели (должен быть размер 9, белый фон)
-        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-          range.setBackground('#ffffff').setFontSize(9);
-        } else {
-          const fontSize = CURRENT_PROJECT === 'APPLOVIN_TEST' ? 10 : 9;
-          range.setBackground('#ffffff').setFontSize(fontSize);
-        }
-      });
-    }
-
-    if (rowTypeMap.country && rowTypeMap.country.length > 0) {
-      const countryRanges = createOptimizedRanges(sheet, rowTypeMap.country, numCols);
-      if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-        countryRanges.forEach(range => {
-          range.setBackground('#f0f8ff')
-               .setFontSize(10)
-               .setFontWeight('normal');
-        });
-      } else {
-        countryRanges.forEach(range => {
-          range.setBackground('#ffffff').setFontSize(9);
-        });
-      }
-    }
-
-    if (rowTypeMap.network.length > 0) {
-      const networkRanges = createOptimizedRanges(sheet, rowTypeMap.network, numCols);
-      if (CURRENT_PROJECT === 'OVERALL') {
-        networkRanges.forEach(range => {
-          range.setBackground('#ffffff')
-               .setFontWeight('normal')
-               .setFontSize(9);
-        });
-      } else {
-        networkRanges.forEach(range => {
-          range.setBackground('#d1e7fe')
-               .setFontColor('#000000')
-               .setFontWeight('bold')
-               .setFontSize(10);
-        });
-      }
-    }
-
-    // Остальной код остается без изменений...
-    if (rowTypeMap.hyperlink.length > 0 && CURRENT_PROJECT === 'TRICKY') {
-      try {
-        const validHyperlinkRows = rowTypeMap.hyperlink.filter(row => row >= 2 && row <= numRows);
-        if (validHyperlinkRows.length > 0) {
-          validHyperlinkRows.forEach(row => {
-            try {
-              const hyperlinkRange = sheet.getRange(row, 2, 1, 1);
-              hyperlinkRange.setFontColor('#000000').setFontLine('none');
-            } catch (e) {
-              console.error(`Error formatting hyperlink row ${row}:`, e);
-            }
-          });
-        }
-      } catch (e) {
-        console.error('Error in hyperlink formatting section:', e);
-      }
-    }
-
-    if (numRows > 1) {
-      const numberFormatOperations = [
-        { range: sheet.getRange(2, 8, numRows - 1, 1), format: '$0.0' },  // CPI
-        { range: sheet.getRange(2, 10, numRows - 1, 1), format: '0.0' },  // IPM
-        { range: sheet.getRange(2, 13, numRows - 1, 1), format: '$0.0' }, // eARPU
-        { range: sheet.getRange(2, 16, numRows - 1, 1), format: '$0.0' }  // eProfit
-      ];
-      
-      numberFormatOperations.forEach(op => op.range.setNumberFormat(op.format));
-    }
-
-    applyOptimizedConditionalFormatting(sheet, numRows, appData);
+    // 3. Условное форматирование
+    applyConditionalFormats(sheet, sheetId, numRows, appData, spreadsheetId);
     
-    applyOptimizedEROASFormatting(sheet, numRows);
+    // 4. eROAS/eProfit форматирование
+    applyArrowFormatting(sheet, sheetId, numRows, spreadsheetId);
     
-    // Существующий код скрытия колонок
-    sheet.hideColumns(1);
-    sheet.hideColumns(13, 1);
-    sheet.hideColumns(14, 1);
-    sheet.hideColumns(3);
-    
-    // Добавляем скрытие GEO для APPLOVIN_TEST
-    if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-      sheet.hideColumns(4); // Скрываем колонку GEO (4-я колонка)
-    }
+    // 5. Скрытие колонок
+    applyColumnHiding(sheet);
     
     console.log(`Formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     
@@ -263,6 +241,252 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     throw e;
   }
 }
+
+// ========== БАЗОВОЕ ФОРМАТИРОВАНИЕ ==========
+function applyBaseFormatting(sheet, numRows, numCols) {
+  // Ширина колонок
+  TABLE_CONFIG.COLUMN_WIDTHS.forEach(col => {
+    sheet.setColumnWidth(col.c, col.w);
+  });
+  
+  // Заголовок
+  sheet.getRange(1, 1, 1, numCols)
+    .setBackground('#4285f4')
+    .setFontColor('white')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontSize(10)
+    .setWrap(true);
+  
+  if (numRows <= 1) return;
+  
+  // Базовое форматирование данных
+  sheet.getRange(2, 1, numRows - 1, numCols).setVerticalAlignment('middle');
+  
+  // Специальные колонки
+  sheet.getRange(2, 9, numRows - 1, 1).setWrap(true).setHorizontalAlignment('center'); // ROAS
+  sheet.getRange(2, numCols, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Comments
+  sheet.getRange(2, numCols - 1, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Growth Status
+  sheet.getRange(2, 15, numRows - 1, 1).setHorizontalAlignment('right'); // eROAS
+  sheet.getRange(2, 16, numRows - 1, 1).setHorizontalAlignment('right'); // eProfit
+  
+  // Числовое форматирование
+  CONDITIONAL_CONFIG.numberFormats.forEach(({ col, format }) => {
+    sheet.getRange(2, col, numRows - 1, 1).setNumberFormat(format);
+  });
+}
+
+// ========== ФОРМАТИРОВАНИЕ ПО ТИПАМ ==========
+function applyTypeFormatting(sheet, formatData, numCols) {
+  const rules = FORMAT_RULES[CURRENT_PROJECT] || FORMAT_RULES.DEFAULT;
+  const typeMap = {};
+  const hyperlinkRows = [];
+  
+  // Группировка строк по типам с учетом ремаппинга
+  formatData.forEach(item => {
+    if (item.type === 'HYPERLINK') {
+      hyperlinkRows.push(item.row);
+      return;
+    }
+    
+    let type = item.type;
+    if (rules.remapping && rules.remapping[type]) {
+      type = rules.remapping[type];
+    } else {
+      type = type.toLowerCase();
+    }
+    
+    if (!typeMap[type]) typeMap[type] = [];
+    typeMap[type].push(item.row);
+  });
+  
+  // Применение форматирования для каждого типа
+  Object.entries(typeMap).forEach(([type, rows]) => {
+    if (rows.length === 0) return;
+    
+    const typeUpper = type.toUpperCase();
+    const config = rules.types[typeUpper];
+    if (!config) return;
+    
+    const [fontSize, background, fontWeight, fontColor] = config;
+    
+    createOptimizedRanges(sheet, rows, numCols).forEach(range => {
+      if (fontSize) range.setFontSize(fontSize);
+      if (background) range.setBackground(background);
+      if (fontWeight) range.setFontWeight(fontWeight);
+      if (fontColor) range.setFontColor(fontColor);
+    });
+  });
+  
+  // Обработка гиперссылок для TRICKY и REGULAR
+  if (rules.hyperlinkFormatting && hyperlinkRows.length > 0) {
+    hyperlinkRows.filter(row => row >= 2).forEach(row => {
+      try {
+        sheet.getRange(row, 2, 1, 1)
+          .setFontColor('#000000')
+          .setFontLine('none');
+      } catch (e) {
+        console.error(`Error formatting hyperlink row ${row}:`, e);
+      }
+    });
+  }
+}
+
+// ========== УСЛОВНОЕ ФОРМАТИРОВАНИЕ ==========
+function applyConditionalFormats(sheet, sheetId, numRows, appData, spreadsheetId) {
+  if (numRows <= 1) return;
+  
+  const requests = [];
+  const cols = CONDITIONAL_CONFIG.columns;
+  
+  // 1. Spend WoW (отрицательные/положительные)
+  requests.push(
+    createFormatRule(sheetId, cols.spend, 1, numRows, 
+      '=AND(NOT(ISBLANK($F2)), LEFT($F2,1)="-")', 
+      '#f8d7da', '#721c24', 0),
+    createFormatRule(sheetId, cols.spend, 1, numRows,
+      '=AND(NOT(ISBLANK($F2)), $F2<>"", LEFT($F2,1)<>"-")',
+      '#d1f2eb', '#0c5460', 1)
+  );
+  
+  // 2. eROAS правила (с учетом таргетов)
+  const targetGroups = groupRowsByEROASTarget(sheet.getDataRange().getValues());
+  let ruleIndex = requests.length;
+  
+  targetGroups.forEach((rows, targetEROAS) => {
+    const ranges = rows.map(row => ({
+      sheetId: sheetId,
+      startRowIndex: row - 1,
+      endRowIndex: row,
+      startColumnIndex: cols.eROAS - 1,
+      endColumnIndex: cols.eROAS
+    }));
+    
+    // Формулы для eROAS
+    const formulas = [
+      [`>=`, targetEROAS, '#d1f2eb', '#0c5460'],
+      [`>=`, 120, `<`, targetEROAS, '#fff3cd', '#856404'],
+      [`<`, 120, '#f8d7da', '#721c24']
+    ];
+    
+    formulas.forEach(formula => {
+      requests.push(createEROASRule(ranges, formula, ruleIndex++));
+    });
+  });
+  
+  // 3. Profit WoW
+  requests.push(
+    createFormatRule(sheetId, cols.profit, 1, numRows,
+      '=AND(ISNUMBER($Q2), $Q2>0)',
+      '#d1f2eb', '#0c5460', ruleIndex++),
+    createFormatRule(sheetId, cols.profit, 1, numRows,
+      '=AND(ISNUMBER($Q2), $Q2<0)',
+      '#f8d7da', '#721c24', ruleIndex++)
+  );
+  
+  // 4. Growth Status
+  Object.entries(CONDITIONAL_CONFIG.statusColors).forEach(([status, [bg, text]]) => {
+    requests.push({
+      addConditionalFormatRule: {
+        rule: {
+          ranges: [{
+            sheetId: sheetId,
+            startRowIndex: 1,
+            endRowIndex: numRows,
+            startColumnIndex: cols.growth - 1,
+            endColumnIndex: cols.growth
+          }],
+          booleanRule: {
+            condition: {
+              type: 'TEXT_CONTAINS',
+              values: [{ userEnteredValue: status }]
+            },
+            format: {
+              backgroundColor: hexToRgb(bg),
+              textFormat: { foregroundColor: hexToRgb(text) }
+            }
+          }
+        },
+        index: ruleIndex++
+      }
+    });
+  });
+  
+  // Применяем все правила одним батчем
+  if (requests.length > 0) {
+    Sheets.Spreadsheets.batchUpdate({ requests }, spreadsheetId);
+  }
+}
+
+// ========== ФОРМАТИРОВАНИЕ СТРЕЛОК В eROAS/eProfit ==========
+function applyArrowFormatting(sheet, sheetId, numRows, spreadsheetId) {
+  if (numRows <= 1) return;
+  
+  const rules = FORMAT_RULES[CURRENT_PROJECT] || FORMAT_RULES.DEFAULT;
+  const cols = CONDITIONAL_CONFIG.columns;
+  
+  const data = sheet.getRange(2, 1, numRows - 1, cols.eProfit + 2).getValues();
+  const requests = [];
+  
+  data.forEach((row, index) => {
+    const level = row[0];
+    const eroasValue = row[cols.eROAS - 1];
+    const eprofitValue = row[cols.eProfit - 1];
+    const rowIndex = index + 1;
+    
+    // Получаем размер шрифта из конфигурации
+    const config = rules.types[level];
+    const baseFontSize = config ? config[0] : 10;
+    const smallerFontSize = baseFontSize - 1;
+    
+    // Обрабатываем стрелки в eROAS
+    if (eroasValue && typeof eroasValue === 'string' && eroasValue.includes('→')) {
+      requests.push(createArrowFormat(sheetId, rowIndex, cols.eROAS - 1, 
+        eroasValue, smallerFontSize, baseFontSize));
+    }
+    
+    // Обрабатываем стрелки в eProfit
+    if (eprofitValue && typeof eprofitValue === 'string' && eprofitValue.includes('→')) {
+      requests.push(createArrowFormat(sheetId, rowIndex, cols.eProfit - 1,
+        eprofitValue, smallerFontSize, baseFontSize));
+    }
+  });
+  
+  // Применяем батчами
+  if (requests.length > 0) {
+    const batchSize = 500;
+    for (let i = 0; i < requests.length; i += batchSize) {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: requests.slice(i, i + batchSize)
+      }, spreadsheetId);
+      
+      if (i + batchSize < requests.length) {
+        Utilities.sleep(50);
+      }
+    }
+  }
+}
+
+// ========== СКРЫТИЕ КОЛОНОК ==========
+function applyColumnHiding(sheet) {
+  // Стандартные скрытые колонки
+  CONDITIONAL_CONFIG.standardHiddenColumns.forEach(col => {
+    if (col === 13 || col === 14) {
+      sheet.hideColumns(col, 1);
+    } else {
+      sheet.hideColumns(col);
+    }
+  });
+  
+  // Проектно-специфичные скрытые колонки
+  const rules = FORMAT_RULES[CURRENT_PROJECT] || FORMAT_RULES.DEFAULT;
+  if (rules.hideColumns) {
+    rules.hideColumns.forEach(col => sheet.hideColumns(col));
+  }
+}
+
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
 function createOptimizedRanges(sheet, rowNumbers, numCols) {
   if (rowNumbers.length === 0) return [];
@@ -287,470 +511,141 @@ function createOptimizedRanges(sheet, rowNumbers, numCols) {
   return ranges;
 }
 
-function applyOptimizedEROASFormatting(sheet, numRows) {
-  if (numRows <= 1) return;
-  
-  const startTime = Date.now();
-  
-  try {
-    const spreadsheetId = sheet.getParent().getId();
-    const sheetId = sheet.getSheetId();
-    const eroasColumn = 14;
-    const eprofitColumn = 15;
-    
-    const range = sheet.getRange(2, 1, numRows - 1, eprofitColumn + 2);
-    const allData = range.getValues();
-    
-    const requests = [];
-    
-    allData.forEach((row, index) => {
-      const level = row[0];
-      const eroasValue = row[eroasColumn];
-      const eprofitValue = row[eprofitColumn];
-      
-      const rowIndex = index + 1;
-      
-      let baseFontSize = 10;
-      
-      switch (level) {
-        case 'APP':
-          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-            baseFontSize = 9;
-          } else {
-            baseFontSize = 10;
-          }
-          break;
-          
-        case 'WEEK':
-          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-            baseFontSize = 9; // Недели в INCENT_TRAFFIC должны быть размер 9
-          } else {
-            baseFontSize = 10;
-          }
-          break;
-          
-        case 'SOURCE_APP':
-          baseFontSize = 10;
-          break;
-          
-        case 'CAMPAIGN':
-          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-            baseFontSize = 10; // Кампании в INCENT_TRAFFIC должны быть размер 10
-          } else {
-            baseFontSize = 9;
-          }
-          break;
-          
-        case 'NETWORK':
-          if (CURRENT_PROJECT === 'OVERALL') {
-            baseFontSize = 9;
-          } else if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-            baseFontSize = 10;
-          } else {
-            baseFontSize = 10;
-          }
-          break;
-          
-        default:
-          baseFontSize = 10;
-      }
-      
-      const smallerFontSize = baseFontSize - 1;
-      
-      // Format eROAS column
-      if (eroasValue && typeof eroasValue === 'string' && eroasValue.includes('→')) {
-        const arrowIndex = eroasValue.indexOf('→');
-        if (arrowIndex !== -1) {
-          requests.push({
-            updateCells: {
-              range: {
-                sheetId: sheetId,
-                startRowIndex: rowIndex,
-                endRowIndex: rowIndex + 1,
-                startColumnIndex: eroasColumn,
-                endColumnIndex: eroasColumn + 1
-              },
-              rows: [{
-                values: [{
-                  userEnteredValue: { stringValue: eroasValue },
-                  textFormatRuns: [
-                    {
-                      startIndex: 0,
-                      format: {
-                        foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
-                        fontSize: smallerFontSize
-                      }
-                    },
-                    {
-                      startIndex: arrowIndex,
-                      format: {
-                        fontSize: baseFontSize
-                      }
-                    }
-                  ]
-                }]
-              }],
-              fields: 'userEnteredValue,textFormatRuns'
-            }
-          });
-        }
-      }
-      
-      // Format eProfit column
-      if (eprofitValue && typeof eprofitValue === 'string' && eprofitValue.includes('→')) {
-        const arrowIndex = eprofitValue.indexOf('→');
-        if (arrowIndex !== -1) {
-          requests.push({
-            updateCells: {
-              range: {
-                sheetId: sheetId,
-                startRowIndex: rowIndex,
-                endRowIndex: rowIndex + 1,
-                startColumnIndex: eprofitColumn,
-                endColumnIndex: eprofitColumn + 1
-              },
-              rows: [{
-                values: [{
-                  userEnteredValue: { stringValue: eprofitValue },
-                  textFormatRuns: [
-                    {
-                      startIndex: 0,
-                      format: {
-                        foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
-                        fontSize: smallerFontSize
-                      }
-                    },
-                    {
-                      startIndex: arrowIndex,
-                      format: {
-                        fontSize: baseFontSize
-                      }
-                    }
-                  ]
-                }]
-              }],
-              fields: 'userEnteredValue,textFormatRuns'
-            }
-          });
-        }
-      }
-    });
-    
-    if (requests.length > 0) {
-      const batchSize = 500;
-      for (let i = 0; i < requests.length; i += batchSize) {
-        const batch = requests.slice(i, i + batchSize);
-        Sheets.Spreadsheets.batchUpdate({
-          requests: batch
-        }, spreadsheetId);
-        
-        if (i + batchSize < requests.length) {
-          Utilities.sleep(50);
-        }
-      }
-    }
-    
-    console.log(`eROAS/eProfit formatting completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${requests.length} cells)`);
-    
-  } catch (e) {
-    console.error('Error applying optimized eROAS/eProfit formatting:', e);
-  }
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    red: parseInt(result[1], 16) / 255,
+    green: parseInt(result[2], 16) / 255,
+    blue: parseInt(result[3], 16) / 255
+  } : { red: 1, green: 1, blue: 1 };
 }
 
-function applyOptimizedConditionalFormatting(sheet, numRows, appData) {
-  try {
-    const startTime = Date.now();
-    
-    if (numRows <= 1) return;
-    
-    const spreadsheetId = sheet.getParent().getId();
-    const sheetId = sheet.getSheetId();
-    
-    const conditionalFormatRequests = [];
-    
-    // 1. Правила для Spend WoW колонки (исправлен порядок и формулы)
-    const spendColumn = 6;
-    conditionalFormatRequests.push(
-      // ПЕРВОЕ правило: отрицательные значения → красный
-      {
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: spendColumn - 1,
-              endColumnIndex: spendColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), LEFT($F2,1)="-")' }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#f8d7da'),
-                textFormat: { foregroundColor: hexToRgb('#721c24') }
-              }
-            }
+function createFormatRule(sheetId, column, startRow, endRow, formula, bgColor, textColor, index) {
+  return {
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [{
+          sheetId: sheetId,
+          startRowIndex: startRow,
+          endRowIndex: endRow,
+          startColumnIndex: column - 1,
+          endColumnIndex: column
+        }],
+        booleanRule: {
+          condition: {
+            type: 'CUSTOM_FORMULA',
+            values: [{ userEnteredValue: formula }]
           },
-          index: 0
-        }
-      },
-      // ВТОРОЕ правило: положительные значения → зеленый
-      {
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: spendColumn - 1,
-              endColumnIndex: spendColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{ userEnteredValue: '=AND(NOT(ISBLANK($F2)), $F2<>"", LEFT($F2,1)<>"-")' }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#d1f2eb'),
-                textFormat: { foregroundColor: hexToRgb('#0c5460') }
-              }
-            }
-          },
-          index: 1
-        }
-      }
-    );
-    
-    // 2. Правила для eROAS колонки - оптимизированный подход
-    const eroasColumn = 15;
-    const data = sheet.getDataRange().getValues();
-    
-    const targetGroups = new Map();
-    
-    for (let i = 1; i < data.length; i++) {
-      const level = data[i][0];
-      let appName = '';
-      let targetEROAS = 150;
-      
-      if (level === 'APP') {
-        appName = data[i][1];
-        targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-      } else {
-        for (let j = i - 1; j >= 1; j--) {
-          if (data[j][0] === 'APP') {
-            appName = data[j][1];
-            targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
-            break;
+          format: {
+            backgroundColor: hexToRgb(bgColor),
+            textFormat: { foregroundColor: hexToRgb(textColor) }
           }
         }
-      }
-      
-      if (!targetGroups.has(targetEROAS)) {
-        targetGroups.set(targetEROAS, []);
-      }
-      targetGroups.get(targetEROAS).push(i + 1);
+      },
+      index: index
     }
-    
-    let ruleIndex = conditionalFormatRequests.length;
-    
-    targetGroups.forEach((rows, targetEROAS) => {
-      const ranges = rows.map(row => ({
+  };
+}
+
+function createEROASRule(ranges, formula, index) {
+  let formulaStr;
+  
+  if (formula.length === 4) {
+    // Зеленый (>= target)
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
+  } else if (formula.length === 6) {
+    // Желтый (между 120 и target)
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]}, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[2]} ${formula[3]})`;
+  } else {
+    // Красный (< 120)
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
+  }
+  
+  const colors = formula[formula.length - 2];
+  const textColor = formula[formula.length - 1];
+  
+  return {
+    addConditionalFormatRule: {
+      rule: {
+        ranges: ranges,
+        booleanRule: {
+          condition: {
+            type: 'CUSTOM_FORMULA',
+            values: [{ userEnteredValue: formulaStr }]
+          },
+          format: {
+            backgroundColor: hexToRgb(colors),
+            textFormat: { foregroundColor: hexToRgb(textColor) }
+          }
+        }
+      },
+      index: index
+    }
+  };
+}
+
+function createArrowFormat(sheetId, rowIndex, columnIndex, value, smallFont, largeFont) {
+  const arrowIndex = value.indexOf('→');
+  
+  return {
+    updateCells: {
+      range: {
         sheetId: sheetId,
-        startRowIndex: row - 1,
-        endRowIndex: row,
-        startColumnIndex: eroasColumn - 1,
-        endColumnIndex: eroasColumn
-      }));
-      
-      conditionalFormatRequests.push({
-        addConditionalFormatRule: {
-          rule: {
-            ranges: ranges,
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{
-                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= ${targetEROAS})`
-                }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#d1f2eb'),
-                textFormat: { foregroundColor: hexToRgb('#0c5460') }
-              }
-            }
-          },
-          index: ruleIndex++
-        }
-      });
-      
-      conditionalFormatRequests.push({
-        addConditionalFormatRule: {
-          rule: {
-            ranges: ranges,
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{
-                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) >= 120, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < ${targetEROAS})`
-                }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#fff3cd'),
-                textFormat: { foregroundColor: hexToRgb('#856404') }
-              }
-            }
-          },
-          index: ruleIndex++
-        }
-      });
-      
-      conditionalFormatRequests.push({
-        addConditionalFormatRule: {
-          rule: {
-            ranges: ranges,
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{
-                  userEnteredValue: `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) < 120)`
-                }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#f8d7da'),
-                textFormat: { foregroundColor: hexToRgb('#721c24') }
-              }
-            }
-          },
-          index: ruleIndex++
-        }
-      });
-    });
-    
-    // 3. Правила для Profit WoW колонки
-    const profitColumn = 17;
-    conditionalFormatRequests.push(
-      {
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: profitColumn - 1,
-              endColumnIndex: profitColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2>0)' }]
-              },
-              format: {
-                backgroundColor: hexToRgb('#d1f2eb'),
-                textFormat: { foregroundColor: hexToRgb('#0c5460') }
-              }
-            }
-          },
-          index: ruleIndex++
-        }
+        startRowIndex: rowIndex,
+        endRowIndex: rowIndex + 1,
+        startColumnIndex: columnIndex,
+        endColumnIndex: columnIndex + 1
       },
-      {
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: profitColumn - 1,
-              endColumnIndex: profitColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'CUSTOM_FORMULA',
-                values: [{ userEnteredValue: '=AND(ISNUMBER($Q2), $Q2<0)' }]
-              },
+      rows: [{
+        values: [{
+          userEnteredValue: { stringValue: value },
+          textFormatRuns: [
+            {
+              startIndex: 0,
               format: {
-                backgroundColor: hexToRgb('#f8d7da'),
-                textFormat: { foregroundColor: hexToRgb('#721c24') }
+                foregroundColor: { red: 0.5, green: 0.5, blue: 0.5 },
+                fontSize: smallFont
               }
+            },
+            {
+              startIndex: arrowIndex,
+              format: { fontSize: largeFont }
             }
-          },
-          index: ruleIndex++
-        }
-      }
-    );
-    
-    // 4. Правила для Growth Status колонки
-    const growthColumn = 18;
-    const statusColors = {
-      "🟢 Healthy Growth": { background: "#d4edda", fontColor: "#155724" },
-      "🟢 Efficiency Improvement": { background: "#d1f2eb", fontColor: "#0c5460" },
-      "🔴 Inefficient Growth": { background: "#f8d7da", fontColor: "#721c24" },
-      "🟠 Declining Efficiency": { background: "#ff9800", fontColor: "white" },
-      "🔵 Scaling Down": { background: "#cce7ff", fontColor: "#004085" },
-      "🔵 Scaling Down - Efficient": { background: "#b8e6b8", fontColor: "#2d5a2d" },
-      "🔵 Scaling Down - Moderate": { background: "#d1ecf1", fontColor: "#0c5460" },
-      "🔵 Scaling Down - Problematic": { background: "#ffcc99", fontColor: "#cc5500" },
-      "🟡 Moderate Growth": { background: "#fff3cd", fontColor: "#856404" },
-      "🟡 Moderate Decline - Efficiency Drop": { background: "#ffe0cc", fontColor: "#cc6600" },
-      "🟡 Moderate Decline - Spend Optimization": { background: "#e6f3ff", fontColor: "#0066cc" },
-      "🟡 Moderate Decline - Proportional": { background: "#f0f0f0", fontColor: "#666666" },
-      "🟡 Efficiency Improvement": { background: "#e8f5e8", fontColor: "#2d5a2d" },
-      "🟡 Minimal Growth": { background: "#fff8e1", fontColor: "#f57f17" },
-      "🟡 Moderate Decline": { background: "#fff3cd", fontColor: "#856404" },
-      "⚪ Stable": { background: "#f5f5f5", fontColor: "#616161" },
-      "First Week": { background: "#e0e0e0", fontColor: "#757575" }
-    };
-    
-    Object.entries(statusColors).forEach(([status, colors]) => {
-      conditionalFormatRequests.push({
-        addConditionalFormatRule: {
-          rule: {
-            ranges: [{
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: numRows,
-              startColumnIndex: growthColumn - 1,
-              endColumnIndex: growthColumn
-            }],
-            booleanRule: {
-              condition: {
-                type: 'TEXT_CONTAINS',
-                values: [{ userEnteredValue: status }]
-              },
-              format: {
-                backgroundColor: hexToRgb(colors.background),
-                textFormat: { foregroundColor: hexToRgb(colors.fontColor) }
-              }
-            }
-          },
-          index: ruleIndex++
-        }
-      });
-    });
-    
-    const batchUpdateRequest = {
-      requests: conditionalFormatRequests
-    };
-    
-    Sheets.Spreadsheets.batchUpdate(batchUpdateRequest, spreadsheetId);
-    
-    const endTime = Date.now();
-    console.log(`Conditional formatting completed in ${(endTime - startTime) / 1000}s (${conditionalFormatRequests.length} rules)`);
-    
-  } catch (e) {
-    console.error('Error applying conditional formatting:', e);
-  }
+          ]
+        }]
+      }],
+      fields: 'userEnteredValue,textFormatRuns'
+    }
+  };
 }
 
-function createProjectPivotTable(projectName, appData) {
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
+function groupRowsByEROASTarget(data) {
+  const targetGroups = new Map();
   
-  try {
-    createUnifiedPivotTable(appData);
-  } finally {
-    setCurrentProject(originalProject);
+  for (let i = 1; i < data.length; i++) {
+    const level = data[i][0];
+    let appName = '';
+    let targetEROAS = 150;
+    
+    if (level === 'APP') {
+      appName = data[i][1];
+      targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+    } else {
+      // Ищем родительское приложение
+      for (let j = i - 1; j >= 1; j--) {
+        if (data[j][0] === 'APP') {
+          appName = data[j][1];
+          targetEROAS = getTargetEROAS(CURRENT_PROJECT, appName);
+          break;
+        }
+      }
+    }
+    
+    if (!targetGroups.has(targetEROAS)) {
+      targetGroups.set(targetEROAS, []);
+    }
+    targetGroups.get(targetEROAS).push(i + 1);
   }
+  
+  return targetGroups;
 }
