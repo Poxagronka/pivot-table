@@ -9,7 +9,7 @@ const FORMAT_RULES = {
       CAMPAIGN: [10, '#ffffff'],
       WEEK: [9, '#ffffff']
     },
-    hideColumns: [4], // GEO
+    hideColumns: [], // Убрали скрытие GEO колонки
     remapping: null
   },
   

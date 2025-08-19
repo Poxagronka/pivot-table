@@ -197,10 +197,23 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       networkRow[1] = network.networkName;
       tableData.push(networkRow);
       
-      // Сортируем страны по алфавиту
-      const countryKeys = Object.keys(network.countries).sort((a, b) =>
-        network.countries[a].countryName.localeCompare(network.countries[b].countryName)
-      );
+      // Сортируем страны по spend (от большего к меньшему)
+      const countryKeys = Object.keys(network.countries).sort((a, b) => {
+        // Считаем общий spend для каждой страны
+        const getCountrySpend = (country) => {
+          let totalSpend = 0;
+          Object.values(country.campaigns).forEach(campaign => {
+            Object.values(campaign.weeks).forEach(week => {
+              totalSpend += week.data.reduce((s, d) => s + d.spend, 0);
+            });
+          });
+          return totalSpend;
+        };
+        
+        const spendA = getCountrySpend(network.countries[a]);
+        const spendB = getCountrySpend(network.countries[b]);
+        return spendB - spendA; // От большего к меньшему
+      });
       
       countryKeys.forEach(countryCode => {
         const country = network.countries[countryCode];

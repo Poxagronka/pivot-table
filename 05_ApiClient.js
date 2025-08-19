@@ -185,6 +185,11 @@ function processApiData(rawData, includeLastWeek = null) {
 function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
   // Специальная обработка для INCENT_TRAFFIC
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+    const KEY_COUNTRIES = [
+      'United States', 'United Kingdom', 'Germany', 'Canada',
+      'Australia', 'France', 'South Korea', 'Japan'
+    ];
+    
     const networkData = {};
     
     stats.forEach(row => {
@@ -195,8 +200,12 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
       
       const data = parseRow(row, true);
       const networkId = data.networkId;
-      const countryCode = data.countryCode;
       const campaignId = data.campaignId;
+      
+      // Определяем, относится ли страна к ключевым или это Other
+      const isKeyCountry = KEY_COUNTRIES.includes(data.countryName);
+      const finalCountryCode = isKeyCountry ? data.countryCode : 'OTHER';
+      const finalCountryName = isKeyCountry ? data.countryName : 'Other';
       
       // Инициализация структуры: network -> country -> campaign -> week
       if (!networkData[networkId]) {
@@ -207,16 +216,16 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
         };
       }
       
-      if (!networkData[networkId].countries[countryCode]) {
-        networkData[networkId].countries[countryCode] = {
-          countryCode: data.countryCode,
-          countryName: data.countryName,
+      if (!networkData[networkId].countries[finalCountryCode]) {
+        networkData[networkId].countries[finalCountryCode] = {
+          countryCode: finalCountryCode,
+          countryName: finalCountryName,
           campaigns: {}
         };
       }
       
-      if (!networkData[networkId].countries[countryCode].campaigns[campaignId]) {
-        networkData[networkId].countries[countryCode].campaigns[campaignId] = {
+      if (!networkData[networkId].countries[finalCountryCode].campaigns[campaignId]) {
+        networkData[networkId].countries[finalCountryCode].campaigns[campaignId] = {
           campaignId: data.campaignId,
           campaignName: data.campaignName,
           sourceApp: data.sourceApp,
@@ -225,10 +234,10 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
         };
       }
       
-      if (!networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey]) {
+      if (!networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey]) {
         const monday = getMondayOfWeek(new Date(date));
         const sunday = getSundayOfWeek(new Date(date));
-        networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey] = {
+        networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey] = {
           weekStart: formatDateForAPI(monday),
           weekEnd: formatDateForAPI(sunday),
           data: []
@@ -236,7 +245,7 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
       }
       
       // Добавляем данные
-      networkData[networkId].countries[countryCode].campaigns[campaignId].weeks[weekKey].data.push({
+      networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey].data.push({
         date,
         ...data.metrics,
         appId: data.app.id,

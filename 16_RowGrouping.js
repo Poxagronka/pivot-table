@@ -141,9 +141,22 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
     const collapseData = [];
     let networkTotalRows = 0;
     
-    const countryKeys = Object.keys(entity.countries).sort((a, b) =>
-      entity.countries[a].countryName.localeCompare(entity.countries[b].countryName)
-    );
+    // Сортируем страны по общему spend
+    const countryKeys = Object.keys(entity.countries).sort((a, b) => {
+      const getCountryTotalSpend = (country) => {
+        let total = 0;
+        Object.values(country.campaigns).forEach(campaign => {
+          Object.values(campaign.weeks).forEach(week => {
+            total += week.data.reduce((s, d) => s + d.spend, 0);
+          });
+        });
+        return total;
+      };
+      
+      const spendA = getCountryTotalSpend(entity.countries[a]);
+      const spendB = getCountryTotalSpend(entity.countries[b]);
+      return spendB - spendA;
+    });
     
     countryKeys.forEach(countryCode => {
       const country = entity.countries[countryCode];
