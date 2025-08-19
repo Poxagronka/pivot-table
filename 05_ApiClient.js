@@ -90,7 +90,7 @@ function fetchProjectCampaignData(projectName, dateRange) {
 
 // Simplified payload builder
 function buildPayload(apiConfig, dateRange, project) {
-  const dateDim = ['GOOGLE_ADS','APPLOVIN','APPLOVIN_TEST','INCENT','OVERALL'].includes(project) ? 'DATE' : 'INSTALL_DATE';
+  const dateDim = ['GOOGLE_ADS','APPLOVIN','APPLOVIN_TEST','INCENT','INCENT_TRAFFIC','OVERALL'].includes(project) ? 'DATE' : 'INSTALL_DATE';
   const filters = [
     { dimension: "USER", values: apiConfig.FILTERS.USER, include: true },
     { dimension: "ATTRIBUTION_PARTNER", values: apiConfig.FILTERS.ATTRIBUTION_PARTNER, include: true }
@@ -588,7 +588,7 @@ function parseRow(row, isOverallOrIncent) {
       campaignId,
       metrics,
       countryCode: countryObj?.code || 'OTHER',
-      countryName: countryObj?.country || 'Other',
+      countryName: countryObj?.value || 'Other',
       networkId: network?.hid || network?.id || 'unknown',
       networkName: network?.value || network?.name || 'Unknown Network',
       geo: extractGeoFromCampaign(campaignName),
@@ -641,7 +641,7 @@ function parseRow(row, isOverallOrIncent) {
         type: campaign?.type || 'Unknown',
         isAutomated: campaign?.isAutomated || false,
         countryCode: countryObj.code,
-        countryName: countryObj.country
+        countryName: countryObj.value
       };
     }
   }

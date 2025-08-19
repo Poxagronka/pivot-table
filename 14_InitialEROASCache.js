@@ -165,18 +165,21 @@ class InitialMetricsCache {
     
     if (this.projectName === 'INCENT_TRAFFIC') {
       Object.values(appData).forEach(network => {
-        Object.values(network.weeks).forEach(week => {
-          const weekRange = `${week.weekStart} - ${week.weekEnd}`;
-          
-          const allCampaigns = [];
-          Object.values(week.apps).forEach(app => {
-            allCampaigns.push(...app.campaigns);
-          });
-          const weekTotals = calculateWeekTotals(allCampaigns);
-          
-          const weekKey = this.createKey('WEEK', network.networkName, weekRange, '', '');
-          const existingEntry = this.memoryCache[weekKey];
-          
+        Object.values(network.countries).forEach(country => {
+          Object.values(country.campaigns).forEach(campaign => {
+            Object.values(campaign.weeks).forEach(week => {
+              const weekRange = `${week.weekStart} - ${week.weekEnd}`;
+              
+              const allDataPoints = week.data || [];
+              const weekTotals = calculateWeekTotals(allDataPoints.map(d => ({
+                ...d,
+                campaignId: campaign.campaignId,
+                campaignName: campaign.campaignName
+              })));
+              
+              const weekKey = this.createKey('WEEK', network.networkName, weekRange, '', '');
+              const existingEntry = this.memoryCache[weekKey];
+              
           if (!existingEntry) {
             if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
               newValues.push(['WEEK', network.networkName, weekRange, '', '', 
@@ -197,32 +200,7 @@ class InitialMetricsCache {
               });
             }
           }
-          
-          Object.values(week.apps).forEach(app => {
-            const appTotals = calculateWeekTotals(app.campaigns);
-            const appKey = this.createKey('APP', network.networkName, weekRange, app.appId, app.appName);
-            const existingEntry = this.memoryCache[appKey];
-            
-            if (!existingEntry) {
-              if (appTotals.avgEROASD730 > 0 || appTotals.totalProfit !== 0) {
-                newValues.push(['APP', network.networkName, weekRange, app.appId, app.appName, 
-                  appTotals.avgEROASD730 > 0 ? appTotals.avgEROASD730 : '', 
-                  new Date(), 
-                  appTotals.totalProfit !== 0 ? appTotals.totalProfit : ''
-                ]);
-              }
-            } else {
-              const needsUpdate = (appTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                 (appTotals.totalProfit !== 0 && !existingEntry.profit);
-              if (needsUpdate) {
-                updateRequests.push({
-                  key: appKey,
-                  rowIndex: this.rowIndexCache[appKey],
-                  eROAS: existingEntry.eROAS || (appTotals.avgEROASD730 > 0 ? appTotals.avgEROASD730 : null),
-                  profit: existingEntry.profit || (appTotals.totalProfit !== 0 ? appTotals.totalProfit : null)
-                });
-              }
-            }
+            });
           });
         });
       });

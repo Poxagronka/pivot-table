@@ -136,7 +136,7 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
     return requests;
   }
   
-  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ НОВОЙ СТРУКТУРЫ INCENT_TRAFFIC
+  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ НОВОЙ СТРУКТУРЫ INCENT_TRAFFIC - КАК В TRICKY
   if (CURRENT_PROJECT === 'INCENT_TRAFFIC' && entity.countries) {
     const collapseData = [];
     let networkTotalRows = 0;
@@ -148,7 +148,7 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
     countryKeys.forEach(countryCode => {
       const country = entity.countries[countryCode];
       const countryStartRow = rowPointer;
-      rowPointer++; // Country header
+      rowPointer++; // Country header row
       let countryContentRows = 0;
       
       const campaignKeys = Object.keys(country.campaigns).sort((a, b) => {
@@ -162,12 +162,12 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
       campaignKeys.forEach(campaignId => {
         const campaign = country.campaigns[campaignId];
         const campaignStartRow = rowPointer;
-        rowPointer++; // Campaign header
+        rowPointer++; // Campaign header row
         
         const weekCount = Object.keys(campaign.weeks).length;
         rowPointer += weekCount;
         
-        // Группа для недель внутри кампании (depth 4)
+        // Группа для недель внутри кампании (depth 3) - аналог sourceApp в TRICKY
         if (weekCount > 0) {
           requests.push({
             addDimensionGroup: {
@@ -177,13 +177,13 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
             }
           });
           collapseData.push({ start: campaignStartRow, 
-                             end: campaignStartRow + weekCount, depth: 4 });
+                             end: campaignStartRow + weekCount, depth: 3 });
         }
         
         countryContentRows += 1 + weekCount; // 1 campaign header + weeks
       });
       
-      // Группа для всех кампаний в стране (depth 3)
+      // Группа для всех кампаний в стране (depth 2) - аналог week в TRICKY
       if (countryContentRows > 0) {
         requests.push({
           addDimensionGroup: {
@@ -193,13 +193,13 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
           }
         });
         collapseData.push({ start: countryStartRow, 
-                           end: countryStartRow + countryContentRows, depth: 3 });
+                           end: countryStartRow + countryContentRows, depth: 2 });
       }
       
       networkTotalRows += 1 + countryContentRows; // 1 country header + content
     });
     
-    // Группа для всех стран в сети (depth 2)
+    // Группа для всех стран в сети (depth 1) - аналог app в TRICKY
     if (networkTotalRows > 0) {
       requests.push({
         addDimensionGroup: {
@@ -209,7 +209,7 @@ function buildGroupRequests(data, entityKey, entityType, sheetId) {
         }
       });
       collapseData.push({ start: entityStartRow, 
-                         end: entityStartRow + networkTotalRows, depth: 2 });
+                         end: entityStartRow + networkTotalRows, depth: 1 });
     }
     
     // Добавляем collapse в обратном порядке (от самого глубокого к самому высокому)
