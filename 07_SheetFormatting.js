@@ -322,7 +322,11 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
           break;
           
         case 'WEEK':
-          baseFontSize = 10;
+          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+            baseFontSize = 9; // Недели в INCENT_TRAFFIC должны быть размер 9
+          } else {
+            baseFontSize = 10;
+          }
           break;
           
         case 'SOURCE_APP':
@@ -330,7 +334,11 @@ function applyOptimizedEROASFormatting(sheet, numRows) {
           break;
           
         case 'CAMPAIGN':
-          baseFontSize = 9;
+          if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+            baseFontSize = 10; // Кампании в INCENT_TRAFFIC должны быть размер 10
+          } else {
+            baseFontSize = 9;
+          }
           break;
           
         case 'NETWORK':
