@@ -192,8 +192,12 @@ function calculateWoWMetrics(appData) {
             
             sourceApp.campaigns.forEach(c => {
               if (c.campaignId) {
-                dataCollections.campaign[`${c.campaignId}_${week.weekStart}`] = {
-                  campaignId: c.campaignId,
+                // Инициализируем структуру для кампании если её ещё нет
+                if (!dataCollections.campaign[c.campaignId]) {
+                  dataCollections.campaign[c.campaignId] = {};
+                }
+                // Добавляем данные недели для этой кампании
+                dataCollections.campaign[c.campaignId][week.weekStart] = {
                   weekStart: week.weekStart,
                   spend: c.spend,
                   eProfitForecast: c.eProfitForecast
@@ -223,8 +227,12 @@ function calculateWoWMetrics(appData) {
           
           allCampaigns.forEach(c => {
             if (c.campaignId) {
-              dataCollections.campaign[`${c.campaignId}_${week.weekStart}`] = {
-                campaignId: c.campaignId,
+              // Инициализируем структуру для кампании если её ещё нет
+              if (!dataCollections.campaign[c.campaignId]) {
+                dataCollections.campaign[c.campaignId] = {};
+              }
+              // Добавляем данные недели для этой кампании
+              dataCollections.campaign[c.campaignId][week.weekStart] = {
                 weekStart: week.weekStart,
                 spend: c.spend,
                 eProfitForecast: c.eProfitForecast
