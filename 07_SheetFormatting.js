@@ -147,7 +147,13 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
     if (rowTypeMap.week.length > 0) {
       const weekRanges = createOptimizedRanges(sheet, rowTypeMap.week, numCols);
       weekRanges.forEach(range => {
-        range.setBackground('#e8f0fe').setFontSize(10);
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+          // Для INCENT_TRAFFIC в week попадают кампании - белый фон, размер 10
+          range.setBackground('#ffffff').setFontSize(10);
+        } else {
+          // Стандартное форматирование недель - синий фон, размер 10
+          range.setBackground('#e8f0fe').setFontSize(10);
+        }
       });
     }
 
