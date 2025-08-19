@@ -40,11 +40,10 @@ function getTargetEROAS(projectName, appName = null) {
   }
 }
 
-function getGrowthThresholds(projectName) {
-  projectName = projectName.toUpperCase();
+function getGrowthThresholds() {
   try {
     const settings = loadSettingsFromSheet();
-    return settings.growthThresholds[projectName] || getDefaultGrowthThresholds();
+    return settings.growthThresholds || getDefaultGrowthThresholds();
   } catch (e) {
     console.error('Error loading growth thresholds:', e);
     return getDefaultGrowthThresholds();
@@ -54,7 +53,7 @@ function getGrowthThresholds(projectName) {
 function getDefaultGrowthThresholds() {
   return {
     healthyGrowth: { minSpendChange: 10, minProfitChange: 5 },
-    efficiencyImprovement: { maxSpendDecline: -5, minProfitGrowth: 8 },
+    efficiencyImprovement: { minSpendChange: -2, maxSpendChange: 2, minProfitGrowth: 5 },
     inefficientGrowth: { minSpendChange: 0, maxProfitChange: -8 },
     decliningEfficiency: { minSpendStable: -2, maxSpendGrowth: 10, maxProfitDecline: -4, minProfitDecline: -7 },
     scalingDown: { 
@@ -176,7 +175,7 @@ function getCurrentConfig() {
     SHEET_NAME: project.SHEET_NAME,
     API_URL: project.API_URL,
     TARGET_EROAS: (appName) => getTargetEROAS(CURRENT_PROJECT, appName),
-    GROWTH_THRESHOLDS: () => getGrowthThresholds(CURRENT_PROJECT),
+    GROWTH_THRESHOLDS: () => getGrowthThresholds(),
     BEARER_TOKEN: project.BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: project.COMMENTS_CACHE_SHEET,
     APPS_CACHE_SHEET: project.APPS_CACHE_SHEET || null
@@ -194,7 +193,7 @@ function getProjectConfig(projectName) {
     SHEET_NAME: project.SHEET_NAME,
     API_URL: project.API_URL,
     TARGET_EROAS: (appName) => getTargetEROAS(projectName, appName),
-    GROWTH_THRESHOLDS: () => getGrowthThresholds(projectName),
+    GROWTH_THRESHOLDS: () => getGrowthThresholds(),
     BEARER_TOKEN: project.BEARER_TOKEN(),
     COMMENTS_CACHE_SHEET: project.COMMENTS_CACHE_SHEET,
     APPS_CACHE_SHEET: project.APPS_CACHE_SHEET || null

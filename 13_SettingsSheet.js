@@ -159,8 +159,7 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A12:H12').merge().setValue('📊 GROWTH THRESHOLDS (Advanced)').setBackground('#9c27b0').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
   sheet.setRowHeight(12, 30);
   
-  // Заголовки с увеличенной шириной
-  sheet.getRange('A13').setValue('Project').setFontWeight('bold').setWrap(true);
+  // Заголовки с увеличенной шириной (убираем колонку Project)
   sheet.getRange('B13').setValue('Healthy Growth').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
   sheet.getRange('C13').setValue('Efficiency').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
   sheet.getRange('D13').setValue('Inefficient').setFontWeight('bold').setWrap(true).setHorizontalAlignment('center');
@@ -171,70 +170,66 @@ function createSettingsLayout(sheet) {
   sheet.getRange('A13:H13').setBackground('#f3e5f5');
   sheet.setRowHeight(13, 25);
   
-  // ОБНОВЛЕНО: добавлен INCENT_TRAFFIC в список проектов
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
-  projects.forEach((proj, i) => {
-    const row = 14 + i;
-    sheet.getRange(`A${row}`).setValue(proj).setFontWeight('bold');
-    sheet.getRange(`B${row}`).setValue('spend:10,profit:5').setWrap(true);
-    sheet.getRange(`C${row}`).setValue('spendDrop:-5,profitGain:8').setWrap(true);
-    sheet.getRange(`D${row}`).setValue('profitDrop:-8').setWrap(true);
-    sheet.getRange(`E${row}`).setValue('spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10').setWrap(true);
-    sheet.getRange(`F${row}`).setValue('modSpend:3,modProfit:2,stable:2').setWrap(true);
-    sheet.getRange(`G${row}`).setValue('✅ Active').setHorizontalAlignment('center').setFontColor('#28a745');
-    sheet.getRange(`H${row}`).setValue('Default').setHorizontalAlignment('center').setFontStyle('italic');
-    sheet.getRange(`A${row}:A${row}`).setBackground('#fce4ec');
-    sheet.setRowHeight(row, 30);
-    
-    sheet.getRange(`A${row}:H${row}`).setBorder(true, true, true, true, false, false, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
-  });
+  // Единая строка настроек для всех проектов
+  const row = 14;
+  sheet.getRange(`A${row}`).setValue('ALL PROJECTS').setFontWeight('bold');
+  sheet.getRange(`B${row}`).setValue('spend:10,profit:5').setWrap(true);
+  sheet.getRange(`C${row}`).setValue('spendMin:-2,spendMax:2,profitGain:5').setWrap(true);
+  sheet.getRange(`D${row}`).setValue('profitDrop:-8').setWrap(true);
+  sheet.getRange(`E${row}`).setValue('spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10').setWrap(true);
+  sheet.getRange(`F${row}`).setValue('modSpend:3,modProfit:2,stable:2').setWrap(true);
+  sheet.getRange(`G${row}`).setValue('✅ Active').setHorizontalAlignment('center').setFontColor('#28a745');
+  sheet.getRange(`H${row}`).setValue('Default').setHorizontalAlignment('center').setFontStyle('italic');
+  sheet.getRange(`A${row}:A${row}`).setBackground('#fce4ec');
+  sheet.setRowHeight(row, 30);
+  sheet.getRange(`A${row}:H${row}`).setBorder(true, true, true, true, false, false, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
   
-  sheet.setRowHeight(23, 20);
+  sheet.setRowHeight(15, 20);
   
   // Detailed Instructions
-  sheet.getRange('A24:H24').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(24, 30);
+  sheet.getRange('A16:H16').merge().setValue('📖 INSTRUCTIONS').setBackground('#607d8b').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(16, 30);
   
   // Target eROAS Instructions
-  sheet.getRange('A25').setValue('🎯 Target eROAS Logic:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A26:H28').merge();
-  sheet.getRange('A26').setValue(
+  sheet.getRange('A17').setValue('🎯 Target eROAS Logic:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A18:H20').merge();
+  sheet.getRange('A18').setValue(
     '• TRICKY проект: всегда 250% (весь лист)\n' +
     '• Business приложения: 140% (со словом "Business" в любом проекте)\n' +
     '• Все остальные: 150% (по умолчанию)'
   );
-  sheet.getRange('A26:H28').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A18:H20').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   // Growth Thresholds Instructions
-  sheet.getRange('A30').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
-  sheet.getRange('A31:H34').merge();
-  sheet.getRange('A31').setValue(
+  sheet.getRange('A22').setValue('📊 Growth Thresholds:').setFontWeight('bold').setFontSize(11);
+  sheet.getRange('A23:H26').merge();
+  sheet.getRange('A23').setValue(
     '🟢 HEALTHY: spend:X,profit:Y - оба условия выполняются\n' +
-    '🟢 EFFICIENCY: spendDrop:X,profitGain:Y - тратим меньше, зарабатываем больше\n' +
+    '🟢 EFFICIENCY: spendMin:X,spendMax:Y,profitGain:Z - спенд в диапазоне X-Y%, профит растёт на Z%+\n' +
     '🔴 INEFFICIENT: profitDrop:X - критическое падение прибыли\n' +
     '🔵 SCALING DOWN: spendDrop:X - значительное сокращение спенда'
   );
-  sheet.getRange('A31:H34').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A23:H26').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
-  sheet.setRowHeight(36, 20);
+  sheet.setRowHeight(28, 20);
   
   // API Settings в конце
-  sheet.getRange('A37:H37').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
-  sheet.setRowHeight(37, 30);
+  sheet.getRange('A29:H29').merge().setValue('🔐 API SETTINGS').setBackground('#4285f4').setFontColor('white').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center');
+  sheet.setRowHeight(29, 30);
   
-  sheet.getRange('A38').setValue('Bearer Token:').setFontWeight('bold');
-  sheet.getRange('B38:H38').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
-  sheet.getRange('A38:A38').setBackground('#e8f0fe');
-  sheet.getRange('B38:H38').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
-  sheet.setRowHeight(38, 25);
+  sheet.getRange('A30').setValue('Bearer Token:').setFontWeight('bold');
+  sheet.getRange('B30:H30').merge().setValue('[ENTER_YOUR_TOKEN_HERE]');
+  sheet.getRange('A30:A30').setBackground('#e8f0fe');
+  sheet.getRange('B30:H30').setBackground('#f8f9fa').setBorder(true, true, true, true, false, false);
+  sheet.setRowHeight(30, 25);
   
-  sheet.getRange('A40:H42').merge();
-  sheet.getRange('A40').setValue(
+  sheet.getRange('A32:H34').merge();
+  sheet.getRange('A32').setValue(
     '• Bearer Token: Получите из app.appodeal.com → Settings → API\n' +
     '• Токен должен начинаться с "eyJ" и быть длиной 300+ символов\n' +
     '• Один токен работает для всех проектов'
   );
-  sheet.getRange('A40:H42').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
+  sheet.getRange('A32:H34').setBackground('#f5f5f5').setWrap(true).setBorder(true, true, true, true, false, false);
   
   // Настройка ширины колонок
   sheet.setColumnWidth(1, 140);  // Project
@@ -309,21 +304,18 @@ function loadSettingsFromSheet() {
           settings.targetEROAS.ceg = (!isNaN(numValue) && numValue >= 100 && numValue <= 500) ? numValue : 150;
         }
         
-        // ОБНОВЛЕНО: Advanced Growth Thresholds по проектам (включая INCENT_TRAFFIC)
-        const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
-        projects.forEach(proj => {
-          if (label === proj && i >= 13 && i <= 23) {
-            const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
-            const efficiencyValue = row[2] ? row[2].toString() : 'spendDrop:-5,profitGain:8';
-            const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
-            const scalingValue = row[4] ? row[4].toString() : 'spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10';
-            const otherValue = row[5] ? row[5].toString() : 'modSpend:3,modProfit:2,stable:2';
-            
-            settings.growthThresholds[proj] = parseAdvancedGrowthThresholds(
-              healthyValue, efficiencyValue, inefficientValue, scalingValue, otherValue
-            );
-          }
-        });
+        // Единые Growth Thresholds для всех проектов
+        if (label === 'ALL PROJECTS' && i === 13) {
+          const healthyValue = row[1] ? row[1].toString() : 'spend:10,profit:5';
+          const efficiencyValue = row[2] ? row[2].toString() : 'spendMin:-2,spendMax:2,profitGain:5';
+          const inefficientValue = row[3] ? row[3].toString() : 'profitDrop:-8';
+          const scalingValue = row[4] ? row[4].toString() : 'spendDrop:-15,efficientProfit:0,moderateMin:-1,moderateMax:-10';
+          const otherValue = row[5] ? row[5].toString() : 'modSpend:3,modProfit:2,stable:2';
+          
+          settings.growthThresholds = parseAdvancedGrowthThresholds(
+            healthyValue, efficiencyValue, inefficientValue, scalingValue, otherValue
+          );
+        }
       }
       
       SETTINGS_CACHE = settings;
@@ -362,7 +354,7 @@ function loadSettingsFromSheet() {
     bearerToken: '',
     targetEROAS: { tricky: 250, business: 140, ceg: 150 },
     automation: { autoCache: false, autoUpdate: false },
-    growthThresholds: getDefaultGrowthThresholdsForAllProjects()
+    growthThresholds: getDefaultGrowthThresholds()
   };
 }
 
@@ -384,7 +376,7 @@ function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr
   }
   
   const healthy = parseCompactFormat(healthyStr, { spend: 10, profit: 5 });
-  const efficiency = parseCompactFormat(efficiencyStr, { spendDrop: -5, profitGain: 8 });
+  const efficiency = parseCompactFormat(efficiencyStr, { spendMin: -2, spendMax: 2, profitGain: 5 });
   const inefficient = parseCompactFormat(inefficientStr, { profitDrop: -8 });
   const scaling = parseCompactFormat(scalingStr, { 
     spendDrop: -15, efficientProfit: 0, moderateMin: -1, moderateMax: -10 
@@ -397,8 +389,9 @@ function parseAdvancedGrowthThresholds(healthyStr, efficiencyStr, inefficientStr
       minProfitChange: healthy.profit || 5 
     },
     efficiencyImprovement: { 
-      maxSpendDecline: efficiency.spendDrop || -5, 
-      minProfitGrowth: efficiency.profitGain || 8 
+      minSpendChange: efficiency.spendMin || -2,
+      maxSpendChange: efficiency.spendMax || 2, 
+      minProfitGrowth: efficiency.profitGain || 5 
     },
     inefficientGrowth: { 
       minSpendChange: 0, 
@@ -510,19 +503,6 @@ function openSettingsSheet() {
   const spreadsheet = SpreadsheetApp.openById(MAIN_SHEET_ID);
   spreadsheet.setActiveSheet(sheet);
   SpreadsheetApp.getUi().alert('Settings Sheet', 'Лист Settings с исправленной логикой таргетов!\n\n🎯 TRICKY: 250% (весь проект)\n💼 Business: 140% (приложения с "Business")\n📱 Остальные: 150% (по умолчанию)\n\nИспользуйте "🔄 Refresh Settings" после изменений.', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-// ОБНОВЛЕНО: включен INCENT_TRAFFIC в список проектов для получения дефолтных порогов
-function getDefaultGrowthThresholdsForAllProjects() {
-  const defaultThresholds = getDefaultGrowthThresholds();
-  const projects = ['TRICKY', 'MOLOCO', 'REGULAR', 'GOOGLE_ADS', 'APPLOVIN', 'MINTEGRAL', 'INCENT', 'INCENT_TRAFFIC', 'OVERALL'];
-  const result = {};
-  
-  projects.forEach(proj => {
-    result[proj] = defaultThresholds;
-  });
-  
-  return result;
 }
 
 // Функция для предварительной загрузки настроек

@@ -360,7 +360,7 @@ function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'e
   const prevProfit = profitField === 'profit' ? prev.profit : prev.eProfitForecast;
   const currProfit = profitField === 'profit' ? curr.profit : curr.eProfitForecast;
   
-  const t = getGrowthThresholds(CURRENT_PROJECT);
+  const t = getGrowthThresholds();
   
   // Special cases
   if (prevProfit < 0 && currProfit > 0) return '🟢 Healthy Growth';
@@ -370,7 +370,7 @@ function calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField = 'e
   const checks = [
     { condition: profitPct <= t.inefficientGrowth.maxProfitChange, status: '🔴 Inefficient Growth' },
     { condition: spendPct >= t.healthyGrowth.minSpendChange && profitPct >= t.healthyGrowth.minProfitChange, status: '🟢 Healthy Growth' },
-    { condition: spendPct <= t.efficiencyImprovement.maxSpendDecline && profitPct >= t.efficiencyImprovement.minProfitGrowth, status: '🟢 Efficiency Improvement' },
+    { condition: spendPct >= t.efficiencyImprovement.minSpendChange && spendPct <= t.efficiencyImprovement.maxSpendChange && profitPct > t.efficiencyImprovement.minProfitGrowth, status: '🟢 Efficiency Improvement' },
     { condition: spendPct <= t.scalingDown.maxSpendChange, status: getScalingDownStatus(profitPct, t.scalingDown) },
     { condition: Math.abs(spendPct) <= t.stable.maxAbsoluteChange && Math.abs(profitPct) <= t.stable.maxAbsoluteChange, status: '⚪ Stable' }
   ];
@@ -536,19 +536,8 @@ function updateAllDataToCurrent() {
   updateProjectData(CURRENT_PROJECT);
 }
 
-// Legacy functions for compatibility (keep signatures!)
-function calculateProjectGrowthStatus(projectName, prev, curr, spendPct, profitPct, profitField = 'eProfitForecast') {
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    return calculateGrowthStatus(prev, curr, spendPct, profitPct, profitField);
-  } finally {
-    setCurrentProject(originalProject);
-  }
-}
-
 function getGrowthStatusExplanation() {
-  return `Growth Status Criteria for ${CURRENT_PROJECT}:
+  return `Growth Status Criteria (Universal):
 
 🟢 ПОЗИТИВНЫЕ: Healthy Growth (Spend ≥10% AND Profit ≥5%), Efficiency Improvement (спенд падает, профит растет), переход из убытка в прибыль
 🔴 КРИТИЧЕСКИЕ: Inefficient Growth (Profit ≤-8%), переход из прибыли в убыток  
@@ -556,24 +545,4 @@ function getGrowthStatusExplanation() {
 🔵 СОКРАЩЕНИЕ: Scaling Down (Spend ≤-15%) - Efficient/Moderate/Problematic
 🟡 УМЕРЕННЫЕ: Moderate Growth/Decline, Minimal Growth, различные паттерны
 ⚪ СТАБИЛЬНЫЕ: Минимальные изменения в любую сторону`;
-}
-
-function getProjectGrowthStatusExplanation(projectName) {
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  try {
-    return getGrowthStatusExplanation();
-  } finally {
-    setCurrentProject(originalProject);
-  }
-}
-
-function analyzeGrowthScenario(spendPct, profitPct, projectName = CURRENT_PROJECT) {
-  const mockPrev = { eProfitForecast: 100, spend: 100 };
-  const mockCurr = { eProfitForecast: 100 + profitPct, spend: 100 + spendPct };
-  const originalProject = CURRENT_PROJECT;
-  setCurrentProject(projectName);
-  const status = calculateGrowthStatus(mockPrev, mockCurr, spendPct, profitPct);
-  setCurrentProject(originalProject);
-  return { spendPct, profitPct, projectName, status };
 }
