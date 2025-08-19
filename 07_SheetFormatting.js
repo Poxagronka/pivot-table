@@ -162,8 +162,13 @@ function applyOptimizedFormatting(sheet, numRows, numCols, formatData, appData) 
       const campaignRanges = createOptimizedRanges(sheet, rowTypeMap.campaign, numCols);
       campaignRanges.forEach(range => {
         // Для APPLOVIN_TEST в campaign попадают недели (должен быть размер 10)
-        const fontSize = CURRENT_PROJECT === 'APPLOVIN_TEST' ? 10 : 9;
-        range.setBackground('#ffffff').setFontSize(fontSize);
+        // Для INCENT_TRAFFIC в campaign попадают недели (должен быть размер 9, белый фон)
+        if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
+          range.setBackground('#ffffff').setFontSize(9);
+        } else {
+          const fontSize = CURRENT_PROJECT === 'APPLOVIN_TEST' ? 10 : 9;
+          range.setBackground('#ffffff').setFontSize(fontSize);
+        }
       });
     }
 
