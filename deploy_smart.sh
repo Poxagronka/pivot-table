@@ -48,13 +48,19 @@ SUGGESTED_MSG="$SUGGESTED_MSG (${FILE_COUNT} files)"
 echo "💡 Предложенный коммит: $SUGGESTED_MSG"
 echo "📁 Измененные файлы: $(echo $CHANGED_FILES | tr '\n' ' ')"
 echo ""
-echo "💬 Введите сообщение коммита (Enter = использовать предложенное):"
-read -r USER_INPUT
-
-if [ -n "$USER_INPUT" ]; then
-    COMMIT_MSG="$USER_INPUT"
+if [ -n "$1" ]; then
+    COMMIT_MSG="$1"
+    echo "📝 Используется переданное сообщение: $COMMIT_MSG"
 else
-    COMMIT_MSG="$SUGGESTED_MSG"
+    echo "💬 Введите сообщение коммита (обязательно):"
+    read -r USER_INPUT
+    
+    while [ -z "$USER_INPUT" ]; do
+        echo "⚠️  Сообщение коммита не может быть пустым. Введите сообщение:"
+        read -r USER_INPUT
+    done
+    
+    COMMIT_MSG="$USER_INPUT"
 fi
 
 echo "📝 Коммит: $COMMIT_MSG"
