@@ -30,7 +30,7 @@ const ROW_PARSERS = {
     typeCheck: row => row[1]?.__typename === 'UaCampaignCountry',
     extractors: {
       countryCode: row => row[1]?.code || 'OTHER',
-      countryName: row => row[1]?.value || 'Other',
+      countryName: row => row[1]?.country || row[1]?.value || 'Other',
       campaignId: row => row[2]?.hid || row[2]?.id || 'Unknown',
       campaignName: row => row[2]?.campaignName || 'Unknown',
       app: row => row[3]
