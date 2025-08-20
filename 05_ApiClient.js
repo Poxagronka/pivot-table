@@ -7,7 +7,87 @@ var APPS_DB_CACHE = null;
 var APPS_DB_CACHE_TIME = null;
 var BUNDLE_ID_CACHE_SHEET_ID = '1Z5pJgtg--9EACJL8PVZgJsmeUemv6PKhSsyx9ArChrM';
 
-// GEO configuration
+// ========== КОНФИГУРАЦИИ ==========
+
+// Конфигурация парсеров строк для каждого проекта
+const ROW_PARSERS = {
+  INCENT_TRAFFIC: {
+    structure: ['date', 'country', 'network', 'campaign', 'app'],
+    metricsStart: 5,
+    extractors: {
+      countryCode: row => row[1]?.code || 'OTHER',
+      countryName: row => row[1]?.value || 'Other',
+      networkId: row => row[2]?.hid || row[2]?.id || 'unknown',
+      networkName: row => row[2]?.value || row[2]?.name || 'Unknown Network',
+      campaignId: row => row[3]?.hid || row[3]?.id || 'Unknown',
+      campaignName: row => row[3]?.campaignName || row[3]?.value || 'Unknown',
+      app: row => row[4]
+    }
+  },
+  APPLOVIN_TEST: {
+    structure: ['date', 'country', 'campaign', 'app'],
+    metricsStart: 4,
+    typeCheck: row => row[1]?.__typename === 'UaCampaignCountry',
+    extractors: {
+      countryCode: row => row[1]?.code || 'OTHER',
+      countryName: row => row[1]?.value || 'Other',
+      campaignId: row => row[2]?.hid || row[2]?.id || 'Unknown',
+      campaignName: row => row[2]?.campaignName || 'Unknown',
+      app: row => row[3]
+    }
+  },
+  OVERALL: {
+    structure: ['date', 'network', 'app'],
+    metricsStart: 3,
+    isNetworkLevel: true,
+    extractors: {
+      networkId: row => row[1]?.id || 'unknown',
+      networkName: row => row[1]?.value || 'Unknown Network',
+      app: row => row[2]
+    }
+  },
+  DEFAULT: {
+    structure: ['date', 'campaign', 'app'],
+    metricsStart: 3,
+    extractors: {
+      campaignId: row => row[1]?.campaignId || row[1]?.hid || row[1]?.id || 'Unknown',
+      campaignName: row => row[1]?.campaignName || row[1]?.value || 'Unknown',
+      app: row => row[2]
+    }
+  }
+};
+
+// Конфигурация метрик
+const METRICS_MAP = [
+  ['cpi', 'float'], ['installs', 'int'], ['ipm', 'float'], ['spend', 'float'],
+  ['rrD1', 'float'], ['roasD1', 'float'], ['roasD3', 'float'], ['rrD7', 'float'],
+  ['roasD7', 'float'], ['roasD30', 'float'], ['eArpuForecast', 'float'],
+  ['eRoasForecast', 'float'], ['eProfitForecast', 'float'], ['eRoasForecastD730', 'float']
+];
+
+// Процессоры данных для проектов
+const DATA_PROCESSORS = {
+  INCENT_TRAFFIC: {
+    keyCountries: ['United States', 'United Kingdom', 'Germany', 'Canada',
+                   'Australia', 'France', 'South Korea', 'Japan'],
+    builder: 'networkBuilder'
+  },
+  APPLOVIN_TEST: {
+    builder: 'appBuilder',
+    postProcess: 'restructureToCampaignFirst'
+  },
+  TRICKY: {
+    customProcessor: true
+  },
+  OVERALL: {
+    builder: 'appWithNetworksBuilder'
+  },
+  DEFAULT: {
+    builder: 'appBuilder'
+  }
+};
+
+// GEO конфигурация
 const GEO_CONFIGS = {
   TRICKY: {
     patterns: ['USA','MEX','AUS','DEU','JPN','KOR','BRA','CAN','GBR','FRA','ITA','ESP','RUS','CHN','IND',
@@ -15,7 +95,7 @@ const GEO_CONFIGS = {
                'BGR','HRV','SVK','SVN','LTU','LVA','EST','UKR','BLR','ISR','SAU','ARE','QAT','KWT','EGY',
                'ZAF','NGA','KEN','MAR','THA','VNM','IDN','MYS','SGP','PHL','TWN','HKG','ARG','CHL','COL',
                'PER','VEN','URY','ECU','BOL','PRY','CRI','GTM','DOM','PAN','NZL'],
-    extract: (name) => {
+    extract: name => {
       for (const geo of GEO_CONFIGS.TRICKY.patterns) {
         if (name.includes(`| ${geo} |`)) return geo;
       }
@@ -25,7 +105,7 @@ const GEO_CONFIGS = {
   GOOGLE_ADS: {
     patterns: [['LatAm','LatAm'],['UK,GE','UK,GE'],['BR (PT)','BR'],['US ','US'],[' US ','US'],
                ['WW ','WW'],[' WW ','WW'],['UK','UK'],['GE','GE'],['BR','BR']],
-    extract: (name) => {
+    extract: name => {
       for (const [pattern, geo] of GEO_CONFIGS.GOOGLE_ADS.patterns) {
         if (name.includes(pattern)) return geo;
       }
@@ -35,7 +115,7 @@ const GEO_CONFIGS = {
   DEFAULT: {
     patterns: ['WW_ru','WW_es','WW_de','WW_pt','Asia T1','T2-ES','T1-EN','LatAm',
                'TopGeo','Europe','US','RU','UK','GE','FR','PT','ES','DE','T1','WW'],
-    extract: (name) => {
+    extract: name => {
       const upper = name.toUpperCase();
       for (const pattern of GEO_CONFIGS.DEFAULT.patterns) {
         const up = pattern.toUpperCase();
@@ -50,18 +130,17 @@ const GEO_CONFIGS = {
   }
 };
 
-// Main API functions (keep signatures!)
+// ========== ОСНОВНЫЕ ФУНКЦИИ (сохраняем сигнатуры) ==========
+
 function fetchCampaignData(dateRange, projectName = null) {
   const project = projectName || CURRENT_PROJECT;
-  
-  // APPLOVIN_TEST должен использовать свою конфигурацию со странами!
   const config = projectName ? getProjectConfig(projectName) : getCurrentConfig();
   const apiConfig = projectName ? getProjectApiConfig(projectName) : getCurrentApiConfig();
   
   if (!config.BEARER_TOKEN) throw new Error(`${project} missing BEARER_TOKEN`);
   if (!apiConfig.FILTERS.USER?.length) throw new Error(`${project} missing USER filters`);
   
-  const payload = buildPayload(apiConfig, dateRange, project); // используем project
+  const payload = buildPayload(apiConfig, dateRange, project);
   const options = {
     method: 'post',
     contentType: 'application/json',
@@ -81,14 +160,13 @@ function fetchCampaignData(dateRange, projectName = null) {
     muteHttpExceptions: true
   };
 
-  return executeWithRetry(config.API_URL, options, project); // используем project
+  return executeWithRetry(config.API_URL, options, project);
 }
 
 function fetchProjectCampaignData(projectName, dateRange) {
   return fetchCampaignData(dateRange, projectName);
 }
 
-// Simplified payload builder
 function buildPayload(apiConfig, dateRange, project) {
   const dateDim = ['GOOGLE_ADS','APPLOVIN','APPLOVIN_TEST','INCENT','INCENT_TRAFFIC','OVERALL'].includes(project) ? 'DATE' : 'INSTALL_DATE';
   const filters = [
@@ -128,7 +206,6 @@ function buildPayload(apiConfig, dateRange, project) {
   };
 }
 
-// Simplified retry logic
 function executeWithRetry(url, options, project, maxRetries = 3) {
   let lastError = null;
   
@@ -162,6 +239,8 @@ function executeWithRetry(url, options, project, maxRetries = 3) {
   throw lastError || new Error('API request failed');
 }
 
+// ========== ОБРАБОТКА ДАННЫХ ==========
+
 function processApiData(rawData, includeLastWeek = null) {
   const stats = rawData.data.analytics.richStats.stats;
   const today = new Date();
@@ -171,96 +250,39 @@ function processApiData(rawData, includeLastWeek = null) {
   
   console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
   
-  // Data processor strategy
-  const processor = CURRENT_PROJECT === 'TRICKY' ? processTrickyStrategy : processStandardStrategy;
-  const appData = processor(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
-  
-  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-    return restructureToCampaignFirst(appData);
+  // Специальный процессор для TRICKY
+  if (CURRENT_PROJECT === 'TRICKY') {
+    return processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
   }
   
-  return appData;
+  // Универсальный процессор
+  const processor = DATA_PROCESSORS[CURRENT_PROJECT] || DATA_PROCESSORS.DEFAULT;
+  const data = processWithBuilder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor);
+  
+  // Постобработка если нужна
+  if (processor.postProcess === 'restructureToCampaignFirst') {
+    return restructureToCampaignFirst(data);
+  }
+  
+  return data;
 }
 
-function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
-  // Специальная обработка для INCENT_TRAFFIC
-  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    const KEY_COUNTRIES = [
-      'United States', 'United Kingdom', 'Germany', 'Canada',
-      'Australia', 'France', 'South Korea', 'Japan'
-    ];
-    
-    const networkData = {};
-    
-    stats.forEach(row => {
-      const date = row[0].value;
-      const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
-      
-      if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
-      
-      const data = parseRow(row, true);
-      const networkId = data.networkId;
-      const campaignId = data.campaignId;
-      
-      // Определяем, относится ли страна к ключевым или это Other
-      const isKeyCountry = KEY_COUNTRIES.includes(data.countryName);
-      const finalCountryCode = isKeyCountry ? data.countryCode : 'OTHER';
-      const finalCountryName = isKeyCountry ? data.countryName : 'Other';
-      
-      // Инициализация структуры: network -> country -> campaign -> week
-      if (!networkData[networkId]) {
-        networkData[networkId] = {
-          networkId: data.networkId,
-          networkName: data.networkName,
-          countries: {}
-        };
-      }
-      
-      if (!networkData[networkId].countries[finalCountryCode]) {
-        networkData[networkId].countries[finalCountryCode] = {
-          countryCode: finalCountryCode,
-          countryName: finalCountryName,
-          campaigns: {}
-        };
-      }
-      
-      if (!networkData[networkId].countries[finalCountryCode].campaigns[campaignId]) {
-        networkData[networkId].countries[finalCountryCode].campaigns[campaignId] = {
-          campaignId: data.campaignId,
-          campaignName: data.campaignName,
-          sourceApp: data.sourceApp,
-          geo: data.geo,
-          weeks: {}
-        };
-      }
-      
-      if (!networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey]) {
-        const monday = getMondayOfWeek(new Date(date));
-        const sunday = getSundayOfWeek(new Date(date));
-        networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey] = {
-          weekStart: formatDateForAPI(monday),
-          weekEnd: formatDateForAPI(sunday),
-          data: []
-        };
-      }
-      
-      // Добавляем данные
-      networkData[networkId].countries[finalCountryCode].campaigns[campaignId].weeks[weekKey].data.push({
-        date,
-        ...data.metrics,
-        appId: data.app.id,
-        appName: data.app.name,
-        status: data.status,
-        type: data.type,
-        isAutomated: data.isAutomated
-      });
-    });
-    
-    return networkData;
-  }
+function processWithBuilder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor) {
+  const builders = {
+    networkBuilder: buildNetworkStructure,
+    appBuilder: buildAppStructure,
+    appWithNetworksBuilder: buildAppWithNetworksStructure
+  };
   
-  const appData = {};
-  const isOverallOrIncent = ['OVERALL'].includes(CURRENT_PROJECT);
+  const builder = builders[processor.builder] || builders.appBuilder;
+  return builder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor);
+}
+
+// ========== BUILDERS ==========
+
+function buildNetworkStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor) {
+  const networkData = {};
+  const keyCountries = processor.keyCountries || [];
   
   stats.forEach(row => {
     const date = row[0].value;
@@ -268,17 +290,241 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
     
     if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
     
-    const data = parseRow(row, isOverallOrIncent);
+    const data = parseRowUnified(row);
+    
+    // Обработка ключевых стран для INCENT_TRAFFIC
+    const isKeyCountry = keyCountries.includes(data.countryName);
+    const finalCountryCode = isKeyCountry ? data.countryCode : 'OTHER';
+    const finalCountryName = isKeyCountry ? data.countryName : 'Other';
+    
+    // Инициализация структур
+    ensureNestedStructure(networkData, [
+      [data.networkId, () => ({ networkId: data.networkId, networkName: data.networkName, countries: {} })],
+      [`${data.networkId}.countries.${finalCountryCode}`, () => ({ 
+        countryCode: finalCountryCode, countryName: finalCountryName, campaigns: {} 
+      })],
+      [`${data.networkId}.countries.${finalCountryCode}.campaigns.${data.campaignId}`, () => ({ 
+        campaignId: data.campaignId, campaignName: data.campaignName,
+        sourceApp: data.sourceApp, geo: data.geo, weeks: {} 
+      })],
+      [`${data.networkId}.countries.${finalCountryCode}.campaigns.${data.campaignId}.weeks.${weekKey}`, () => ({
+        weekStart: formatDateForAPI(getMondayOfWeek(new Date(date))),
+        weekEnd: formatDateForAPI(getSundayOfWeek(new Date(date))),
+        data: []
+      })]
+    ]);
+    
+    // Добавляем данные
+    networkData[data.networkId].countries[finalCountryCode].campaigns[data.campaignId].weeks[weekKey].data.push({
+      date, ...data.metrics, appId: data.app.id, appName: data.app.name,
+      status: data.status, type: data.type, isAutomated: data.isAutomated
+    });
+  });
+  
+  return networkData;
+}
+
+function buildAppStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+  const appData = {};
+  
+  stats.forEach(row => {
+    const date = row[0].value;
+    const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
+    
+    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    
+    const data = parseRowUnified(row);
     const appKey = data.app.id;
     
-    // Initialize structures
+    ensureNestedStructure(appData, [
+      [appKey, () => ({
+        appId: data.app.id, appName: data.app.name,
+        platform: data.app.platform, bundleId: data.app.bundleId, weeks: {}
+      })],
+      [`${appKey}.weeks.${weekKey}`, () => ({
+        weekStart: formatDateForAPI(getMondayOfWeek(new Date(date))),
+        weekEnd: formatDateForAPI(getSundayOfWeek(new Date(date))),
+        campaigns: []
+      })]
+    ]);
+    
+    appData[appKey].weeks[weekKey].campaigns.push({
+      date, campaignId: data.campaignId, campaignName: data.campaignName,
+      ...data.metrics, status: data.status, type: data.type,
+      geo: data.geo, sourceApp: data.sourceApp, isAutomated: data.isAutomated,
+      countryCode: data.countryCode, countryName: data.countryName
+    });
+  });
+  
+  return appData;
+}
+
+function buildAppWithNetworksStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+  const appData = {};
+  
+  stats.forEach(row => {
+    const date = row[0].value;
+    const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
+    
+    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    
+    const data = parseRowUnified(row);
+    const appKey = data.app.id;
+    const networkId = data.networkId || 'unknown';
+    
+    ensureNestedStructure(appData, [
+      [appKey, () => ({
+        appId: data.app.id, appName: data.app.name,
+        platform: data.app.platform, bundleId: data.app.bundleId, weeks: {}
+      })],
+      [`${appKey}.weeks.${weekKey}`, () => ({
+        weekStart: formatDateForAPI(getMondayOfWeek(new Date(date))),
+        weekEnd: formatDateForAPI(getSundayOfWeek(new Date(date))),
+        networks: {}
+      })],
+      [`${appKey}.weeks.${weekKey}.networks.${networkId}`, () => ({
+        networkId, networkName: data.networkName, campaigns: []
+      })]
+    ]);
+    
+    appData[appKey].weeks[weekKey].networks[networkId].campaigns.push({
+      date, campaignId: `network_${networkId}_${data.app.id}_${weekKey}`,
+      campaignName: data.networkName, ...data.metrics,
+      status: 'Active', type: 'Network', geo: 'ALL', 
+      sourceApp: data.networkName, isAutomated: false
+    });
+  });
+  
+  return appData;
+}
+
+// ========== ПАРСЕРЫ ==========
+
+function parseRowUnified(row) {
+  const parser = ROW_PARSERS[CURRENT_PROJECT] || ROW_PARSERS.DEFAULT;
+  
+  // Проверка типов для APPLOVIN_TEST
+  if (parser.typeCheck && !parser.typeCheck(row)) {
+    return parseRowUnified.call({ CURRENT_PROJECT: 'DEFAULT' }, row);
+  }
+  
+  // Извлечение базовых данных
+  const result = {
+    metrics: extractMetrics(row, parser.metricsStart),
+    status: 'Unknown',
+    type: 'Unknown',
+    isAutomated: false
+  };
+  
+  // Применение экстракторов
+  Object.entries(parser.extractors).forEach(([key, extractor]) => {
+    result[key] = extractor(row);
+  });
+  
+  // Добавление campaign данных если есть
+  const campaign = row[parser.structure.indexOf('campaign')];
+  if (campaign) {
+    result.status = campaign.status || 'Unknown';
+    result.type = campaign.type || 'Unknown';
+    result.isAutomated = campaign.isAutomated || false;
+  }
+  
+  // GEO и sourceApp
+  result.geo = extractGeoFromCampaign(result.campaignName);
+  result.sourceApp = extractSourceApp(result.campaignName);
+  
+  return result;
+}
+
+function extractMetrics(row, startIndex) {
+  const metrics = {};
+  METRICS_MAP.forEach(([name, type], index) => {
+    const value = row[startIndex + index]?.value || 0;
+    metrics[name] = type === 'int' ? parseInt(value) || 0 : parseFloat(value) || 0;
+  });
+  return metrics;
+}
+
+// ========== УТИЛИТЫ ==========
+
+function ensureNestedStructure(obj, pathConfigs) {
+  pathConfigs.forEach(([path, initializer]) => {
+    const parts = path.split('.');
+    let current = obj;
+    
+    for (let i = 0; i < parts.length; i++) {
+      if (i === 0 && !current[parts[0]]) {
+        current[parts[0]] = initializer();
+      } else if (i > 0) {
+        if (!current[parts[i]]) {
+          current[parts[i]] = i === parts.length - 1 ? initializer() : {};
+        }
+        current = current[parts[i]];
+      } else {
+        current = current[parts[0]];
+      }
+    }
+  });
+}
+
+// ========== LEGACY ПАРСЕР (для обратной совместимости) ==========
+
+function parseRow(row, isOverallOrIncent) {
+  if (CURRENT_PROJECT === 'INCENT_TRAFFIC' || CURRENT_PROJECT === 'APPLOVIN_TEST') {
+    return parseRowUnified(row);
+  }
+  
+  // Оригинальная логика для остальных проектов
+  const campaign = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? null : row[1];
+  const network = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? row[1] : null;
+  const app = row[2];
+  const metricsStartIndex = 3;
+  
+  const campaignName = campaign ? (campaign.campaignName || campaign.value || 'Unknown') : 'Unknown';
+  const campaignId = campaign ? (campaign.campaignId || campaign.hid || campaign.id || 'Unknown') : 'Unknown';
+  
+  const metrics = extractMetrics(row, metricsStartIndex);
+  
+  return {
+    campaign, network, app, campaignName, campaignId, metrics,
+    geo: extractGeoFromCampaign(campaignName),
+    sourceApp: extractSourceApp(campaignName),
+    status: campaign?.status || 'Unknown',
+    type: campaign?.type || 'Unknown',
+    isAutomated: campaign?.isAutomated || false,
+    countryCode: null,
+    countryName: null
+  };
+}
+
+// ========== СПЕЦИАЛЬНЫЕ ПРОЦЕССОРЫ (без изменений) ==========
+
+function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+  ensureBundleIdCacheLoaded();
+  const appsDbCache = getOptimizedAppsDbForTricky();
+  const appData = {};
+  const newBundleIds = new Map();
+  
+  stats.forEach(row => {
+    const date = row[0].value;
+    const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
+    
+    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    
+    const data = parseRow(row, false);
+    const bundleId = getCachedBundleId(data.campaignName, data.campaignId) || 'unknown';
+    
+    if (bundleId && !BUNDLE_ID_CACHE.has(data.campaignName)) {
+      newBundleIds.set(data.campaignName, { campaignId: data.campaignId, bundleId });
+    }
+    
+    const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
+    const appKey = data.app.id;
+    
     if (!appData[appKey]) {
       appData[appKey] = {
-        appId: data.app.id,
-        appName: data.app.name,
-        platform: data.app.platform,
-        bundleId: data.app.bundleId,
-        weeks: {}
+        appId: data.app.id, appName: data.app.name,
+        platform: data.app.platform, bundleId: data.app.bundleId, weeks: {}
       };
     }
     
@@ -288,49 +534,26 @@ function processStandardStrategy(stats, currentWeekStart, lastWeekStart, shouldI
       appData[appKey].weeks[weekKey] = {
         weekStart: formatDateForAPI(monday),
         weekEnd: formatDateForAPI(sunday),
-        campaigns: [],
-        networks: isOverallOrIncent ? {} : undefined
+        sourceApps: {}
       };
     }
     
-    // Add data
-    if (isOverallOrIncent) {
-      const networkId = data.network?.id || 'unknown';
-      const networkName = data.network?.value || 'Unknown Network';
-      
-      if (!appData[appKey].weeks[weekKey].networks[networkId]) {
-        appData[appKey].weeks[weekKey].networks[networkId] = {
-          networkId, networkName, campaigns: []
-        };
-      }
-      
-      appData[appKey].weeks[weekKey].networks[networkId].campaigns.push({
-        date, campaignId: `network_${networkId}_${data.app.id}_${weekKey}`,
-        campaignName: networkName, ...data.metrics,
-        status: 'Active', type: 'Network', geo: 'ALL', sourceApp: networkName, isAutomated: false
-      });
-    } else {
-      // Для всех проектов, включая APPLOVIN_TEST с группировкой по странам
-      const countryCode = data.countryCode || 'OTHER';
-      const countryName = data.countryName || 'Other';
-      
-      appData[appKey].weeks[weekKey].campaigns.push({
-        date, 
-        campaignId: data.campaignId, 
-        campaignName: data.campaignName,
-        ...data.metrics, 
-        status: data.status, 
-        type: data.type,
-        geo: data.geo, 
-        sourceApp: data.sourceApp, 
-        isAutomated: data.isAutomated,
-        countryCode: countryCode,
-        countryName: countryName
-      });
+    if (!appData[appKey].weeks[weekKey].sourceApps[bundleId]) {
+      appData[appKey].weeks[weekKey].sourceApps[bundleId] = {
+        sourceAppId: bundleId, sourceAppName: sourceAppDisplayName, campaigns: []
+      };
     }
+    
+    appData[appKey].weeks[weekKey].sourceApps[bundleId].campaigns.push({
+      date, campaignId: data.campaignId, campaignName: data.campaignName,
+      ...data.metrics, status: data.status, type: data.type,
+      geo: data.geo, sourceApp: data.sourceApp, isAutomated: data.isAutomated
+    });
   });
   
-  return CURRENT_PROJECT === 'INCENT_TRAFFIC' ? convertToNetworkStructure(appData) : appData;
+  if (newBundleIds.size > 0) saveBundleIdCache(newBundleIds);
+  console.log(`TRICKY: Processed ${stats.length} records`);
+  return appData;
 }
 
 function restructureToCampaignFirst(appData) {
@@ -339,15 +562,11 @@ function restructureToCampaignFirst(appData) {
   Object.keys(appData).forEach(appKey => {
     const app = appData[appKey];
     const campaignGroups = {};
-    
-    // Собираем все уникальные кампании
     const allCampaigns = new Map();
     
     Object.keys(app.weeks).forEach(weekKey => {
       const week = app.weeks[weekKey];
-      if (!week.campaigns) {
-        return;
-      }
+      if (!week.campaigns) return;
       
       week.campaigns.forEach(campaign => {
         const campaignKey = campaign.campaignId;
@@ -361,17 +580,15 @@ function restructureToCampaignFirst(appData) {
       });
     });
     
-    // Создаем структуру campaignGroups
     allCampaigns.forEach((campaignInfo, campaignId) => {
       campaignGroups[campaignId] = {
         campaignId: campaignId,
         campaignName: campaignInfo.campaignName,
         sourceApp: campaignInfo.sourceApp,
-        geo: '', // GEO теперь на уровне стран, не кампаний
+        geo: '',
         weeks: {}
       };
       
-      // Добавляем недели для каждой кампании
       Object.keys(app.weeks).forEach(weekKey => {
         const week = app.weeks[weekKey];
         const campaignDataForWeek = week.campaigns.filter(c => c.campaignId === campaignId);
@@ -383,7 +600,6 @@ function restructureToCampaignFirst(appData) {
             countries: {}
           };
           
-          // Группируем по странам
           campaignDataForWeek.forEach(campaign => {
             const countryCode = campaign.countryCode || 'OTHER';
             const countryName = campaign.countryName || 'Other';
@@ -399,18 +615,12 @@ function restructureToCampaignFirst(appData) {
             campaignGroups[campaignId].weeks[weekKey].countries[countryCode].campaigns.push(campaign);
           });
           
-          // Обработка топ-10 стран для этой недели
           const countriesArray = Object.values(campaignGroups[campaignId].weeks[weekKey].countries);
-          
-          // Считаем спенд для каждой страны
           countriesArray.forEach(country => {
             country.totalSpend = country.campaigns.reduce((sum, c) => sum + c.spend, 0);
           });
-          
-          // Сортируем по спенду
           countriesArray.sort((a, b) => b.totalSpend - a.totalSpend);
           
-          // Топ-10 и остальные
           const top10 = countriesArray.slice(0, 10);
           const others = countriesArray.slice(10);
           
@@ -419,7 +629,6 @@ function restructureToCampaignFirst(appData) {
             const othersCampaigns = [];
             others.forEach(country => othersCampaigns.push(...country.campaigns));
             
-            // Агрегируем метрики для Others
             const othersAggregated = {
               countryCode: 'OTHERS',
               countryName: 'Others',
@@ -431,7 +640,6 @@ function restructureToCampaignFirst(appData) {
               }]
             };
             
-            // Создаем финальный список с правильной сортировкой
             const finalCountries = [];
             let othersInserted = false;
             
@@ -447,7 +655,6 @@ function restructureToCampaignFirst(appData) {
               finalCountries.push(othersAggregated);
             }
             
-            // Перестраиваем countries объект с правильным порядком
             campaignGroups[campaignId].weeks[weekKey].countries = {};
             finalCountries.forEach(country => {
               campaignGroups[campaignId].weeks[weekKey].countries[country.countryCode] = country;
@@ -500,210 +707,8 @@ function aggregateCampaigns(campaigns) {
   };
 }
 
+// ========== GEO И SOURCE APP ==========
 
-function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
-  ensureBundleIdCacheLoaded();
-  const appsDbCache = getOptimizedAppsDbForTricky();
-  const appData = {};
-  const newBundleIds = new Map();
-  
-  stats.forEach(row => {
-    const date = row[0].value;
-    const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
-    
-    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
-    
-    const data = parseRow(row, false);
-    const bundleId = getCachedBundleId(data.campaignName, data.campaignId) || 'unknown';
-    
-    if (bundleId && !BUNDLE_ID_CACHE.has(data.campaignName)) {
-      newBundleIds.set(data.campaignName, { campaignId: data.campaignId, bundleId });
-    }
-    
-    const sourceAppDisplayName = getOptimizedSourceAppDisplayName(bundleId, appsDbCache);
-    const appKey = data.app.id;
-    
-    // Initialize structures
-    if (!appData[appKey]) {
-      appData[appKey] = {
-        appId: data.app.id, appName: data.app.name,
-        platform: data.app.platform, bundleId: data.app.bundleId, weeks: {}
-      };
-    }
-    
-    if (!appData[appKey].weeks[weekKey]) {
-      const monday = getMondayOfWeek(new Date(date));
-      const sunday = getSundayOfWeek(new Date(date));
-      appData[appKey].weeks[weekKey] = {
-        weekStart: formatDateForAPI(monday),
-        weekEnd: formatDateForAPI(sunday),
-        sourceApps: {}
-      };
-    }
-    
-    if (!appData[appKey].weeks[weekKey].sourceApps[bundleId]) {
-      appData[appKey].weeks[weekKey].sourceApps[bundleId] = {
-        sourceAppId: bundleId, sourceAppName: sourceAppDisplayName, campaigns: []
-      };
-    }
-    
-    appData[appKey].weeks[weekKey].sourceApps[bundleId].campaigns.push({
-      date, campaignId: data.campaignId, campaignName: data.campaignName,
-      ...data.metrics, status: data.status, type: data.type,
-      geo: data.geo, sourceApp: data.sourceApp, isAutomated: data.isAutomated
-    });
-  });
-  
-  if (newBundleIds.size > 0) saveBundleIdCache(newBundleIds);
-  console.log(`TRICKY: Processed ${stats.length} records`);
-  return appData;
-}
-
-// Simplified row parser
-function parseRow(row, isOverallOrIncent) {
-  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ INCENT_TRAFFIC
-  if (CURRENT_PROJECT === 'INCENT_TRAFFIC') {
-    // Структура: [0] - дата, [1] - страна, [2] - сеть, [3] - кампания, [4] - приложение, [5+] - метрики
-    const countryObj = row[1];
-    const network = row[2];
-    const campaign = row[3];
-    const app = row[4];
-    
-    const campaignName = campaign ? (campaign.campaignName || campaign.value || 'Unknown') : 'Unknown';
-    const campaignId = campaign ? (campaign.hid || campaign.id || 'Unknown') : 'Unknown';
-    
-    const metrics = {
-      cpi: parseFloat(row[5]?.value || 0) || 0,
-      installs: parseInt(row[6]?.value || 0) || 0,
-      ipm: parseFloat(row[7]?.value || 0) || 0,
-      spend: parseFloat(row[8]?.value || 0) || 0,
-      rrD1: parseFloat(row[9]?.value || 0) || 0,
-      roasD1: parseFloat(row[10]?.value || 0) || 0,
-      roasD3: parseFloat(row[11]?.value || 0) || 0,
-      rrD7: parseFloat(row[12]?.value || 0) || 0,
-      roasD7: parseFloat(row[13]?.value || 0) || 0,
-      roasD30: parseFloat(row[14]?.value || 0) || 0,
-      eArpuForecast: parseFloat(row[15]?.value || 0) || 0,
-      eRoasForecast: parseFloat(row[16]?.value || 0) || 0,
-      eProfitForecast: parseFloat(row[17]?.value || 0) || 0,
-      eRoasForecastD730: parseFloat(row[18]?.value || 0) || 0
-    };
-    
-    return {
-      campaign,
-      network,
-      app,
-      campaignName,
-      campaignId,
-      metrics,
-      countryCode: countryObj?.code || 'OTHER',
-      countryName: countryObj?.value || 'Other',
-      networkId: network?.hid || network?.id || 'unknown',
-      networkName: network?.value || network?.name || 'Unknown Network',
-      geo: extractGeoFromCampaign(campaignName),
-      sourceApp: extractSourceApp(campaignName),
-      status: campaign?.status || 'Unknown',
-      type: campaign?.type || 'Unknown',
-      isAutomated: campaign?.isAutomated || false
-    };
-  }
-  
-  // СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ APPLOVIN_TEST
-  if (CURRENT_PROJECT === 'APPLOVIN_TEST') {
-    // В новой структуре: [0] - дата, [1] - страна, [2] - кампания, [3] - приложение, [4+] - метрики
-    const countryObj = row[1];
-    const campaign = row[2];
-    const app = row[3];
-    
-    // Проверяем, что у нас правильная структура
-    if (countryObj && countryObj.__typename === 'UaCampaignCountry') {
-      const campaignName = campaign ? (campaign.campaignName || 'Unknown') : 'Unknown';
-      const campaignId = campaign ? (campaign.hid || campaign.id || 'Unknown') : 'Unknown';
-      
-      const metrics = {
-        cpi: parseFloat(row[4]?.value || 0) || 0,
-        installs: parseInt(row[5]?.value || 0) || 0,
-        ipm: parseFloat(row[6]?.value || 0) || 0,
-        spend: parseFloat(row[7]?.value || 0) || 0,
-        rrD1: parseFloat(row[8]?.value || 0) || 0,
-        roasD1: parseFloat(row[9]?.value || 0) || 0,
-        roasD3: parseFloat(row[10]?.value || 0) || 0,
-        rrD7: parseFloat(row[11]?.value || 0) || 0,
-        roasD7: parseFloat(row[12]?.value || 0) || 0,
-        roasD30: parseFloat(row[13]?.value || 0) || 0,
-        eArpuForecast: parseFloat(row[14]?.value || 0) || 0,
-        eRoasForecast: parseFloat(row[15]?.value || 0) || 0,
-        eProfitForecast: parseFloat(row[16]?.value || 0) || 0,
-        eRoasForecastD730: parseFloat(row[17]?.value || 0) || 0
-      };
-      
-      return {
-        campaign,
-        network: null,
-        app,
-        campaignName,
-        campaignId,
-        metrics,
-        geo: countryObj.code || 'OTHER',
-        sourceApp: extractSourceApp(campaignName),
-        status: campaign?.status || 'Unknown',
-        type: campaign?.type || 'Unknown',
-        isAutomated: campaign?.isAutomated || false,
-        countryCode: countryObj.code,
-        countryName: countryObj.value
-      };
-    }
-  }
-  
-  // ОРИГИНАЛЬНАЯ ЛОГИКА ДЛЯ ДРУГИХ ПРОЕКТОВ
-  const hasCountry = false; // Для других проектов стран нет
-  const country = null;
-  const campaign = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? null : row[1];
-  const network = (isOverallOrIncent && CURRENT_PROJECT !== 'INCENT_TRAFFIC') ? row[1] : null;
-  const app = row[2];
-  const metricsStartIndex = 3;
-  
-  const campaignName = campaign ? (campaign.campaignName || campaign.value || 'Unknown') : 'Unknown';
-  const campaignId = campaign ? (campaign.campaignId || campaign.hid || campaign.id || 'Unknown') : 'Unknown';
-  
-  const metrics = {
-    cpi: parseFloat(row[metricsStartIndex]?.value || 0) || 0,
-    installs: parseInt(row[metricsStartIndex + 1]?.value || 0) || 0,
-    ipm: parseFloat(row[metricsStartIndex + 2]?.value || 0) || 0,
-    spend: parseFloat(row[metricsStartIndex + 3]?.value || 0) || 0,
-    rrD1: parseFloat(row[metricsStartIndex + 4]?.value || 0) || 0,
-    roasD1: parseFloat(row[metricsStartIndex + 5]?.value || 0) || 0,
-    roasD3: parseFloat(row[metricsStartIndex + 6]?.value || 0) || 0,
-    rrD7: parseFloat(row[metricsStartIndex + 7]?.value || 0) || 0,
-    roasD7: parseFloat(row[metricsStartIndex + 8]?.value || 0) || 0,
-    roasD30: parseFloat(row[metricsStartIndex + 9]?.value || 0) || 0,
-    eArpuForecast: parseFloat(row[metricsStartIndex + 10]?.value || 0) || 0,
-    eRoasForecast: parseFloat(row[metricsStartIndex + 11]?.value || 0) || 0,
-    eProfitForecast: parseFloat(row[metricsStartIndex + 12]?.value || 0) || 0,
-    eRoasForecastD730: parseFloat(row[metricsStartIndex + 13]?.value || 0) || 0
-  };
-  
-  return {
-    campaign,
-    network,
-    app,
-    campaignName,
-    campaignId,
-    metrics,
-    geo: extractGeoFromCampaign(campaignName),
-    sourceApp: extractSourceApp(campaignName),
-    status: campaign?.status || 'Unknown',
-    type: campaign?.type || 'Unknown',
-    isAutomated: campaign?.isAutomated || false,
-    countryCode: null,
-    countryName: null
-  };
-}
-
-// convertToNetworkStructure больше не используется, структура для INCENT_TRAFFIC 
-// формируется напрямую в processStandardStrategy
-
-// GEO extraction (keep signature!)
 function extractGeoFromCampaign(campaignName) {
   if (!campaignName) return 'OTHER';
   if (['OVERALL','INCENT_TRAFFIC'].includes(CURRENT_PROJECT)) return 'ALL';
@@ -713,13 +718,11 @@ function extractGeoFromCampaign(campaignName) {
   return config.extract(campaignName);
 }
 
-// Source app extraction (keep signature!)
 function extractSourceApp(campaignName) {
   if (['OVERALL','INCENT_TRAFFIC'].includes(CURRENT_PROJECT)) return campaignName;
   if (campaignName.startsWith('APD_')) return campaignName;
   if (['REGULAR','GOOGLE_ADS','APPLOVIN','MINTEGRAL','INCENT'].includes(CURRENT_PROJECT)) return campaignName;
   
-  // TRICKY logic
   const eq = campaignName.indexOf('=');
   if (eq !== -1) {
     let t = campaignName.substring(eq + 1).trim();
@@ -739,7 +742,8 @@ function extractSourceApp(campaignName) {
   return 'Unknown';
 }
 
-// Bundle ID cache functions (keep all!)
+// ========== BUNDLE ID КЕШИРОВАНИЕ (без изменений) ==========
+
 function ensureBundleIdCacheLoaded() {
   const now = Date.now();
   if (BUNDLE_ID_CACHE_LOADED && BUNDLE_ID_CACHE_TIME && (now - BUNDLE_ID_CACHE_TIME) < BUNDLE_ID_CACHE_DURATION) return;
@@ -842,7 +846,8 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
   return bundleId;
 }
 
-// Legacy functions (keep all signatures!)
+// ========== LEGACY ФУНКЦИИ (для совместимости) ==========
+
 function processProjectApiData(projectName, rawData, includeLastWeek = null) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
@@ -882,7 +887,8 @@ function clearTrickyCaches() {
   console.log('TRICKY caches cleared');
 }
 
-// GraphQL query (keep as is!)
+// ========== GRAPHQL QUERY ==========
+
 function getGraphQLQuery() {
   return `query RichStats($dateFilters: [DateFilterInput!]!, $filters: [FilterInput!]!, $groupBy: [GroupByInput!]!, $measures: [RichMeasureInput!]!, $havingFilters: [HavingFilterInput!], $anonymizationMode: DataAnonymizationMode, $revenuePredictionVersion: String!, $topFilter: TopFilterInput, $funnelFilter: FunnelAttributes, $isMultiMediation: Boolean) {
     analytics(anonymizationMode: $anonymizationMode) {
