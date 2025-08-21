@@ -125,3 +125,12 @@ When modifying API queries:
 - Check "Debug" sheet tab for step-by-step API response analysis
 - Campaign filtering verification shows matched/unmatched patterns
 - Each project has individual debug functions available through menu
+
+### Code Editing Best Practices
+**ВАЖНО для Claude Code:** В этом проекте активен автоматический линтер, который может создавать конфликты при редактировании файлов.
+
+**Рекомендации:**
+- **Используй MultiEdit** вместо множественных Edit для файлов с большими изменениями
+- **Избегай Edit** для файлов больше 500 строк - используй MultiEdit с несколькими правками сразу
+- При получении ошибок "Found 2 matches" - добавляй больше уникального контекста в old_string
+- Файлы могут изменяться линтером между операциями чтения и редактирования

@@ -158,6 +158,25 @@ class InitialMetricsCache {
   recordInitialValuesFromData(appData) {
     console.log(`${this.projectName}: Recording initial metrics values for all weeks in data`);
     
+    // Определяем, какие недели можно записывать в initial кэш
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const isAllowedToRecord = dayOfWeek >= 2 || dayOfWeek === 0; // Вторник или позже
+    const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
+    const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
+
+    // Функция проверки, можно ли записывать initial для этой недели
+    const canRecordInitialForWeek = (weekStart) => {
+      // Никогда не записываем для текущей недели
+      if (weekStart >= currentWeekStart) return false;
+      
+      // Для прошлой недели - только если сегодня вторник или позже
+      if (weekStart === lastWeekStart) return isAllowedToRecord;
+      
+      // Для более старых недель - всегда можно
+      return true;
+    };
+    
     this.loadAllInitialValues();
     
     const newValues = [];
@@ -181,23 +200,30 @@ class InitialMetricsCache {
               const existingEntry = this.memoryCache[weekKey];
               
           if (!existingEntry) {
-            if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
-              newValues.push(['WEEK', network.networkName, weekRange, '', '', 
-                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                new Date(), 
-                weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
-              ]);
+            // Проверяем, можно ли записывать initial для этой недели
+            const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+            if (canRecordInitialForWeek(weekStartDate)) {
+              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                newValues.push(['WEEK', network.networkName, weekRange, '', '', 
+                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                  new Date(), 
+                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                ]);
+              }
             }
           } else {
-            const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                               (weekTotals.totalProfit !== 0 && !existingEntry.profit);
-            if (needsUpdate) {
-              updateRequests.push({
-                key: weekKey,
-                rowIndex: this.rowIndexCache[weekKey],
-                eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
-                profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
-              });
+            const weekStartDate = weekRange.split(' - ')[0];
+            if (canRecordInitialForWeek(weekStartDate)) {
+              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: weekKey,
+                  rowIndex: this.rowIndexCache[weekKey],
+                  eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                  profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                });
+              }
             }
           }
             });
@@ -219,23 +245,30 @@ class InitialMetricsCache {
           const existingEntry = this.memoryCache[weekKey];
           
           if (!existingEntry) {
-            if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
-              newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                new Date(), 
-                weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
-              ]);
+            // Проверяем, можно ли записывать initial для этой недели
+            const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+            if (canRecordInitialForWeek(weekStartDate)) {
+              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                  new Date(), 
+                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                ]);
+              }
             }
           } else {
-            const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                               (weekTotals.totalProfit !== 0 && !existingEntry.profit);
-            if (needsUpdate) {
-              updateRequests.push({
-                key: weekKey,
-                rowIndex: this.rowIndexCache[weekKey],
+            const weekStartDate = weekRange.split(' - ')[0];
+            if (canRecordInitialForWeek(weekStartDate)) {
+              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+              if (needsUpdate) {
+                updateRequests.push({
+                  key: weekKey,
+                  rowIndex: this.rowIndexCache[weekKey],
                 eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
                 profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
               });
+              }
             }
           }
           
@@ -245,23 +278,30 @@ class InitialMetricsCache {
             const existingEntry = this.memoryCache[networkKey];
             
             if (!existingEntry) {
-              if (networkTotals.avgEROASD730 > 0 || networkTotals.totalProfit !== 0) {
-                newValues.push(['NETWORK', app.appName, weekRange, network.networkId, network.networkName, 
-                  networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : '', 
-                  new Date(), 
-                  networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : ''
-                ]);
+              // Проверяем, можно ли записывать initial для этой недели
+              const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+              if (canRecordInitialForWeek(weekStartDate)) {
+                if (networkTotals.avgEROASD730 > 0 || networkTotals.totalProfit !== 0) {
+                  newValues.push(['NETWORK', app.appName, weekRange, network.networkId, network.networkName, 
+                    networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : '', 
+                    new Date(), 
+                    networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : ''
+                  ]);
+                }
               }
             } else {
-              const needsUpdate = (networkTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                 (networkTotals.totalProfit !== 0 && !existingEntry.profit);
-              if (needsUpdate) {
-                updateRequests.push({
-                  key: networkKey,
-                  rowIndex: this.rowIndexCache[networkKey],
-                  eROAS: existingEntry.eROAS || (networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : null),
-                  profit: existingEntry.profit || (networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : null)
-                });
+              const weekStartDate = weekRange.split(' - ')[0];
+              if (canRecordInitialForWeek(weekStartDate)) {
+                const needsUpdate = (networkTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                   (networkTotals.totalProfit !== 0 && !existingEntry.profit);
+                if (needsUpdate) {
+                  updateRequests.push({
+                    key: networkKey,
+                    rowIndex: this.rowIndexCache[networkKey],
+                    eROAS: existingEntry.eROAS || (networkTotals.avgEROASD730 > 0 ? networkTotals.avgEROASD730 : null),
+                    profit: existingEntry.profit || (networkTotals.totalProfit !== 0 ? networkTotals.totalProfit : null)
+                  });
+                }
               }
             }
           });
@@ -287,23 +327,30 @@ class InitialMetricsCache {
                 const existingEntry = this.memoryCache[weekKey];
                 
                 if (!existingEntry) {
-                  if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
-                    newValues.push(['WEEK', app.appName, weekRange, campaignGroup.campaignId, campaignGroup.campaignName, 
-                      weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                      new Date(), 
-                      weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
-                    ]);
+                  // Проверяем, можно ли записывать initial для этой недели
+                  const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                      newValues.push(['WEEK', app.appName, weekRange, campaignGroup.campaignId, campaignGroup.campaignName, 
+                        weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                        new Date(), 
+                        weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                      ]);
+                    }
                   }
                 } else {
-                  const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                     (weekTotals.totalProfit !== 0 && !existingEntry.profit);
-                  if (needsUpdate) {
-                    updateRequests.push({
-                      key: weekKey,
-                      rowIndex: this.rowIndexCache[weekKey],
-                      eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
-                      profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
-                    });
+                  const weekStartDate = weekRange.split(' - ')[0];
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                       (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+                    if (needsUpdate) {
+                      updateRequests.push({
+                        key: weekKey,
+                        rowIndex: this.rowIndexCache[weekKey],
+                        eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                        profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                      });
+                    }
                   }
                 }
                 
@@ -317,24 +364,31 @@ class InitialMetricsCache {
                   const existingEntry = this.memoryCache[countryKey];
                   
                   if (!existingEntry) {
-                    if (countryTotals.avgEROASD730 > 0 || countryTotals.totalProfit !== 0) {
-                      newValues.push(['COUNTRY', app.appName, weekRange, 
-                        `${campaignGroup.campaignId}_${countryCode}`, country.countryName, 
-                        countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : '', 
-                        new Date(), 
-                        countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : ''
-                      ]);
+                    // Проверяем, можно ли записывать initial для этой недели
+                    const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+                    if (canRecordInitialForWeek(weekStartDate)) {
+                      if (countryTotals.avgEROASD730 > 0 || countryTotals.totalProfit !== 0) {
+                        newValues.push(['COUNTRY', app.appName, weekRange, 
+                          `${campaignGroup.campaignId}_${countryCode}`, country.countryName, 
+                          countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : '', 
+                          new Date(), 
+                          countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : ''
+                        ]);
+                      }
                     }
                   } else {
-                    const needsUpdate = (countryTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                       (countryTotals.totalProfit !== 0 && !existingEntry.profit);
-                    if (needsUpdate) {
-                      updateRequests.push({
-                        key: countryKey,
-                        rowIndex: this.rowIndexCache[countryKey],
-                        eROAS: existingEntry.eROAS || (countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : null),
-                        profit: existingEntry.profit || (countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : null)
-                      });
+                    const weekStartDate = weekRange.split(' - ')[0];
+                    if (canRecordInitialForWeek(weekStartDate)) {
+                      const needsUpdate = (countryTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                         (countryTotals.totalProfit !== 0 && !existingEntry.profit);
+                      if (needsUpdate) {
+                        updateRequests.push({
+                          key: countryKey,
+                          rowIndex: this.rowIndexCache[countryKey],
+                          eROAS: existingEntry.eROAS || (countryTotals.avgEROASD730 > 0 ? countryTotals.avgEROASD730 : null),
+                          profit: existingEntry.profit || (countryTotals.totalProfit !== 0 ? countryTotals.totalProfit : null)
+                        });
+                      }
                     }
                   }
                 });
@@ -359,25 +413,32 @@ class InitialMetricsCache {
             const existingEntry = this.memoryCache[weekKey];
             
             if (!existingEntry) {
-              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
-                newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                  new Date(), 
-                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
-                ]);
+              // Проверяем, можно ли записывать initial для этой недели
+              const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+              if (canRecordInitialForWeek(weekStartDate)) {
+                if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                  newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                    weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                    new Date(), 
+                    weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                  ]);
+                }
               }
             } else {
-              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
-              if (needsUpdate) {
-                updateRequests.push({
-                  key: weekKey,
-                  rowIndex: this.rowIndexCache[weekKey],
-                  eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
-                  profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
-                });
+              const weekStartDate = weekRange.split(' - ')[0];
+              if (canRecordInitialForWeek(weekStartDate)) {
+                const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                   (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+                  if (needsUpdate) {
+                    updateRequests.push({
+                      key: weekKey,
+                      rowIndex: this.rowIndexCache[weekKey],
+                      eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                      profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                    });
+                  }
+                }
               }
-            }
             
             Object.values(week.sourceApps).forEach(sourceApp => {
               const sourceAppTotals = calculateWeekTotals(sourceApp.campaigns);
@@ -385,23 +446,30 @@ class InitialMetricsCache {
               const existingEntry = this.memoryCache[sourceAppKey];
               
               if (!existingEntry) {
-                if (sourceAppTotals.avgEROASD730 > 0 || sourceAppTotals.totalProfit !== 0) {
-                  newValues.push(['SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, 
-                    sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : '', 
+                // Проверяем, можно ли записывать initial для этой недели
+                const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+                if (canRecordInitialForWeek(weekStartDate)) {
+                  if (sourceAppTotals.avgEROASD730 > 0 || sourceAppTotals.totalProfit !== 0) {
+                    newValues.push(['SOURCE_APP', app.appName, weekRange, sourceApp.sourceAppId, sourceApp.sourceAppName, 
+                      sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : '', 
                     new Date(), 
                     sourceAppTotals.totalProfit !== 0 ? sourceAppTotals.totalProfit : ''
                   ]);
+                  }
                 }
               } else {
-                const needsUpdate = (sourceAppTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                   (sourceAppTotals.totalProfit !== 0 && !existingEntry.profit);
-                if (needsUpdate) {
-                  updateRequests.push({
-                    key: sourceAppKey,
-                    rowIndex: this.rowIndexCache[sourceAppKey],
-                    eROAS: existingEntry.eROAS || (sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : null),
-                    profit: existingEntry.profit || (sourceAppTotals.totalProfit !== 0 ? sourceAppTotals.totalProfit : null)
-                  });
+                const weekStartDate = weekRange.split(' - ')[0];
+                if (canRecordInitialForWeek(weekStartDate)) {
+                  const needsUpdate = (sourceAppTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                     (sourceAppTotals.totalProfit !== 0 && !existingEntry.profit);
+                  if (needsUpdate) {
+                    updateRequests.push({
+                      key: sourceAppKey,
+                      rowIndex: this.rowIndexCache[sourceAppKey],
+                      eROAS: existingEntry.eROAS || (sourceAppTotals.avgEROASD730 > 0 ? sourceAppTotals.avgEROASD730 : null),
+                      profit: existingEntry.profit || (sourceAppTotals.totalProfit !== 0 ? sourceAppTotals.totalProfit : null)
+                    });
+                  }
                 }
               }
               
@@ -410,23 +478,30 @@ class InitialMetricsCache {
                 const existingEntry = this.memoryCache[campaignKey];
                 
                 if (!existingEntry) {
-                  if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
-                    newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
-                      campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
-                      new Date(), 
-                      campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
-                    ]);
+                  // Проверяем, можно ли записывать initial для этой недели
+                  const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
+                      newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
+                        campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
+                        new Date(), 
+                        campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
+                        ]);
+                    }
                   }
                 } else {
-                  const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
-                                     (campaign.eProfitForecast !== 0 && !existingEntry.profit);
-                  if (needsUpdate) {
-                    updateRequests.push({
-                      key: campaignKey,
-                      rowIndex: this.rowIndexCache[campaignKey],
-                      eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
-                      profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
-                    });
+                  const weekStartDate = weekRange.split(' - ')[0];
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
+                                       (campaign.eProfitForecast !== 0 && !existingEntry.profit);
+                    if (needsUpdate) {
+                      updateRequests.push({
+                        key: campaignKey,
+                        rowIndex: this.rowIndexCache[campaignKey],
+                        eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
+                        profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
+                      });
+                    }
                   }
                 }
               });
@@ -438,23 +513,30 @@ class InitialMetricsCache {
             const existingEntry = this.memoryCache[weekKey];
             
             if (!existingEntry) {
-              if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
-                newValues.push(['WEEK', app.appName, weekRange, '', '', 
-                  weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
-                  new Date(), 
-                  weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
-                ]);
+              // Проверяем, можно ли записывать initial для этой недели
+              const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+              if (canRecordInitialForWeek(weekStartDate)) {
+                if (weekTotals.avgEROASD730 > 0 || weekTotals.totalProfit !== 0) {
+                  newValues.push(['WEEK', app.appName, weekRange, '', '', 
+                    weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : '', 
+                    new Date(), 
+                    weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : ''
+                  ]);
+                }
               }
             } else {
-              const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
-                                 (weekTotals.totalProfit !== 0 && !existingEntry.profit);
-              if (needsUpdate) {
-                updateRequests.push({
-                  key: weekKey,
-                  rowIndex: this.rowIndexCache[weekKey],
-                  eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
-                  profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
-                });
+              const weekStartDate = weekRange.split(' - ')[0];
+              if (canRecordInitialForWeek(weekStartDate)) {
+                const needsUpdate = (weekTotals.avgEROASD730 > 0 && !existingEntry.eROAS) || 
+                                   (weekTotals.totalProfit !== 0 && !existingEntry.profit);
+                if (needsUpdate) {
+                  updateRequests.push({
+                    key: weekKey,
+                    rowIndex: this.rowIndexCache[weekKey],
+                    eROAS: existingEntry.eROAS || (weekTotals.avgEROASD730 > 0 ? weekTotals.avgEROASD730 : null),
+                    profit: existingEntry.profit || (weekTotals.totalProfit !== 0 ? weekTotals.totalProfit : null)
+                  });
+                }
               }
             }
             
@@ -464,23 +546,30 @@ class InitialMetricsCache {
                 const existingEntry = this.memoryCache[campaignKey];
                 
                 if (!existingEntry) {
-                  if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
-                    newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
-                      campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
-                      new Date(), 
-                      campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
-                    ]);
+                  // Проверяем, можно ли записывать initial для этой недели
+                  const weekStartDate = weekRange.split(' - ')[0]; // Извлекаем дату начала недели
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    if (campaign.eRoasForecastD730 > 0 || campaign.eProfitForecast !== 0) {
+                      newValues.push(['CAMPAIGN', app.appName, weekRange, campaign.campaignId, campaign.sourceApp, 
+                        campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : '', 
+                        new Date(), 
+                        campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : ''
+                      ]);
+                    }
                   }
                 } else {
-                  const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
-                                     (campaign.eProfitForecast !== 0 && !existingEntry.profit);
-                  if (needsUpdate) {
-                    updateRequests.push({
-                      key: campaignKey,
-                      rowIndex: this.rowIndexCache[campaignKey],
-                      eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
-                      profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
-                    });
+                  const weekStartDate = weekRange.split(' - ')[0];
+                  if (canRecordInitialForWeek(weekStartDate)) {
+                    const needsUpdate = (campaign.eRoasForecastD730 > 0 && !existingEntry.eROAS) || 
+                                       (campaign.eProfitForecast !== 0 && !existingEntry.profit);
+                    if (needsUpdate) {
+                      updateRequests.push({
+                        key: campaignKey,
+                        rowIndex: this.rowIndexCache[campaignKey],
+                        eROAS: existingEntry.eROAS || (campaign.eRoasForecastD730 > 0 ? campaign.eRoasForecastD730 : null),
+                        profit: existingEntry.profit || (campaign.eProfitForecast !== 0 ? campaign.eProfitForecast : null)
+                      });
+                    }
                   }
                 }
               });
