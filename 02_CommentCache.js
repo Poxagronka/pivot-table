@@ -31,13 +31,9 @@ class CommentCache {
     return metadata;
   }
 
-  getFreshSheetData(spreadsheetId, range) {
+  getSheetData(spreadsheetId, range) {
     try {
-      const data = Sheets.Spreadsheets.Values.get(spreadsheetId, range);
-      const key = `${spreadsheetId}_${range}`;
-      COMMENT_CACHE_GLOBAL.sheetData[key] = data;
-      COMMENT_CACHE_GLOBAL.sheetDataTime[key] = Date.now();
-      return data;
+      return Sheets.Spreadsheets.Values.get(spreadsheetId, range);
     } catch (e) {
       console.error(`Error fetching ${range}:`, e);
       throw e;
@@ -113,7 +109,7 @@ class CommentCache {
     if (this._cols) return this._cols;
     
     try {
-      const headers = this.getFreshSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!1:1`).values?.[0] || [];
+      const headers = this.getSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!1:1`).values?.[0] || [];
       const find = (names) => {
         for (const name of names) {
           const idx = headers.findIndex(h => h?.toString().toLowerCase().trim() === name.toLowerCase());
@@ -141,7 +137,7 @@ class CommentCache {
     return headers.findIndex(h => h?.toString().toLowerCase().trim() === text.toLowerCase().trim()) + 1; 
   }
   getSheetHeaders(sheetName) { 
-    return this.getFreshSheetData(this.config.SHEET_ID, `${sheetName}!1:1`).values?.[0] || []; 
+    return this.getSheetData(this.config.SHEET_ID, `${sheetName}!1:1`).values?.[0] || []; 
   }
   getCommentColumn(sheetName) { return this.getColumns().comment; }
   getLevelColumn(sheetName) { return this.getColumns().level; }
@@ -157,14 +153,23 @@ class CommentCache {
     const comments = {};
     
     try {
-      const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`);
+      const response = this.getSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`);
       if (!response.values || response.values.length <= 1) return comments;
       
       response.values.slice(1).forEach(row => {
         if (row.length >= 7 && row[6]) {
           // Country в самой последней колонке (позиция 8)
           const country = row.length >= 9 ? row[8] : 'N/A';
-          comments[this.getCommentKey(...row.slice(0, 6), country)] = row[6];
+          const comment = row[6];
+          
+          // Диагностика: проверяем на Growth Status в комментариях
+          if (comment && typeof comment === 'string' && 
+              (comment.includes('🟢') || comment.includes('🔴') || comment.includes('🟠') || 
+               comment.includes('🔵') || comment.includes('🟡') || comment.includes('⚪'))) {
+            console.warn(`Found Growth Status in comment cache: "${comment}" for ${row[0]}|||${row[1]}|||${row[2]}`);
+          }
+          
+          comments[this.getCommentKey(...row.slice(0, 6), country)] = comment;
         }
       });
       
@@ -205,7 +210,7 @@ class CommentCache {
     }
     
     try {
-      const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`).values || [];
+      const existing = this.getSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`).values || [];
       const existingMap = new Map();
       
       existing.slice(1).forEach((row, i) => {
@@ -254,7 +259,7 @@ class CommentCache {
           data: requests
         }, this.cacheSpreadsheetId);
         
-        delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:I`];
+        // Кеш больше не используется
       }
       
       console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
@@ -282,7 +287,7 @@ class CommentCache {
 
   syncCommentsFromSheet() {
     try {
-      const data = this.getFreshSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!A:Z`).values;
+      const data = this.getSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!A:Z`).values;
       if (!data || data.length < 2) return console.log(`${this.projectName}: No data`);
       
       const cols = this.getColumns();
@@ -472,7 +477,7 @@ class CommentCache {
 
   applyCommentsToSheet() {
     try {
-      const data = this.getFreshSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!A:Z`).values;
+      const data = this.getSheetData(this.config.SHEET_ID, `${this.config.SHEET_NAME}!A:Z`).values;
       if (!data || data.length < 2) return console.log(`${this.projectName}: No data`);
       
       const cols = this.getColumns();
