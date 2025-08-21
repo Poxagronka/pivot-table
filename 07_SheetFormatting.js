@@ -14,15 +14,15 @@ const FORMAT_RULES = {
   },
   
   APPLOVIN_TEST: {
-    types: {
-      APP: [10, '#d1e7fe', 'bold', '#000000'],
-      CAMPAIGN: [10, '#e8f0fe'], // форматируется как week
-      WEEK: [10, '#ffffff'],      // форматируется как campaign
-      COUNTRY: [9, '#ffffff']
-    },
-    hideColumns: [4], // GEO
-    remapping: { CAMPAIGN: 'week', WEEK: 'campaign', COUNTRY: 'country' }
+  types: {
+    APP: [10, '#d1e7fe', 'bold', '#000000'],
+    CAMPAIGN: [10, '#e8f0fe'],  // светло-голубой фон для кампаний
+    WEEK: [9, '#ffffff'],       // белый фон для недель
+    COUNTRY: [9, '#ffffff']      // белый фон для стран
   },
+  hideColumns: [4], // GEO
+  remapping: null  // Убираем remapping, он только путает
+},
   
   OVERALL: {
     types: {

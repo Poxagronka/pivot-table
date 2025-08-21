@@ -109,7 +109,6 @@ class CommentCache {
     }
   }
 
-  // Объединенный метод для всех колонок - экономия 88 строк!
   getColumns() {
     if (this._cols) return this._cols;
     
@@ -137,7 +136,7 @@ class CommentCache {
     }
   }
 
-  // Legacy методы для обратной совместимости - по 2 строки каждый
+  // Legacy методы для обратной совместимости
   findColumnByHeader(headers, text) { 
     return headers.findIndex(h => h?.toString().toLowerCase().trim() === text.toLowerCase().trim()) + 1; 
   }
@@ -154,115 +153,113 @@ class CommentCache {
   }
 
   loadAllComments() {
-  this.getOrCreateCacheSheet();
-  const comments = {};
-  
-  try {
-    const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`);
-    if (!response.values || response.values.length <= 1) return comments;
+    this.getOrCreateCacheSheet();
+    const comments = {};
     
-    response.values.slice(1).forEach(row => {
-      if (row.length >= 7 && row[6]) {
-        comments[this.getCommentKey(...row.slice(0, 6))] = row[6];
-      }
-    });
-    
-    // Добавляем legacy ключи для обратной совместимости
-    if (typeof APP_NAME_LEGACY !== 'undefined') {
-      Object.keys(APP_NAME_LEGACY).forEach(newName => {
-        const oldName = APP_NAME_LEGACY[newName];
-        response.values.slice(1).forEach(row => {
-          if (row.length >= 7 && row[6] && row[0] === oldName) {
-            const legacyKey = this.getCommentKey(newName, row[1], row[2], row[3], row[4], row[5]);
-            if (!comments[legacyKey]) comments[legacyKey] = row[6];
-          }
-        });
+    try {
+      const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`);
+      if (!response.values || response.values.length <= 1) return comments;
+      
+      response.values.slice(1).forEach(row => {
+        if (row.length >= 7 && row[6]) {
+          comments[this.getCommentKey(...row.slice(0, 6))] = row[6];
+        }
       });
+      
+      // Legacy ключи для обратной совместимости
+      if (typeof APP_NAME_LEGACY !== 'undefined') {
+        Object.keys(APP_NAME_LEGACY).forEach(newName => {
+          const oldName = APP_NAME_LEGACY[newName];
+          response.values.slice(1).forEach(row => {
+            if (row.length >= 7 && row[6] && row[0] === oldName) {
+              const legacyKey = this.getCommentKey(newName, row[1], row[2], row[3], row[4], row[5]);
+              if (!comments[legacyKey]) comments[legacyKey] = row[6];
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.error('Error loading comments:', e);
     }
-  } catch (e) {
-    console.error('Error loading comments:', e);
+    
+    return comments;
   }
-  
-  return comments;
-}
 
   batchSaveComments(commentsArray) {
-  if (!commentsArray?.length) return;
-  
-  this.getOrCreateCacheSheet();
-  
-  // Нормализация названий приложений - заменяем старые названия на новые
-  if (typeof APP_NAME_LEGACY !== 'undefined') {
-    commentsArray = commentsArray.map(item => {
-      // Ищем, не является ли appName старым названием
-      const newName = Object.keys(APP_NAME_LEGACY).find(key => APP_NAME_LEGACY[key] === item.appName);
-      return {
-        ...item,
-        appName: newName || item.appName // Если нашли - заменяем на новое, иначе оставляем как есть
-      };
-    });
-  }
-  
-  try {
-    const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`).values || [];
-    const existingMap = new Map();
+    if (!commentsArray?.length) return;
     
-    existing.slice(1).forEach((row, i) => {
-      if (row.length >= 6) {
-        existingMap.set(this.getCommentKey(...row.slice(0, 6)), {
-          rowIndex: i + 2,
-          comment: row[6] || ''
-        });
-      }
-    });
+    this.getOrCreateCacheSheet();
     
-    const timestamp = new Date().toISOString();
-    const updates = [];
-    const newRows = [];
-    
-    commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign }) => {
-      const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign);
-      const existing = existingMap.get(key);
-      
-      if (existing) {
-        if (comment.length > existing.comment.length) {
-          updates.push({
-            range: `${this.cacheSheetName}!G${existing.rowIndex}:H${existing.rowIndex}`,
-            values: [[comment, timestamp]]
-          });
-        }
-      } else {
-        newRows.push([appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', 
-                     campaign || 'N/A', comment, timestamp]);
-      }
-    });
-    
-    const requests = [...updates];
-    if (newRows.length) {
-      const start = existing.length + 1;
-      requests.push({
-        range: `${this.cacheSheetName}!A${start}:H${start + newRows.length - 1}`,
-        values: newRows
+    // Нормализация названий приложений
+    if (typeof APP_NAME_LEGACY !== 'undefined') {
+      commentsArray = commentsArray.map(item => {
+        const newName = Object.keys(APP_NAME_LEGACY).find(key => APP_NAME_LEGACY[key] === item.appName);
+        return {
+          ...item,
+          appName: newName || item.appName
+        };
       });
     }
     
-    if (requests.length) {
-      Sheets.Spreadsheets.Values.batchUpdate({
-        valueInputOption: 'RAW',
-        data: requests
-      }, this.cacheSpreadsheetId);
+    try {
+      const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`).values || [];
+      const existingMap = new Map();
       
-      delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:H`];
+      existing.slice(1).forEach((row, i) => {
+        if (row.length >= 6) {
+          existingMap.set(this.getCommentKey(...row.slice(0, 6)), {
+            rowIndex: i + 2,
+            comment: row[6] || ''
+          });
+        }
+      });
+      
+      const timestamp = new Date().toISOString();
+      const updates = [];
+      const newRows = [];
+      
+      commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign }) => {
+        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign);
+        const existing = existingMap.get(key);
+        
+        if (existing) {
+          if (comment.length > existing.comment.length) {
+            updates.push({
+              range: `${this.cacheSheetName}!G${existing.rowIndex}:H${existing.rowIndex}`,
+              values: [[comment, timestamp]]
+            });
+          }
+        } else {
+          newRows.push([appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', 
+                       campaign || 'N/A', comment, timestamp]);
+        }
+      });
+      
+      const requests = [...updates];
+      if (newRows.length) {
+        const start = existing.length + 1;
+        requests.push({
+          range: `${this.cacheSheetName}!A${start}:H${start + newRows.length - 1}`,
+          values: newRows
+        });
+      }
+      
+      if (requests.length) {
+        Sheets.Spreadsheets.Values.batchUpdate({
+          valueInputOption: 'RAW',
+          data: requests
+        }, this.cacheSpreadsheetId);
+        
+        delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:H`];
+      }
+      
+      console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
+    } catch (e) {
+      console.error('Error saving comments:', e);
+      throw e;
     }
-    
-    console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
-  } catch (e) {
-    console.error('Error saving comments:', e);
-    throw e;
   }
-}
 
-  // Упрощенные методы валидации и синхронизации
   validateRowContent(row, level, expected) {
     if (!row?.length >= 3 || row[0] !== level) return false;
     
@@ -288,7 +285,7 @@ class CommentCache {
       if (cols.comment === -1) return console.log(`${this.projectName}: Comments column not found`);
       
       const comments = [];
-      let currentApp = '', currentWeek = '';
+      let currentApp = '', currentWeek = '', currentCampaign = '';
       
       data.slice(1).forEach(row => {
         if (!row?.length) return;
@@ -299,42 +296,77 @@ class CommentCache {
         if (level === 'APP') {
           currentApp = nameOrRange;
           currentWeek = '';
-        } else if (level === 'WEEK' && currentApp) {
-          currentWeek = nameOrRange;
-          if (comment) comments.push({ appName: currentApp, weekRange: currentWeek, level: 'WEEK', 
-                                       comment, identifier: 'N/A', sourceApp: 'N/A', campaign: 'N/A' });
-        } else if (comment && currentApp && currentWeek) {
+          currentCampaign = '';
+        } else if (level === 'CAMPAIGN' && this.projectName === 'APPLOVIN_TEST') {
+          // Для APPLOVIN_TEST: CAMPAIGN на втором уровне после APP
+          currentCampaign = nameOrRange;
+          currentWeek = ''; // Сбрасываем неделю при новой кампании
+          if (comment && currentApp) {
+            comments.push({ 
+              appName: currentApp, 
+              weekRange: '', // Для кампании weekRange пустой
+              level: 'CAMPAIGN', 
+              comment, 
+              identifier: idOrEmpty || 'N/A', 
+              sourceApp: nameOrRange || 'N/A', 
+              campaign: idOrEmpty || 'N/A' 
+            });
+          }
+        } else if (level === 'WEEK') {
+          if (this.projectName === 'APPLOVIN_TEST') {
+            // Для APPLOVIN_TEST: WEEK внутри CAMPAIGN
+            currentWeek = nameOrRange;
+            if (comment && currentApp && currentCampaign) {
+              comments.push({ 
+                appName: currentApp, 
+                weekRange: currentWeek, 
+                level: 'WEEK', 
+                comment, 
+                identifier: currentCampaign, // Сохраняем ID кампании
+                sourceApp: currentCampaign, // Имя кампании
+                campaign: 'N/A' 
+              });
+            }
+          } else {
+            // Стандартная логика для других проектов
+            currentWeek = nameOrRange;
+            if (comment && currentApp) {
+              comments.push({ 
+                appName: currentApp, 
+                weekRange: currentWeek, 
+                level: 'WEEK', 
+                comment, 
+                identifier: 'N/A', 
+                sourceApp: 'N/A', 
+                campaign: 'N/A' 
+              });
+            }
+          }
+        } else if (comment && currentApp) {
+          // Обработка других уровней
           let config = null;
           
           if (level === 'COUNTRY' && this.projectName === 'APPLOVIN_TEST') {
-            // Для APPLOVIN_TEST найдем текущую кампанию
-            let currentCampaign = '';
-            for (let j = data.indexOf(row) - 1; j >= 0; j--) {
-              if (data[j] && data[j][cols.level - 1] === 'CAMPAIGN') {
-                currentCampaign = data[j][cols.name - 1];
-                break;
-              }
-            }
+            // Для APPLOVIN_TEST: COUNTRY внутри WEEK внутри CAMPAIGN
             config = {
-              identifier: idOrEmpty || 'N/A',
-              sourceApp: currentCampaign || 'N/A',
+              identifier: `${currentCampaign}_${idOrEmpty || 'N/A'}`, // CampaignId_CountryCode
+              sourceApp: currentCampaign || 'N/A', // Имя кампании
               campaign: nameOrRange || 'N/A', // Название страны
-              country: nameOrRange || 'N/A'
+              country: idOrEmpty || 'N/A' // Код страны
             };
           } else if (this.projectName === 'INCENT_TRAFFIC') {
-            // Специальная обработка для новой структуры INCENT_TRAFFIC
             if (level === 'COUNTRY') {
               config = {
-                identifier: idOrEmpty || 'N/A', // код страны из колонки GEO
+                identifier: idOrEmpty || 'N/A',
                 sourceApp: 'N/A',
-                campaign: nameOrRange || 'N/A', // полное название страны
-                country: idOrEmpty || 'N/A' // код страны
+                campaign: nameOrRange || 'N/A',
+                country: idOrEmpty || 'N/A'
               };
             } else if (level === 'CAMPAIGN') {
               config = {
-                identifier: idOrEmpty || 'N/A', // campaign ID
-                sourceApp: nameOrRange || 'N/A', // campaign name
-                campaign: idOrEmpty || 'N/A' // campaign ID
+                identifier: idOrEmpty || 'N/A',
+                sourceApp: nameOrRange || 'N/A',
+                campaign: idOrEmpty || 'N/A'
               };
             } else {
               config = {
@@ -344,6 +376,7 @@ class CommentCache {
               };
             }
           } else {
+            // Стандартная логика
             config = {
               NETWORK: { identifier: idOrEmpty || 'N/A', sourceApp: 'N/A', campaign: nameOrRange || 'N/A' },
               SOURCE_APP: { identifier: nameOrRange || 'N/A', sourceApp: nameOrRange || 'N/A', campaign: 'N/A' },
@@ -361,7 +394,12 @@ class CommentCache {
             }[level];
           }
           
-          if (config) comments.push({ appName: currentApp, weekRange: currentWeek, level, comment, ...config });
+          if (config && currentWeek) {
+            comments.push({ appName: currentApp, weekRange: currentWeek, level, comment, ...config });
+          } else if (config && this.projectName === 'APPLOVIN_TEST' && level === 'COUNTRY') {
+            // Для APPLOVIN_TEST страны могут быть без явного weekRange в текущей строке
+            comments.push({ appName: currentApp, weekRange: currentWeek || '', level, comment, ...config });
+          }
         }
       });
       
@@ -385,7 +423,7 @@ class CommentCache {
       
       const comments = this.loadAllComments();
       const updates = [];
-      let currentApp = '', currentWeek = '';
+      let currentApp = '', currentWeek = '', currentCampaign = '';
       
       data.slice(1).forEach((row, i) => {
         if (!row?.length) return;
@@ -395,16 +433,57 @@ class CommentCache {
         if (level === 'APP') {
           currentApp = nameOrRange;
           currentWeek = '';
-        } else if (level === 'WEEK' && currentApp) {
-          currentWeek = nameOrRange;
+          currentCampaign = '';
+        } else if (level === 'CAMPAIGN' && this.projectName === 'APPLOVIN_TEST') {
+          currentCampaign = nameOrRange;
+          const campaignId = idOrEmpty || 'N/A';
+          currentWeek = ''; // Сбрасываем неделю для новой кампании
+          
+          // Генерация ключа для уровня CAMPAIGN в APPLOVIN_TEST
+          const key = this.getCommentKey(currentApp, '', 'CAMPAIGN', campaignId, nameOrRange, campaignId);
+          const comment = comments[key];
+          
+          if (comment) {
+            updates.push({
+              range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+              values: [[comment]]
+            });
+          }
+        } else if (level === 'WEEK') {
+          if (this.projectName === 'APPLOVIN_TEST') {
+            currentWeek = nameOrRange;
+            // Для APPLOVIN_TEST: WEEK связана с кампанией
+            const key = this.getCommentKey(currentApp, currentWeek, 'WEEK', currentCampaign, currentCampaign, 'N/A');
+            const comment = comments[key];
+            
+            if (comment) {
+              updates.push({
+                range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+                values: [[comment]]
+              });
+            }
+          } else {
+            currentWeek = nameOrRange;
+          }
         }
         
-        if (!currentApp || !currentWeek) return;
+        if (!currentApp) return;
         
+        // Генерация ключей для остальных уровней
         const keys = {
-          WEEK: () => this.getCommentKey(currentApp, currentWeek, 'WEEK', 'N/A', 'N/A', 'N/A'),
+          WEEK: () => {
+            if (this.projectName === 'APPLOVIN_TEST') {
+              // Уже обработано выше
+              return null;
+            }
+            return this.getCommentKey(currentApp, currentWeek, 'WEEK', 'N/A', 'N/A', 'N/A');
+          },
           SOURCE_APP: () => this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', nameOrRange, nameOrRange, 'N/A'),
           CAMPAIGN: () => {
+            if (this.projectName === 'APPLOVIN_TEST') {
+              // Уже обработано выше
+              return null;
+            }
             if (this.projectName === 'INCENT_TRAFFIC') {
               return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', idOrEmpty || 'N/A', nameOrRange, idOrEmpty);
             }
@@ -415,33 +494,29 @@ class CommentCache {
           },
           NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange),
           COUNTRY: () => {
-            // Для INCENT_TRAFFIC страны имеют свою структуру
             if (this.projectName === 'INCENT_TRAFFIC') {
               return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', 'N/A', nameOrRange, idOrEmpty);
-            }
-            // Для APPLOVIN_TEST страны связаны с кампаниями
-            else if (this.projectName === 'APPLOVIN_TEST') {
-              // Нужно найти текущую кампанию - ищем вверх до ближайшей кампании
-              for (let j = i - 1; j >= 0; j--) {
-                const prevRow = data[j];
-                if (prevRow && prevRow[cols.level - 1] === 'CAMPAIGN') {
-                  const campaignName = prevRow[cols.name - 1];
-                  return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', campaignName, nameOrRange);
-                }
-              }
+            } else if (this.projectName === 'APPLOVIN_TEST') {
+              // Для APPLOVIN_TEST: страны связаны с кампаниями и неделями
+              const countryCode = idOrEmpty || 'N/A';
+              const countryName = nameOrRange || 'N/A';
+              return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', 
+                                       `${currentCampaign}_${countryCode}`, currentCampaign, countryName);
             }
             return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', nameOrRange, 'N/A', nameOrRange);
           }
         };
         
         const key = keys[level]?.();
-        const comment = key && comments[key];
-        
-        if (comment) {
-          updates.push({
-            range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
-            values: [[comment]]
-          });
+        if (key) {
+          const comment = comments[key];
+          
+          if (comment) {
+            updates.push({
+              range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+              values: [[comment]]
+            });
+          }
         }
       });
       
@@ -459,7 +534,7 @@ class CommentCache {
     }
   }
 
-  // Утилиты - по 1-2 строки
+  // Утилиты
   extractCampaignIdFromHyperlink(formula) {
     return formula?.match?.(/campaigns\/([^"]+)/)?.[1] || 'Unknown';
   }
