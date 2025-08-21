@@ -31,8 +31,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       
       formatData.push({ row: tableData.length + 1, type: 'APP' });
       const emptyRow = new Array(getUnifiedHeaders().length).fill('');
-      emptyRow[0] = 'APP';
-      emptyRow[1] = app.appName;
+      emptyRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'APP';
+      emptyRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = app.appName;
       tableData.push(emptyRow);
       
       const campaignKeys = Object.keys(app.campaignGroups || {}).sort((a, b) => {
@@ -52,10 +52,10 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
         
         formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
         const campaignRow = new Array(getUnifiedHeaders().length).fill('');
-        campaignRow[0] = 'CAMPAIGN';
-        campaignRow[1] = campaignGroup.campaignName;
-        campaignRow[2] = campaignGroup.campaignId;
-        campaignRow[3] = ''; // Не показываем GEO на уровне кампании для APPLOVIN_TEST
+        campaignRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'CAMPAIGN';
+        campaignRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = campaignGroup.campaignName;
+        campaignRow[COLUMN_CONFIG.COLUMNS.ID - 1] = campaignGroup.campaignId;
+        campaignRow[COLUMN_CONFIG.COLUMNS.GEO - 1] = ''; // Не показываем GEO на уровне кампании для APPLOVIN_TEST
         tableData.push(campaignRow);
         
         const weekKeys = Object.keys(campaignGroup.weeks).sort();
@@ -77,23 +77,22 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           
           formatData.push({ row: tableData.length + 1, type: 'WEEK' });
           const weekRow = new Array(getUnifiedHeaders().length).fill('');
-          weekRow[0] = 'WEEK';
-          weekRow[1] = `${week.weekStart} - ${week.weekEnd}`;
-          weekRow[2] = '';
-          weekRow[3] = '';
-          weekRow[4] = formatSmartCurrency(weekTotals.totalSpend);
-          weekRow[5] = spendWoW;
-          weekRow[6] = weekTotals.totalInstalls;
-          weekRow[7] = weekTotals.avgCpi.toFixed(3);
+          weekRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'WEEK';
+          weekRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = `${week.weekStart} - ${week.weekEnd}`;
+          weekRow[COLUMN_CONFIG.COLUMNS.ID - 1] = '';
+          weekRow[COLUMN_CONFIG.COLUMNS.GEO - 1] = '';
+          weekRow[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(weekTotals.totalSpend);
+          weekRow[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW;
+          weekRow[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = weekTotals.totalInstalls;
+          weekRow[COLUMN_CONFIG.COLUMNS.CPI - 1] = weekTotals.avgCpi.toFixed(3);
           
           const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD14.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
-          weekRow[8] = combinedRoas;
+          weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas;
           
-          weekRow[9] = weekTotals.avgIpm.toFixed(1);
-          weekRow[10] = `${weekTotals.avgRrD1.toFixed(0)}%`;
-          weekRow[11] = `${weekTotals.avgRrD7.toFixed(0)}%`;
-          weekRow[12] = weekTotals.avgArpu.toFixed(3);
-          weekRow[13] = `${weekTotals.avgERoas.toFixed(0)}%`;
+          weekRow[COLUMN_CONFIG.COLUMNS.IPM - 1] = weekTotals.avgIpm.toFixed(1);
+          weekRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${weekTotals.avgRrD1.toFixed(0)}% → ${weekTotals.avgRrD7.toFixed(0)}%`;
+          weekRow[COLUMN_CONFIG.COLUMNS.EARPU - 1] = weekTotals.avgArpu.toFixed(3);
+          weekRow[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${weekTotals.avgERoas.toFixed(0)}%`;
           // Вместо простого форматирования, используем initialMetricsCache
           let weekEROAS730Display = `${weekTotals.avgEROASD730.toFixed(0)}%`;
           let weekEProfit730Display = formatSmartCurrency(weekTotals.totalProfit);
@@ -110,11 +109,11 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
             );
           }
 
-          weekRow[14] = weekEROAS730Display;
-          weekRow[15] = weekEProfit730Display;
-          weekRow[16] = profitWoW;
-          weekRow[17] = status;
-          weekRow[18] = '';
+          weekRow[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = weekEROAS730Display;
+          weekRow[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = weekEProfit730Display;
+          weekRow[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW;
+          weekRow[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status;
+          weekRow[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
           
           tableData.push(weekRow);
           
@@ -132,23 +131,22 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
             formatData.push({ row: tableData.length + 1, type: 'COUNTRY' });
             
             const countryRow = new Array(getUnifiedHeaders().length).fill('');
-            countryRow[0] = 'COUNTRY';
-            countryRow[1] = country.countryName;
-            countryRow[2] = '';
-            countryRow[3] = country.countryCode || 'OTHER';
-            countryRow[4] = formatSmartCurrency(campaign.spend || 0);
-            countryRow[5] = spendWoW;
-            countryRow[6] = campaign.installs || 0;
-            countryRow[7] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
+            countryRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'COUNTRY';
+            countryRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = country.countryName;
+            countryRow[COLUMN_CONFIG.COLUMNS.ID - 1] = '';
+            countryRow[COLUMN_CONFIG.COLUMNS.GEO - 1] = country.countryCode || 'OTHER';
+            countryRow[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(campaign.spend || 0);
+            countryRow[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW;
+            countryRow[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = campaign.installs || 0;
+            countryRow[COLUMN_CONFIG.COLUMNS.CPI - 1] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
             
             const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD14 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
-            countryRow[8] = combinedRoas;
+            countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas;
             
-            countryRow[9] = (campaign.ipm || 0).toFixed(1);
-            countryRow[10] = `${(campaign.rrD1 || 0).toFixed(0)}%`;
-            countryRow[11] = `${(campaign.rrD7 || 0).toFixed(0)}%`;
-            countryRow[12] = (campaign.eArpuForecast || 0).toFixed(3);
-            countryRow[13] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
+            countryRow[COLUMN_CONFIG.COLUMNS.IPM - 1] = (campaign.ipm || 0).toFixed(1);
+            countryRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${(campaign.rrD1 || 0).toFixed(0)}% → ${(campaign.rrD7 || 0).toFixed(0)}%`;
+            countryRow[COLUMN_CONFIG.COLUMNS.EARPU - 1] = (campaign.eArpuForecast || 0).toFixed(3);
+            countryRow[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
             // Для каждой страны добавить обработку initial метрик
             let countryEROAS730Display = `${(campaign.eRoasForecastD730 || 0).toFixed(0)}%`;
             let countryEProfit730Display = formatSmartCurrency(campaign.eProfitForecast || 0);
@@ -165,11 +163,11 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
               );
             }
 
-            countryRow[14] = countryEROAS730Display;
-            countryRow[15] = countryEProfit730Display;
-            countryRow[16] = profitWoW;
-            countryRow[17] = status;
-            countryRow[18] = '';
+            countryRow[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = countryEROAS730Display;
+            countryRow[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = countryEProfit730Display;
+            countryRow[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW;
+            countryRow[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status;
+            countryRow[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
             
             tableData.push(countryRow);
           });
@@ -193,8 +191,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       // Уровень NETWORK
       formatData.push({ row: tableData.length + 1, type: 'NETWORK' });
       const networkRow = new Array(getUnifiedHeaders().length).fill('');
-      networkRow[0] = 'NETWORK';
-      networkRow[1] = network.networkName;
+      networkRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'NETWORK';
+      networkRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = network.networkName;
       tableData.push(networkRow);
       
       // Сортируем страны по spend (от большего к меньшему)
@@ -221,9 +219,9 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
         // Уровень COUNTRY
         formatData.push({ row: tableData.length + 1, type: 'COUNTRY' });
         const countryRow = new Array(getUnifiedHeaders().length).fill('');
-        countryRow[0] = 'COUNTRY';
-        countryRow[1] = country.countryName;
-        countryRow[3] = country.countryCode;  // GEO колонка
+        countryRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'COUNTRY';
+        countryRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = country.countryName;
+        countryRow[COLUMN_CONFIG.COLUMNS.GEO - 1] = country.countryCode;  // GEO колонка
         tableData.push(countryRow);
         
         // Сортируем кампании по общему spend
@@ -241,10 +239,10 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           // Уровень CAMPAIGN
           formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
           const campaignRow = new Array(getUnifiedHeaders().length).fill('');
-          campaignRow[0] = 'CAMPAIGN';
-          campaignRow[1] = campaign.campaignName;
-          campaignRow[2] = campaign.campaignId;
-          campaignRow[3] = campaign.geo || '';
+          campaignRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'CAMPAIGN';
+          campaignRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = campaign.campaignName;
+          campaignRow[COLUMN_CONFIG.COLUMNS.ID - 1] = campaign.campaignId;
+          campaignRow[COLUMN_CONFIG.COLUMNS.GEO - 1] = campaign.geo || '';
           tableData.push(campaignRow);
           
           // Сортируем недели
@@ -287,8 +285,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
       
       formatData.push({ row: tableData.length + 1, type: 'APP' });
       const emptyRow = new Array(getUnifiedHeaders().length).fill('');
-      emptyRow[0] = 'APP';
-      emptyRow[1] = app.appName;
+      emptyRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'APP';
+      emptyRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = app.appName;
       tableData.push(emptyRow);
 
       // Для APPLOVIN_TEST структура другая: app.campaignGroups вместо app.weeks
@@ -311,8 +309,8 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           // Добавляем строку кампании
           formatData.push({ row: tableData.length + 1, type: 'CAMPAIGN' });
           const campaignEmptyRow = new Array(getUnifiedHeaders().length).fill('');
-          campaignEmptyRow[0] = 'CAMPAIGN';
-          campaignEmptyRow[1] = campaignGroup.campaignName;
+          campaignEmptyRow[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = 'CAMPAIGN';
+          campaignEmptyRow[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = campaignGroup.campaignName;
           tableData.push(campaignEmptyRow);
           
           // Обрабатываем недели для каждой кампании
@@ -673,13 +671,13 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   const headers = getUnifiedHeaders();
   const row = new Array(headers.length).fill('');
   
-  row[0] = level;
+  row[COLUMN_CONFIG.COLUMNS.LEVEL - 1] = level;
   
   if (level === 'APP' && CURRENT_PROJECT !== 'INCENT_TRAFFIC') {
-    row[1] = displayName || identifier;
+    row[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = displayName || identifier;
     return row;
   } else if (level === 'WEEK') {
-    row[1] = `${week.weekStart} - ${week.weekEnd}`;
+    row[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = `${week.weekStart} - ${week.weekEnd}`;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD14.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
@@ -691,12 +689,12 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eProfit730Display = initialMetricsCache.formatProfitWithInitial('WEEK', appName, weekRange, data.totalProfit);
     }
     
-    row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
-    row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
-    row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
+    row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.totalSpend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.totalInstalls; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.avgCpi.toFixed(3);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.avgArpu.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.avgERoas.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
+    row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   } else if (level === 'CAMPAIGN') {
-    row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
+    row[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = data.sourceApp; row[COLUMN_CONFIG.COLUMNS.ID - 1] = campaignIdValue; row[COLUMN_CONFIG.COLUMNS.GEO - 1] = data.geo;
     const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD14.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.eRoasForecastD730.toFixed(0)}%`;
@@ -708,12 +706,12 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eProfit730Display = initialMetricsCache.formatProfitWithInitial('CAMPAIGN', appName, weekRange, data.eProfitForecast, data.campaignId, data.sourceApp);
     }
     
-    row[4] = formatSmartCurrency(data.spend); row[5] = spendWoW; row[6] = data.installs; row[7] = data.cpi ? data.cpi.toFixed(3) : '0.000';
-    row[8] = combinedRoas; row[9] = data.ipm.toFixed(1); row[10] = `${data.rrD1.toFixed(0)}%`; row[11] = `${data.rrD7.toFixed(0)}%`;
-    row[12] = data.eArpuForecast.toFixed(3); row[13] = `${data.eRoasForecast.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
+    row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.spend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.installs; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.cpi ? data.cpi.toFixed(3) : '0.000';
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.ipm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.rrD1.toFixed(0)}% → ${data.rrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.eArpuForecast.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.eRoasForecast.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
+    row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   } else {
-    row[1] = displayName || identifier;
+    row[COLUMN_CONFIG.COLUMNS.WEEK_RANGE - 1] = displayName || identifier;
     const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD14.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
@@ -725,13 +723,12 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
       eProfit730Display = initialMetricsCache.formatProfitWithInitial(level, appName, weekRange, data.totalProfit, identifier, displayName);
     }
     
-    row[4] = formatSmartCurrency(data.totalSpend); row[5] = spendWoW; row[6] = data.totalInstalls; row[7] = data.avgCpi.toFixed(3);
-    row[8] = combinedRoas; row[9] = data.avgIpm.toFixed(1); row[10] = `${data.avgRrD1.toFixed(0)}%`; row[11] = `${data.avgRrD7.toFixed(0)}%`;
-    row[12] = data.avgArpu.toFixed(3); row[13] = `${data.avgERoas.toFixed(0)}%`; row[14] = eROAS730Display;
-    row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
+    row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.totalSpend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.totalInstalls; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.avgCpi.toFixed(3);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.avgArpu.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.avgERoas.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
+    row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   }
   
-  row[18] = '';
   return row;
 }
 

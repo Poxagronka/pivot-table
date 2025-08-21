@@ -78,9 +78,9 @@ class CommentCache {
           requests: [
             {
               updateCells: {
-                range: { sheetId: sheet.properties.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+                range: { sheetId: sheet.properties.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
                 rows: [{
-                  values: ['AppName','WeekRange','Level','Identifier','SourceApp','Campaign','Comment','LastUpdated']
+                  values: ['AppName','WeekRange','Level','Identifier','SourceApp','Campaign','Comment','LastUpdated','Country']
                     .map(v => ({ userEnteredValue: { stringValue: v } }))
                 }],
                 fields: 'userEnteredValue'
@@ -88,7 +88,7 @@ class CommentCache {
             },
             {
               repeatCell: {
-                range: { sheetId: sheet.properties.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+                range: { sheetId: sheet.properties.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
                 cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.94, blue: 0.94 } } },
                 fields: 'userEnteredFormat(textFormat,backgroundColor)'
               }
@@ -123,10 +123,10 @@ class CommentCache {
       };
       
       this._cols = {
-        comment: find(['Comments', 'Comment']),
-        level: find(['Level']) || 1,
-        name: find(['Week Range / Source App', 'Week Range/Source App']) || 2,
-        id: find(['ID']) || 3
+        comment: COLUMN_CONFIG.COLUMNS.COMMENTS,  // Используем из конфига
+        level: COLUMN_CONFIG.COLUMNS.LEVEL,
+        name: COLUMN_CONFIG.COLUMNS.WEEK_RANGE,
+        id: COLUMN_CONFIG.COLUMNS.ID
       };
       
       return this._cols;
@@ -157,12 +157,14 @@ class CommentCache {
     const comments = {};
     
     try {
-      const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`);
+      const response = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`);
       if (!response.values || response.values.length <= 1) return comments;
       
       response.values.slice(1).forEach(row => {
         if (row.length >= 7 && row[6]) {
-          comments[this.getCommentKey(...row.slice(0, 6))] = row[6];
+          // Country в самой последней колонке (позиция 8)
+          const country = row.length >= 9 ? row[8] : 'N/A';
+          comments[this.getCommentKey(...row.slice(0, 6), country)] = row[6];
         }
       });
       
@@ -172,7 +174,8 @@ class CommentCache {
           const oldName = APP_NAME_LEGACY[newName];
           response.values.slice(1).forEach(row => {
             if (row.length >= 7 && row[6] && row[0] === oldName) {
-              const legacyKey = this.getCommentKey(newName, row[1], row[2], row[3], row[4], row[5]);
+              const country = row.length >= 9 ? row[8] : 'N/A';
+              const legacyKey = this.getCommentKey(newName, row[1], row[2], row[3], row[4], row[5], country);
               if (!comments[legacyKey]) comments[legacyKey] = row[6];
             }
           });
@@ -202,12 +205,13 @@ class CommentCache {
     }
     
     try {
-      const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:H`).values || [];
+      const existing = this.getFreshSheetData(this.cacheSpreadsheetId, `${this.cacheSheetName}!A:I`).values || [];
       const existingMap = new Map();
       
       existing.slice(1).forEach((row, i) => {
-        if (row.length >= 6) {
-          existingMap.set(this.getCommentKey(...row.slice(0, 6)), {
+        if (row.length >= 7) {
+          const country = row.length >= 9 ? row[8] : 'N/A';
+          existingMap.set(this.getCommentKey(...row.slice(0, 6), country), {
             rowIndex: i + 2,
             comment: row[6] || ''
           });
@@ -218,20 +222,20 @@ class CommentCache {
       const updates = [];
       const newRows = [];
       
-      commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign }) => {
-        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign);
+      commentsArray.forEach(({ appName, weekRange, level, comment, identifier, sourceApp, campaign, country }) => {
+        const key = this.getCommentKey(appName, weekRange, level, identifier, sourceApp, campaign, country);
         const existing = existingMap.get(key);
         
         if (existing) {
           if (comment.length > existing.comment.length) {
             updates.push({
-              range: `${this.cacheSheetName}!G${existing.rowIndex}:H${existing.rowIndex}`,
-              values: [[comment, timestamp]]
+              range: `${this.cacheSheetName}!G${existing.rowIndex}:I${existing.rowIndex}`,
+              values: [[comment, timestamp, country || 'N/A']]
             });
           }
         } else {
           newRows.push([appName, weekRange, level, identifier || 'N/A', sourceApp || 'N/A', 
-                       campaign || 'N/A', comment, timestamp]);
+                       campaign || 'N/A', comment, timestamp, country || 'N/A']);
         }
       });
       
@@ -239,7 +243,7 @@ class CommentCache {
       if (newRows.length) {
         const start = existing.length + 1;
         requests.push({
-          range: `${this.cacheSheetName}!A${start}:H${start + newRows.length - 1}`,
+          range: `${this.cacheSheetName}!A${start}:I${start + newRows.length - 1}`,
           values: newRows
         });
       }
@@ -250,7 +254,7 @@ class CommentCache {
           data: requests
         }, this.cacheSpreadsheetId);
         
-        delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:H`];
+        delete COMMENT_CACHE_GLOBAL.sheetData[`${this.cacheSpreadsheetId}_${this.cacheSheetName}!A:I`];
       }
       
       console.log(`${this.projectName}: Saved ${updates.length + newRows.length} comments`);
@@ -287,6 +291,9 @@ class CommentCache {
       const comments = [];
       let currentApp = '', currentWeek = '', currentCampaign = '';
       
+      // Для INCENT_TRAFFIC: отслеживаем network, country, campaign
+      let currentNetwork = '', currentCountry = '';
+      
       data.slice(1).forEach(row => {
         if (!row?.length) return;
         
@@ -297,6 +304,41 @@ class CommentCache {
           currentApp = nameOrRange;
           currentWeek = '';
           currentCampaign = '';
+        } else if (level === 'NETWORK' && this.projectName === 'INCENT_TRAFFIC') {
+          // Для INCENT_TRAFFIC: NETWORK - это аналог APP
+          currentNetwork = nameOrRange;
+          currentCountry = '';
+          currentCampaign = '';
+          currentWeek = '';
+          
+          if (comment) {
+            comments.push({ 
+              appName: currentNetwork, // Используем network как appName 
+              weekRange: '', 
+              level: 'NETWORK', 
+              comment, 
+              identifier: 'N/A',
+              sourceApp: nameOrRange,
+              campaign: 'N/A' 
+            });
+          }
+        } else if (level === 'COUNTRY' && this.projectName === 'INCENT_TRAFFIC') {
+          currentCountry = nameOrRange;
+          currentCampaign = '';
+          currentWeek = '';
+          
+          if (comment && currentNetwork) {
+            comments.push({ 
+              appName: currentNetwork, 
+              weekRange: '', 
+              level: 'COUNTRY', 
+              comment, 
+              identifier: idOrEmpty || 'N/A', // countryCode
+              sourceApp: nameOrRange, // countryName
+              campaign: 'N/A',
+              country: idOrEmpty || 'N/A'
+            });
+          }
         } else if (level === 'CAMPAIGN' && this.projectName === 'APPLOVIN_TEST') {
           // Для APPLOVIN_TEST: CAMPAIGN на втором уровне после APP
           currentCampaign = nameOrRange;
@@ -310,6 +352,23 @@ class CommentCache {
               identifier: idOrEmpty || 'N/A', 
               sourceApp: nameOrRange || 'N/A', 
               campaign: idOrEmpty || 'N/A' 
+            });
+          }
+        } else if (level === 'CAMPAIGN' && this.projectName === 'INCENT_TRAFFIC') {
+          // Для INCENT_TRAFFIC: CAMPAIGN внутри COUNTRY внутри NETWORK
+          currentCampaign = nameOrRange;
+          currentWeek = '';
+          
+          if (comment && currentNetwork && currentCountry) {
+            comments.push({ 
+              appName: currentNetwork, 
+              weekRange: '', 
+              level: 'CAMPAIGN', 
+              comment, 
+              identifier: idOrEmpty || 'N/A', // campaignId
+              sourceApp: nameOrRange, // campaignName
+              campaign: idOrEmpty || 'N/A', // campaignId
+              country: currentCountry
             });
           }
         } else if (level === 'WEEK') {
@@ -327,6 +386,21 @@ class CommentCache {
                 campaign: 'N/A' 
               });
             }
+          } else if (this.projectName === 'INCENT_TRAFFIC') {
+            // Для INCENT_TRAFFIC: WEEK внутри CAMPAIGN внутри COUNTRY внутри NETWORK
+            currentWeek = nameOrRange;
+            if (comment && currentNetwork && currentCountry && currentCampaign) {
+              comments.push({ 
+                appName: currentNetwork, 
+                weekRange: currentWeek, 
+                level: 'WEEK', 
+                comment, 
+                identifier: currentCampaign, // campaignId
+                sourceApp: currentCampaign, // campaignName 
+                campaign: currentCampaign, // campaignId
+                country: currentCountry
+              });
+            }
           } else {
             // Стандартная логика для других проектов
             currentWeek = nameOrRange;
@@ -342,7 +416,7 @@ class CommentCache {
               });
             }
           }
-        } else if (comment && currentApp) {
+        } else if (comment && (currentApp || (this.projectName === 'INCENT_TRAFFIC' && currentNetwork))) {
           // Обработка других уровней
           let config = null;
           
@@ -355,26 +429,8 @@ class CommentCache {
               country: idOrEmpty || 'N/A' // Код страны
             };
           } else if (this.projectName === 'INCENT_TRAFFIC') {
-            if (level === 'COUNTRY') {
-              config = {
-                identifier: idOrEmpty || 'N/A',
-                sourceApp: 'N/A',
-                campaign: nameOrRange || 'N/A',
-                country: idOrEmpty || 'N/A'
-              };
-            } else if (level === 'CAMPAIGN') {
-              config = {
-                identifier: idOrEmpty || 'N/A',
-                sourceApp: nameOrRange || 'N/A',
-                campaign: idOrEmpty || 'N/A'
-              };
-            } else {
-              config = {
-                identifier: idOrEmpty || 'N/A',
-                sourceApp: 'N/A',
-                campaign: nameOrRange || 'N/A'
-              };
-            }
+            // Для INCENT_TRAFFIC все случаи уже обработаны выше, пропускаем
+            config = null;
           } else {
             // Стандартная логика
             config = {
@@ -395,7 +451,8 @@ class CommentCache {
           }
           
           if (config && currentWeek) {
-            comments.push({ appName: currentApp, weekRange: currentWeek, level, comment, ...config });
+            const appName = this.projectName === 'INCENT_TRAFFIC' ? currentNetwork : currentApp;
+            comments.push({ appName, weekRange: currentWeek, level, comment, ...config });
           } else if (config && this.projectName === 'APPLOVIN_TEST' && level === 'COUNTRY') {
             // Для APPLOVIN_TEST страны могут быть без явного weekRange в текущей строке
             comments.push({ appName: currentApp, weekRange: currentWeek || '', level, comment, ...config });
@@ -425,6 +482,9 @@ class CommentCache {
       const updates = [];
       let currentApp = '', currentWeek = '', currentCampaign = '';
       
+      // Для INCENT_TRAFFIC: отслеживаем network, country, campaign
+      let currentNetwork = '', currentCountry = '';
+      
       data.slice(1).forEach((row, i) => {
         if (!row?.length) return;
         
@@ -434,6 +494,38 @@ class CommentCache {
           currentApp = nameOrRange;
           currentWeek = '';
           currentCampaign = '';
+        } else if (level === 'NETWORK' && this.projectName === 'INCENT_TRAFFIC') {
+          // Для INCENT_TRAFFIC: NETWORK - это аналог APP
+          currentNetwork = nameOrRange;
+          currentCountry = '';
+          currentCampaign = '';
+          currentWeek = '';
+          
+          // Применяем комментарий к NETWORK если есть
+          const key = this.getCommentKey(currentNetwork, '', 'NETWORK', 'N/A', nameOrRange, 'N/A');
+          const comment = comments[key];
+          
+          if (comment) {
+            updates.push({
+              range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+              values: [[comment]]
+            });
+          }
+        } else if (level === 'COUNTRY' && this.projectName === 'INCENT_TRAFFIC') {
+          currentCountry = nameOrRange;
+          currentCampaign = '';
+          currentWeek = '';
+          
+          // Применяем комментарий к COUNTRY если есть
+          const key = this.getCommentKey(currentNetwork, '', 'COUNTRY', idOrEmpty || 'N/A', nameOrRange, 'N/A', idOrEmpty);
+          const comment = comments[key];
+          
+          if (comment) {
+            updates.push({
+              range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+              values: [[comment]]
+            });
+          }
         } else if (level === 'CAMPAIGN' && this.projectName === 'APPLOVIN_TEST') {
           currentCampaign = nameOrRange;
           const campaignId = idOrEmpty || 'N/A';
@@ -441,6 +533,21 @@ class CommentCache {
           
           // Генерация ключа для уровня CAMPAIGN в APPLOVIN_TEST
           const key = this.getCommentKey(currentApp, '', 'CAMPAIGN', campaignId, nameOrRange, campaignId);
+          const comment = comments[key];
+          
+          if (comment) {
+            updates.push({
+              range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+              values: [[comment]]
+            });
+          }
+        } else if (level === 'CAMPAIGN' && this.projectName === 'INCENT_TRAFFIC') {
+          // Для INCENT_TRAFFIC: CAMPAIGN внутри COUNTRY внутри NETWORK
+          currentCampaign = nameOrRange;
+          currentWeek = '';
+          
+          // Применяем комментарий к CAMPAIGN если есть
+          const key = this.getCommentKey(currentNetwork, '', 'CAMPAIGN', idOrEmpty || 'N/A', nameOrRange, idOrEmpty, currentCountry);
           const comment = comments[key];
           
           if (comment) {
@@ -462,17 +569,31 @@ class CommentCache {
                 values: [[comment]]
               });
             }
+          } else if (this.projectName === 'INCENT_TRAFFIC') {
+            // Для INCENT_TRAFFIC: WEEK внутри CAMPAIGN внутри COUNTRY внутри NETWORK
+            currentWeek = nameOrRange;
+            
+            // Применяем комментарий к WEEK если есть
+            const key = this.getCommentKey(currentNetwork, currentWeek, 'WEEK', currentCampaign, currentCampaign, currentCampaign, currentCountry);
+            const comment = comments[key];
+            
+            if (comment) {
+              updates.push({
+                range: `${this.config.SHEET_NAME}!${String.fromCharCode(64 + cols.comment)}${i + 2}`,
+                values: [[comment]]
+              });
+            }
           } else {
             currentWeek = nameOrRange;
           }
         }
         
-        if (!currentApp) return;
+        if (!currentApp && !(this.projectName === 'INCENT_TRAFFIC' && currentNetwork)) return;
         
         // Генерация ключей для остальных уровней
         const keys = {
           WEEK: () => {
-            if (this.projectName === 'APPLOVIN_TEST') {
+            if (this.projectName === 'APPLOVIN_TEST' || this.projectName === 'INCENT_TRAFFIC') {
               // Уже обработано выше
               return null;
             }
@@ -480,22 +601,26 @@ class CommentCache {
           },
           SOURCE_APP: () => this.getCommentKey(currentApp, currentWeek, 'SOURCE_APP', nameOrRange, nameOrRange, 'N/A'),
           CAMPAIGN: () => {
-            if (this.projectName === 'APPLOVIN_TEST') {
+            if (this.projectName === 'APPLOVIN_TEST' || this.projectName === 'INCENT_TRAFFIC') {
               // Уже обработано выше
               return null;
-            }
-            if (this.projectName === 'INCENT_TRAFFIC') {
-              return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', idOrEmpty || 'N/A', nameOrRange, idOrEmpty);
             }
             const id = this.extractCampaignIdFromHyperlink(idOrEmpty) || idOrEmpty;
             const name = this.projectName === 'TRICKY' ? id : nameOrRange;
             return this.getCommentKey(currentApp, currentWeek, 'CAMPAIGN', 
                                      this.projectName === 'TRICKY' ? id : 'N/A', nameOrRange, name);
           },
-          NETWORK: () => this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange),
+          NETWORK: () => {
+            if (this.projectName === 'INCENT_TRAFFIC') {
+              // Уже обработано выше
+              return null;
+            }
+            return this.getCommentKey(currentApp, currentWeek, 'NETWORK', idOrEmpty || 'N/A', 'N/A', nameOrRange);
+          },
           COUNTRY: () => {
             if (this.projectName === 'INCENT_TRAFFIC') {
-              return this.getCommentKey(currentApp, currentWeek, 'COUNTRY', idOrEmpty || 'N/A', 'N/A', nameOrRange, idOrEmpty);
+              // Уже обработано выше
+              return null;
             } else if (this.projectName === 'APPLOVIN_TEST') {
               // Для APPLOVIN_TEST: страны связаны с кампаниями и неделями
               const countryCode = idOrEmpty || 'N/A';

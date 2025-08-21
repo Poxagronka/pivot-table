@@ -133,19 +133,19 @@ const CONDITIONAL_CONFIG = {
     "First Week": ["#e0e0e0", "#757575"]
   },
   columns: {
-    spend: 6,
-    eROAS: 15,
-    eProfit: 16,
-    profit: 17,
-    growth: 18
+    spend: COLUMN_CONFIG.COLUMNS.SPEND_WOW,   // 6
+    eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,   // 13 (было 15)
+    eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730, // 14 (было 16)
+    profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,  // 15 (было 17)
+    growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS  // 16 (было 18)
   },
   numberFormats: [
-    { col: 8, format: '$0.0' },   // CPI
-    { col: 10, format: '0.0' },   // IPM
-    { col: 13, format: '$0.0' },  // eARPU
-    { col: 16, format: '$0.0' }   // eProfit
+    { col: COLUMN_CONFIG.COLUMNS.CPI, format: '$0.0' },      // 8
+    { col: COLUMN_CONFIG.COLUMNS.IPM, format: '0.0' },       // 10
+    { col: COLUMN_CONFIG.COLUMNS.EARPU, format: '$0.0' },    // 11 (было 13)
+    { col: COLUMN_CONFIG.COLUMNS.EPROFIT_730, format: '$0.0' }   // eProfit
   ],
-  standardHiddenColumns: [1, 13, 14, 3] // Level, eARPU 365d, eROAS 365d, ID
+  // Это поле больше не используется - заменено на COLUMN_CONFIG.HIDDEN_COLUMNS
 };
 
 // ========== ПУБЛИЧНЫЕ ФУНКЦИИ (для совместимости) ==========
@@ -265,11 +265,12 @@ function applyBaseFormatting(sheet, numRows, numCols) {
   sheet.getRange(2, 1, numRows - 1, numCols).setVerticalAlignment('middle');
   
   // Специальные колонки
-  sheet.getRange(2, 9, numRows - 1, 1).setWrap(true).setHorizontalAlignment('center'); // ROAS
-  sheet.getRange(2, numCols, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Comments
-  sheet.getRange(2, numCols - 1, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Growth Status
-  sheet.getRange(2, 15, numRows - 1, 1).setHorizontalAlignment('right'); // eROAS
-  sheet.getRange(2, 16, numRows - 1, 1).setHorizontalAlignment('right'); // eProfit
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.ROAS_COMBINED, numRows - 1, 1).setWrap(true).setHorizontalAlignment('center'); // ROAS
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.RR_COMBINED, numRows - 1, 1).setWrap(true).setHorizontalAlignment('center'); // RR
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.COMMENTS, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Comments
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.GROWTH_STATUS, numRows - 1, 1).setWrap(true).setHorizontalAlignment('left'); // Growth Status
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.EROAS_730, numRows - 1, 1).setHorizontalAlignment('right'); // eROAS
+  sheet.getRange(2, COLUMN_CONFIG.COLUMNS.EPROFIT_730, numRows - 1, 1).setHorizontalAlignment('right'); // eProfit
   
   // Числовое форматирование
   CONDITIONAL_CONFIG.numberFormats.forEach(({ col, format }) => {
@@ -471,7 +472,7 @@ function applyArrowFormatting(sheet, sheetId, numRows, spreadsheetId) {
 // ========== СКРЫТИЕ КОЛОНОК ==========
 function applyColumnHiding(sheet) {
   // Стандартные скрытые колонки
-  CONDITIONAL_CONFIG.standardHiddenColumns.forEach(col => {
+  COLUMN_CONFIG.HIDDEN_COLUMNS.forEach(col => {
     if (col === 13 || col === 14) {
       sheet.hideColumns(col, 1);
     } else {

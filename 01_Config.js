@@ -215,19 +215,82 @@ function setCurrentProject(projectName) {
   CURRENT_PROJECT = projectName;
 }
 
-var TABLE_CONFIG = {
+// Централизованная конфигурация колонок
+var COLUMN_CONFIG = {
+  // Индексы колонок (1-based для Google Sheets)
+  COLUMNS: {
+    LEVEL: 1,
+    WEEK_RANGE: 2,
+    ID: 3,
+    GEO: 4,
+    SPEND: 5,
+    SPEND_WOW: 6,
+    INSTALLS: 7,
+    CPI: 8,
+    ROAS_COMBINED: 9,
+    IPM: 10,
+    RR_COMBINED: 11,  // Объединенная RR D1→D7
+    EARPU: 12,
+    EROAS_365: 13,
+    EROAS_730: 14,
+    EPROFIT_730: 15,
+    EPROFIT_WOW: 16,
+    GROWTH_STATUS: 17,
+    COMMENTS: 18
+  },
+  
+  // Заголовки колонок
   HEADERS: [
-    'Level', 'Week Range / Source App', 'ID', 'GEO', 'Spend', 'Spend WoW %', 'Installs', 'CPI', 
-    'ROAS D1→D3→D7→D14→D30', 'IPM', 'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 
-    'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 
-    'Growth Status', 'Comments'
+    'Level',
+    'Week Range / Source App',
+    'ID',
+    'GEO',
+    'Spend',
+    'Spend WoW %',
+    'Installs',
+    'CPI',
+    'ROAS D1→D3→D7→D14→D30',
+    'IPM',
+    'RR D1→D7',  // Объединенная колонка вместо двух отдельных
+    'eARPU 365d',
+    'eROAS 365d',
+    'eROAS 730d (initial → actual)',
+    'eProfit 730d (initial → actual)',
+    'eProfit 730d WoW %',
+    'Growth Status',
+    'Comments'
   ],
-  COLUMN_WIDTHS: [
-    { c: 1, w: 80 }, { c: 2, w: 350 }, { c: 3, w: 40 }, { c: 4, w: 40 }, { c: 5, w: 65 },
-    { c: 6, w: 55 }, { c: 7, w: 55 }, { c: 8, w: 45 }, { c: 9, w: 250 }, { c: 10, w: 37 },
-    { c: 11, w: 42 }, { c: 12, w: 42 }, { c: 13, w: 55 }, { c: 14, w: 55 }, { c: 15, w: 115 },
-    { c: 16, w: 120 }, { c: 17, w: 85 }, { c: 18, w: 160 }, { c: 19, w: 450 }
-  ]
+  
+  // Ширины колонок
+  WIDTHS: {
+    1: 80,   // Level
+    2: 350,  // Week Range / Source App
+    3: 40,   // ID
+    4: 40,   // GEO
+    5: 65,   // Spend
+    6: 55,   // Spend WoW %
+    7: 55,   // Installs
+    8: 45,   // CPI
+    9: 250,  // ROAS (увеличено для D14)
+    10: 37,  // IPM
+    11: 85,  // RR D1→D7 (объединенная)
+    12: 55,  // eARPU 365d
+    13: 55,  // eROAS 365d
+    14: 115, // eROAS 730d
+    15: 120, // eProfit 730d
+    16: 85,  // eProfit 730d WoW %
+    17: 160, // Growth Status
+    18: 450  // Comments
+  },
+  
+  // Колонки для скрытия по умолчанию
+  HIDDEN_COLUMNS: [1, 3, 7, 12, 13]  // Level, ID, Installs, eARPU, eROAS 365d
+};
+
+// Обновленный TABLE_CONFIG использующий COLUMN_CONFIG
+var TABLE_CONFIG = {
+  HEADERS: COLUMN_CONFIG.HEADERS,
+  COLUMN_WIDTHS: Object.entries(COLUMN_CONFIG.WIDTHS).map(([c, w]) => ({ c: parseInt(c), w }))
 };
 
 var COLORS = {
