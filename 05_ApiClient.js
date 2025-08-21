@@ -61,7 +61,7 @@ const ROW_PARSERS = {
 const METRICS_MAP = [
   ['cpi', 'float'], ['installs', 'int'], ['ipm', 'float'], ['spend', 'float'],
   ['rrD1', 'float'], ['roasD1', 'float'], ['roasD3', 'float'], ['rrD7', 'float'],
-  ['roasD7', 'float'], ['roasD30', 'float'], ['eArpuForecast', 'float'],
+  ['roasD7', 'float'], ['roasD14', 'float'], ['roasD30', 'float'], ['eArpuForecast', 'float'],
   ['eRoasForecast', 'float'], ['eProfitForecast', 'float'], ['eRoasForecastD730', 'float']
 ];
 
@@ -695,6 +695,7 @@ function aggregateCampaigns(campaigns) {
     roasD1: campaigns.reduce((s, c) => s + c.roasD1, 0) / (campaigns.length || 1),
     roasD3: campaigns.reduce((s, c) => s + c.roasD3, 0) / (campaigns.length || 1),
     roasD7: campaigns.reduce((s, c) => s + c.roasD7, 0) / (campaigns.length || 1),
+    roasD14: campaigns.reduce((s, c) => s + c.roasD14, 0) / (campaigns.length || 1),
     roasD30: campaigns.reduce((s, c) => s + c.roasD30, 0) / (campaigns.length || 1),
     rrD1: campaigns.reduce((s, c) => s + c.rrD1, 0) / (campaigns.length || 1),
     rrD7: campaigns.reduce((s, c) => s + c.rrD7, 0) / (campaigns.length || 1),

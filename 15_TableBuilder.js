@@ -86,7 +86,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           weekRow[6] = weekTotals.totalInstalls;
           weekRow[7] = weekTotals.avgCpi.toFixed(3);
           
-          const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
+          const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD14.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
           weekRow[8] = combinedRoas;
           
           weekRow[9] = weekTotals.avgIpm.toFixed(1);
@@ -141,7 +141,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
             countryRow[6] = campaign.installs || 0;
             countryRow[7] = campaign.cpi ? campaign.cpi.toFixed(3) : '0.000';
             
-            const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
+            const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD14 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
             countryRow[8] = combinedRoas;
             
             countryRow[9] = (campaign.ipm || 0).toFixed(1);
@@ -680,7 +680,7 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     return row;
   } else if (level === 'WEEK') {
     row[1] = `${week.weekStart} - ${week.weekEnd}`;
-    const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
+    const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD14.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
     let eProfit730Display = formatSmartCurrency(data.totalProfit);
@@ -697,7 +697,7 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
   } else if (level === 'CAMPAIGN') {
     row[1] = data.sourceApp; row[2] = campaignIdValue; row[3] = data.geo;
-    const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
+    const combinedRoas = `${data.roasD1.toFixed(0)}% → ${data.roasD3.toFixed(0)}% → ${data.roasD7.toFixed(0)}% → ${data.roasD14.toFixed(0)}% → ${data.roasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.eRoasForecastD730.toFixed(0)}%`;
     let eProfit730Display = formatSmartCurrency(data.eProfitForecast);
@@ -714,7 +714,7 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     row[15] = eProfit730Display; row[16] = profitWoW; row[17] = status;
   } else {
     row[1] = displayName || identifier;
-    const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
+    const combinedRoas = `${data.avgRoasD1.toFixed(0)}% → ${data.avgRoasD3.toFixed(0)}% → ${data.avgRoasD7.toFixed(0)}% → ${data.avgRoasD14.toFixed(0)}% → ${data.avgRoasD30.toFixed(0)}%`;
     
     let eROAS730Display = `${data.avgEROASD730.toFixed(0)}%`;
     let eProfit730Display = formatSmartCurrency(data.totalProfit);
@@ -738,7 +738,7 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
 function getCachedWeekTotals(campaigns) {
   if (!campaigns || campaigns.length === 0) {
     return {
-      totalSpend: 0, totalInstalls: 0, avgCpi: 0, avgRoasD1: 0, avgRoasD3: 0, avgRoasD7: 0, avgRoasD30: 0,
+      totalSpend: 0, totalInstalls: 0, avgCpi: 0, avgRoasD1: 0, avgRoasD3: 0, avgRoasD7: 0, avgRoasD14: 0, avgRoasD30: 0,
       avgIpm: 0, avgRrD1: 0, avgRrD7: 0, avgArpu: 0, avgERoas: 0, avgEROASD730: 0, totalProfit: 0
     };
   }
@@ -762,6 +762,7 @@ function calculateWeekTotals(campaigns) {
   const avgRoasD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD1, 0) / campaigns.length : 0;
   const avgRoasD3 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD3, 0) / campaigns.length : 0;
   const avgRoasD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD7, 0) / campaigns.length : 0;
+  const avgRoasD14 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD14, 0) / campaigns.length : 0;
   const avgRoasD30 = campaigns.length ? campaigns.reduce((s, c) => s + c.roasD30, 0) / campaigns.length : 0;
   
   const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
@@ -798,7 +799,7 @@ function calculateWeekTotals(campaigns) {
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
   return {
-    totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD30, avgIpm, avgRrD1, avgRrD7,
+    totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD14, avgRoasD30, avgIpm, avgRrD1, avgRrD7,
     avgArpu, avgERoas, avgEROASD730, totalProfit
   };
 }
@@ -812,9 +813,5 @@ function clearTableBuilderCaches() {
 }
 
 function getUnifiedHeaders() {
-  return [
-    'Level', 'Week Range / Source App', 'ID', 'GEO',
-    'Spend', 'Spend WoW %', 'Installs', 'CPI', 'ROAS D1→D3→D7→D30', 'IPM',
-    'RR D-1', 'RR D-7', 'eARPU 365d', 'eROAS 365d', 'eROAS 730d (initial → actual)', 'eProfit 730d (initial → actual)', 'eProfit 730d WoW %', 'Growth Status', 'Comments'
-  ];
+  return TABLE_CONFIG.HEADERS;
 }
