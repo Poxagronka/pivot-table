@@ -241,23 +241,22 @@ function executeWithRetry(url, options, project, maxRetries = 3) {
 
 // ========== ОБРАБОТКА ДАННЫХ ==========
 
-function processApiData(rawData, includeLastWeek = null) {
+function processApiData(rawData) {
   const stats = rawData.data.analytics.richStats.stats;
   const today = new Date();
-  const currentWeekStart = formatDateForAPI(getMondayOfWeek(today));
-  const lastWeekStart = formatDateForAPI(getMondayOfWeek(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)));
-  const shouldIncludeLastWeek = includeLastWeek !== null ? includeLastWeek : (today.getDay() >= 2 || today.getDay() === 0);
+  const sundayOfCurrentWeek = getSundayOfWeek(today);
+  const futureDate = formatDateForAPI(new Date(sundayOfCurrentWeek.getTime() + 24 * 60 * 60 * 1000)); // Понедельник следующей недели
   
   console.log(`Processing ${stats.length} records for ${CURRENT_PROJECT}...`);
   
   // Специальный процессор для TRICKY
   if (CURRENT_PROJECT === 'TRICKY') {
-    return processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek);
+    return processTrickyStrategy(stats, sundayOfCurrentWeek);
   }
   
   // Универсальный процессор
   const processor = DATA_PROCESSORS[CURRENT_PROJECT] || DATA_PROCESSORS.DEFAULT;
-  const data = processWithBuilder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor);
+  const data = processWithBuilder(stats, sundayOfCurrentWeek, processor);
   
   // Постобработка если нужна
   if (processor.postProcess === 'restructureToCampaignFirst') {
@@ -267,7 +266,7 @@ function processApiData(rawData, includeLastWeek = null) {
   return data;
 }
 
-function processWithBuilder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor) {
+function processWithBuilder(stats, sundayOfCurrentWeek, processor) {
   const builders = {
     networkBuilder: buildNetworkStructure,
     appBuilder: buildAppStructure,
@@ -275,12 +274,12 @@ function processWithBuilder(stats, currentWeekStart, lastWeekStart, shouldInclud
   };
   
   const builder = builders[processor.builder] || builders.appBuilder;
-  return builder(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor);
+  return builder(stats, sundayOfCurrentWeek, processor);
 }
 
 // ========== BUILDERS ==========
 
-function buildNetworkStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek, processor) {
+function buildNetworkStructure(stats, sundayOfCurrentWeek, processor) {
   const networkData = {};
   const keyCountries = processor.keyCountries || [];
   
@@ -288,7 +287,8 @@ function buildNetworkStructure(stats, currentWeekStart, lastWeekStart, shouldInc
     const date = row[0].value;
     const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
     
-    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    // Исключаем только будущие недели (после текущей)
+    if (new Date(date) > sundayOfCurrentWeek) return;
     
     const data = parseRowUnified(row);
     
@@ -324,14 +324,15 @@ function buildNetworkStructure(stats, currentWeekStart, lastWeekStart, shouldInc
   return networkData;
 }
 
-function buildAppStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+function buildAppStructure(stats, sundayOfCurrentWeek) {
   const appData = {};
   
   stats.forEach(row => {
     const date = row[0].value;
     const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
     
-    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    // Исключаем только будущие недели
+    if (new Date(date) > sundayOfCurrentWeek) return;
     
     const data = parseRowUnified(row);
     const appKey = data.app.id;
@@ -359,14 +360,15 @@ function buildAppStructure(stats, currentWeekStart, lastWeekStart, shouldInclude
   return appData;
 }
 
-function buildAppWithNetworksStructure(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+function buildAppWithNetworksStructure(stats, sundayOfCurrentWeek) {
   const appData = {};
   
   stats.forEach(row => {
     const date = row[0].value;
     const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
     
-    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    // Исключаем только будущие недели
+    if (new Date(date) > sundayOfCurrentWeek) return;
     
     const data = parseRowUnified(row);
     const appKey = data.app.id;
@@ -499,7 +501,7 @@ function parseRow(row, isOverallOrIncent) {
 
 // ========== СПЕЦИАЛЬНЫЕ ПРОЦЕССОРЫ (без изменений) ==========
 
-function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldIncludeLastWeek) {
+function processTrickyStrategy(stats, sundayOfCurrentWeek) {
   ensureBundleIdCacheLoaded();
   const appsDbCache = getOptimizedAppsDbForTricky();
   const appData = {};
@@ -509,7 +511,8 @@ function processTrickyStrategy(stats, currentWeekStart, lastWeekStart, shouldInc
     const date = row[0].value;
     const weekKey = formatDateForAPI(getMondayOfWeek(new Date(date)));
     
-    if (weekKey >= currentWeekStart || (!shouldIncludeLastWeek && weekKey >= lastWeekStart)) return;
+    // Исключаем только будущие недели
+    if (new Date(date) > sundayOfCurrentWeek) return;
     
     const data = parseRow(row, false);
     const bundleId = getCachedBundleId(data.campaignName, data.campaignId) || 'unknown';
@@ -848,11 +851,11 @@ function getOptimizedSourceAppDisplayName(bundleId, appsDbCache) {
 
 // ========== LEGACY ФУНКЦИИ (для совместимости) ==========
 
-function processProjectApiData(projectName, rawData, includeLastWeek = null) {
+function processProjectApiData(projectName, rawData) {
   const originalProject = CURRENT_PROJECT;
   setCurrentProject(projectName);
   try {
-    return processApiData(rawData, includeLastWeek);
+    return processApiData(rawData);
   } finally {
     setCurrentProject(originalProject);
   }

@@ -484,11 +484,9 @@ function updateProjectData(projectName) {
     return;
   }
   
-  // Calculate end date (last complete week)
+  // Calculate end date (до конца текущей недели - воскресенье)
   const today = new Date();
-  const dayOfWeek = today.getDay();
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() - (dayOfWeek === 0 ? 1 : dayOfWeek));
+  const endDate = getSundayOfWeek(today);
   
   const dateRange = {
     from: formatDateForAPI(earliestDate),

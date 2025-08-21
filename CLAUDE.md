@@ -10,16 +10,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Deployment Commands
 - **Deploy to Google Apps Script**: `clasp push --force` (pushes all local changes to GAS)
 - **Deploy and Sync**: `./sync_gas.sh` (interactive script that handles GAS deployment and git sync)
-- **Auto Deploy**: `./deploy_smart.sh` (interactive deployment to both GAS and GitHub - asks user for commit message)
 - **Open in Browser**: `clasp open` (opens the GAS project in web editor)
 
 ### Deployment Best Practices
 When deploying changes:
-- Use `./deploy_smart.sh` for full deployment to both GAS and GitHub
-- Script analyzes changed files and suggests intelligent commit message
-- **IMPORTANT**: Always ask user for commit message instead of auto-generating
-- User can press Enter to use suggested message or type custom one
-- Deployment pushes to GAS first, then commits and pushes to GitHub
+- Use `clasp push --force` to deploy to Google Apps Script
+- Use `./sync_gas.sh` for synchronized deployment and git sync
+- Commit changes manually using git commands when needed
 
 ### Testing Commands
 No automated tests - this is a Google Apps Script project. Testing is done manually through the Google Sheets interface.

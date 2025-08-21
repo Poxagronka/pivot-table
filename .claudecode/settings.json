@@ -1,9 +1,4 @@
 {
-  "hooks": {
-    "post-edit": "./deploy_smart.sh",
-    "post-multiedit": "./deploy_smart.sh",
-    "post-write": "./deploy_smart.sh"
-  },
   "auto_commit": true,
   "auto_push": true
 }
