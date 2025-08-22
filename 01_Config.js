@@ -318,5 +318,35 @@ function getAllProjectNames() {
     ).join('_');
   });
 }
+
+// Функция валидации синхронизации конфигураций
+function validateConditionalConfig() {
+  const errors = [];
+  
+  // Проверяем что CONDITIONAL_CONFIG использует правильные индексы
+  // Эта функция будет вызываться из 07_SheetFormatting.js где определен CONDITIONAL_CONFIG
+  if (typeof CONDITIONAL_CONFIG !== 'undefined') {
+    const expected = {
+      spend: COLUMN_CONFIG.COLUMNS.SPEND_WOW,
+      eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,
+      eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730,
+      profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,
+      growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS
+    };
+    
+    Object.entries(expected).forEach(([key, value]) => {
+      if (CONDITIONAL_CONFIG.columns[key] !== value) {
+        errors.push(`${key}: ${CONDITIONAL_CONFIG.columns[key]} !== ${value}`);
+      }
+    });
+    
+    if (errors.length > 0) {
+      console.error('CONDITIONAL_CONFIG не синхронизирован с COLUMN_CONFIG:', errors);
+    }
+  }
+  
+  return errors.length === 0;
+}
+
 // Экспорт для обратной совместимости
 var ALL_PROJECT_NAMES = getAllProjectNames();

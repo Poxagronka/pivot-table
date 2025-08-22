@@ -134,15 +134,15 @@ const CONDITIONAL_CONFIG = {
   },
   columns: {
     spend: COLUMN_CONFIG.COLUMNS.SPEND_WOW,   // 6
-    eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,   // 13 (было 15)
-    eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730, // 14 (было 16)
-    profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,  // 15 (было 17)
-    growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS  // 16 (было 18)
+    eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,   // 14 (колонка N)
+    eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730, // 15 (колонка O)
+    profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,  // 16 (колонка P)
+    growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS  // 17 (колонка Q)
   },
   numberFormats: [
     { col: COLUMN_CONFIG.COLUMNS.CPI, format: '$0.0' },      // 8
     { col: COLUMN_CONFIG.COLUMNS.IPM, format: '0.0' },       // 10
-    { col: COLUMN_CONFIG.COLUMNS.EARPU, format: '$0.0' },    // 11 (было 13)
+    { col: COLUMN_CONFIG.COLUMNS.EARPU, format: '$0.0' },    // 11
     { col: COLUMN_CONFIG.COLUMNS.EPROFIT_730, format: '$0.0' }   // eProfit
   ],
   // Это поле больше не используется - заменено на COLUMN_CONFIG.HIDDEN_COLUMNS
@@ -341,13 +341,15 @@ function applyConditionalFormats(sheet, sheetId, numRows, appData, spreadsheetId
   const requests = [];
   const cols = CONDITIONAL_CONFIG.columns;
   
-  // 1. Spend WoW (отрицательные/положительные)
+  // 1. Spend WoW (отрицательные/положительные) - используем A1 формат с правильными индексами
+  const spendCol = cols.spend; // 6
+  const spendLetter = columnIndexToLetter(spendCol); // F
   requests.push(
-    createFormatRule(sheetId, cols.spend, 1, numRows, 
-      '=AND(NOT(ISBLANK($F2)), LEFT($F2,1)="-")', 
+    createFormatRule(sheetId, spendCol, 1, numRows, 
+      `=AND(NOT(ISBLANK($${spendLetter}2)), LEFT($${spendLetter}2,1)="-")`, 
       '#f8d7da', '#721c24', 0),
-    createFormatRule(sheetId, cols.spend, 1, numRows,
-      '=AND(NOT(ISBLANK($F2)), $F2<>"", LEFT($F2,1)<>"-")',
+    createFormatRule(sheetId, spendCol, 1, numRows,
+      `=AND(NOT(ISBLANK($${spendLetter}2)), $${spendLetter}2<>"", LEFT($${spendLetter}2,1)<>"-")`,
       '#d1f2eb', '#0c5460', 1)
   );
   
@@ -376,13 +378,15 @@ function applyConditionalFormats(sheet, sheetId, numRows, appData, spreadsheetId
     });
   });
   
-  // 3. Profit WoW
+  // 3. Profit WoW - используем A1 формат с правильными индексами
+  const profitCol = cols.profit; // 16 (колонка P)
+  const profitLetter = columnIndexToLetter(profitCol); // P
   requests.push(
-    createFormatRule(sheetId, cols.profit, 1, numRows,
-      '=AND(ISNUMBER($Q2), $Q2>0)',
+    createFormatRule(sheetId, profitCol, 1, numRows,
+      `=AND(ISNUMBER($${profitLetter}2), $${profitLetter}2>0)`,
       '#d1f2eb', '#0c5460', ruleIndex++),
-    createFormatRule(sheetId, cols.profit, 1, numRows,
-      '=AND(ISNUMBER($Q2), $Q2<0)',
+    createFormatRule(sheetId, profitCol, 1, numRows,
+      `=AND(ISNUMBER($${profitLetter}2), $${profitLetter}2<0)`,
       '#f8d7da', '#721c24', ruleIndex++)
   );
   
@@ -425,15 +429,21 @@ function applyArrowFormatting(sheet, sheetId, numRows, spreadsheetId) {
   if (numRows <= 1) return;
   
   const rules = FORMAT_RULES[CURRENT_PROJECT] || FORMAT_RULES.DEFAULT;
-  const cols = CONDITIONAL_CONFIG.columns;
   
-  const data = sheet.getRange(2, 1, numRows - 1, cols.eProfit + 2).getValues();
+  // Используем максимальный индекс колонки для чтения всех нужных данных
+  const maxCol = Math.max(
+    COLUMN_CONFIG.COLUMNS.EROAS_730,
+    COLUMN_CONFIG.COLUMNS.EPROFIT_730
+  );
+  
+  const data = sheet.getRange(2, 1, numRows - 1, maxCol).getValues();
   const requests = [];
   
   data.forEach((row, index) => {
     const level = row[0];
-    const eroasValue = row[cols.eROAS - 1];
-    const eprofitValue = row[cols.eProfit - 1];
+    // Используем правильные индексы из конфига (минус 1 для 0-based массива)
+    const eroasValue = row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1];
+    const eprofitValue = row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1];
     const rowIndex = index + 1;
     
     // Получаем размер шрифта из конфигурации
@@ -443,13 +453,13 @@ function applyArrowFormatting(sheet, sheetId, numRows, spreadsheetId) {
     
     // Обрабатываем стрелки в eROAS
     if (eroasValue && typeof eroasValue === 'string' && eroasValue.includes('→')) {
-      requests.push(createArrowFormat(sheetId, rowIndex, cols.eROAS - 1, 
+      requests.push(createArrowFormat(sheetId, rowIndex, COLUMN_CONFIG.COLUMNS.EROAS_730 - 1, 
         eroasValue, smallerFontSize, baseFontSize));
     }
     
     // Обрабатываем стрелки в eProfit
     if (eprofitValue && typeof eprofitValue === 'string' && eprofitValue.includes('→')) {
-      requests.push(createArrowFormat(sheetId, rowIndex, cols.eProfit - 1,
+      requests.push(createArrowFormat(sheetId, rowIndex, COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1,
         eprofitValue, smallerFontSize, baseFontSize));
     }
   });
@@ -489,6 +499,17 @@ function applyColumnHiding(sheet) {
 
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
+// Преобразование индекса колонки в букву (1 -> A, 14 -> N, и т.д.)
+function columnIndexToLetter(index) {
+  let letter = '';
+  while (index > 0) {
+    const mod = (index - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    index = Math.floor((index - 1) / 26);
+  }
+  return letter;
+}
+
 function createOptimizedRanges(sheet, rowNumbers, numCols) {
   if (rowNumbers.length === 0) return [];
   
@@ -522,6 +543,7 @@ function hexToRgb(hex) {
 }
 
 function createFormatRule(sheetId, column, startRow, endRow, formula, bgColor, textColor, index) {
+  // Используем формулу как есть - она уже в правильном A1 формате
   return {
     addConditionalFormatRule: {
       rule: {
@@ -549,17 +571,19 @@ function createFormatRule(sheetId, column, startRow, endRow, formula, bgColor, t
 }
 
 function createEROASRule(ranges, formula, index) {
+  const eroasCol = COLUMN_CONFIG.COLUMNS.EROAS_730; // 14 (колонка N)
+  const eroasLetter = columnIndexToLetter(eroasCol); // N
   let formulaStr;
   
   if (formula.length === 4) {
     // Зеленый (>= target)
-    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("${eroasLetter}" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("${eroasLetter}" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
   } else if (formula.length === 6) {
     // Желтый (между 120 и target)
-    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]}, IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[2]} ${formula[3]})`;
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("${eroasLetter}" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("${eroasLetter}" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]}, IF(ISERROR(SEARCH("→", INDIRECT("${eroasLetter}" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[2]} ${formula[3]})`;
   } else {
     // Красный (< 120)
-    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("O" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("O" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("O" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("O" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
+    formulaStr = `=AND(NOT(ISBLANK(INDIRECT("${eroasLetter}" & ROW()))), IF(ISERROR(SEARCH("→", INDIRECT("${eroasLetter}" & ROW()))), VALUE(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "%", "")), VALUE(SUBSTITUTE(TRIM(RIGHT(SUBSTITUTE(INDIRECT("${eroasLetter}" & ROW()), "→", REPT(" ", 100)), 100)), "%", ""))) ${formula[0]} ${formula[1]})`;
   }
   
   const colors = formula[formula.length - 2];
