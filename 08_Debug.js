@@ -16,6 +16,8 @@
  * - debugProjectConfig() - валидация конфигурации проекта
  */
 
+// Дебаг функции удалены после тестирования
+
 // Заглушка для поддержания структуры файлов
 function debugPlaceholder() {
   console.log('Debug file is ready for custom debugging functions');

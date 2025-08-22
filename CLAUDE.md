@@ -14,9 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Deployment Best Practices
 When deploying changes:
-- Use `clasp push --force` to deploy to Google Apps Script
+- **ВСЕГДА выполняй `clasp push --force` после каждого изменения кода** - это критично для синхронизации с GAS
 - Use `./sync_gas.sh` for synchronized deployment and git sync
 - Commit changes manually using git commands when needed
+
+**ВАЖНОЕ ПРАВИЛО:** После любых изменений в файлах .js немедленно выполняй `clasp push --force` без исключений!
 
 ### Testing Commands
 No automated tests - this is a Google Apps Script project. Testing is done manually through the Google Sheets interface.
@@ -125,6 +127,11 @@ When modifying API queries:
 - Check "Debug" sheet tab for step-by-step API response analysis
 - Campaign filtering verification shows matched/unmatched patterns
 - Each project has individual debug functions available through menu
+
+#### Initial Metrics Debug Functions (`08_Debug.js`)
+- **`debugInitialMetrics()`** - подробная диагностика системы initialROAS/eProfit для текущего проекта
+- **`debugAllProjectsInitialMetrics()`** - комплексная проверка всех 9 проектов сразу
+- Проверяют: доступ к спредшиту, загрузку кеша, валидацию данных, логику дат, форматирование
 
 ### Code Editing Best Practices
 **ВАЖНО для Claude Code:** В этом проекте активен автоматический линтер, который может создавать конфликты при редактировании файлов.
