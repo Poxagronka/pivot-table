@@ -20,3 +20,4 @@
 function debugPlaceholder() {
   console.log('Debug file is ready for custom debugging functions');
 }
+
