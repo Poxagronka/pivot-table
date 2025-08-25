@@ -134,16 +134,22 @@ const CONDITIONAL_CONFIG = {
   },
   columns: {
     spend: COLUMN_CONFIG.COLUMNS.SPEND_WOW,   // 6
-    eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,   // 14 (колонка N)
-    eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730, // 15 (колонка O)
-    profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,  // 16 (колонка P)
-    growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS  // 17 (колонка Q)
+    eROAS: COLUMN_CONFIG.COLUMNS.EROAS_730,   // 20 (обновлено)
+    eProfit: COLUMN_CONFIG.COLUMNS.EPROFIT_730, // 21 (обновлено)
+    profit: COLUMN_CONFIG.COLUMNS.EPROFIT_WOW,  // 22 (обновлено)
+    growth: COLUMN_CONFIG.COLUMNS.GROWTH_STATUS  // 23 (обновлено)
   },
   numberFormats: [
-    { col: COLUMN_CONFIG.COLUMNS.CPI, format: '$0.0' },      // 8
-    { col: COLUMN_CONFIG.COLUMNS.IPM, format: '0.0' },       // 10
-    { col: COLUMN_CONFIG.COLUMNS.EARPU, format: '$0.0' },    // 11
-    { col: COLUMN_CONFIG.COLUMNS.EPROFIT_730, format: '$0.0' }   // eProfit
+    { col: COLUMN_CONFIG.COLUMNS.CPI, format: '$0.0' },           // 8
+    { col: COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1, format: '0.0' },  // NEW
+    { col: COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3, format: '0.0' },  // NEW
+    { col: COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7, format: '0.0' }, // NEW
+    { col: COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7, format: '0.0' }, // NEW
+    { col: COLUMN_CONFIG.COLUMNS.IPM, format: '0.0' },            // 14
+    { col: COLUMN_CONFIG.COLUMNS.RR_COEF_3_1, format: '0.0' },    // NEW
+    { col: COLUMN_CONFIG.COLUMNS.RR_COEF_7_3, format: '0.0' },    // NEW
+    { col: COLUMN_CONFIG.COLUMNS.EARPU, format: '$0.0' },         // 18
+    { col: COLUMN_CONFIG.COLUMNS.EPROFIT_730, format: '$0.0' }    // 21
   ],
   // Это поле больше не используется - заменено на COLUMN_CONFIG.HIDDEN_COLUMNS
 };

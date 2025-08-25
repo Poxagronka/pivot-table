@@ -90,7 +90,7 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas;
           
           weekRow[COLUMN_CONFIG.COLUMNS.IPM - 1] = weekTotals.avgIpm.toFixed(1);
-          weekRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${weekTotals.avgRrD1.toFixed(0)}% → ${weekTotals.avgRrD7.toFixed(0)}%`;
+          weekRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${weekTotals.avgRrD1.toFixed(0)}% → ${(weekTotals.avgRrD3 || 0).toFixed(0)}% → ${weekTotals.avgRrD7.toFixed(0)}%`;
           weekRow[COLUMN_CONFIG.COLUMNS.EARPU - 1] = weekTotals.avgArpu.toFixed(3);
           weekRow[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${weekTotals.avgERoas.toFixed(0)}%`;
           // Вместо простого форматирования, используем initialMetricsCache
@@ -690,7 +690,15 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     }
     
     row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.totalSpend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.totalInstalls; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.avgCpi.toFixed(3);
-    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; 
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1 - 1] = calculateCoefficient(data.avgRoasD3, data.avgRoasD1);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3 - 1] = calculateCoefficient(data.avgRoasD7, data.avgRoasD3);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7 - 1] = calculateCoefficient(data.avgRoasD14, data.avgRoasD7);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7 - 1] = calculateCoefficient(data.avgRoasD30, data.avgRoasD7);
+    row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); 
+    row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${(data.avgRrD3 || 0).toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_3_1 - 1] = calculateCoefficient(data.avgRrD3 || 0, data.avgRrD1);
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_7_3 - 1] = calculateCoefficient(data.avgRrD7, data.avgRrD3 || 0);
     row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.avgArpu.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.avgERoas.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
     row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   } else if (level === 'CAMPAIGN') {
@@ -707,7 +715,15 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     }
     
     row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.spend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.installs; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.cpi ? data.cpi.toFixed(3) : '0.000';
-    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.ipm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.rrD1.toFixed(0)}% → ${data.rrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; 
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1 - 1] = calculateCoefficient(data.roasD3, data.roasD1);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3 - 1] = calculateCoefficient(data.roasD7, data.roasD3);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7 - 1] = calculateCoefficient(data.roasD14, data.roasD7);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7 - 1] = calculateCoefficient(data.roasD30, data.roasD7);
+    row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.ipm.toFixed(1); 
+    row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.rrD1.toFixed(0)}% → ${(data.rrD3 || 0).toFixed(0)}% → ${data.rrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_3_1 - 1] = calculateCoefficient(data.rrD3 || 0, data.rrD1);
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_7_3 - 1] = calculateCoefficient(data.rrD7, data.rrD3 || 0);
     row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.eArpuForecast.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.eRoasForecast.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
     row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   } else {
@@ -724,7 +740,15 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
     }
     
     row[COLUMN_CONFIG.COLUMNS.SPEND - 1] = formatSmartCurrency(data.totalSpend); row[COLUMN_CONFIG.COLUMNS.SPEND_WOW - 1] = spendWoW; row[COLUMN_CONFIG.COLUMNS.INSTALLS - 1] = data.totalInstalls; row[COLUMN_CONFIG.COLUMNS.CPI - 1] = data.avgCpi.toFixed(3);
-    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas; 
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1 - 1] = calculateCoefficient(data.avgRoasD3, data.avgRoasD1);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3 - 1] = calculateCoefficient(data.avgRoasD7, data.avgRoasD3);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7 - 1] = calculateCoefficient(data.avgRoasD14, data.avgRoasD7);
+    row[COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7 - 1] = calculateCoefficient(data.avgRoasD30, data.avgRoasD7);
+    row[COLUMN_CONFIG.COLUMNS.IPM - 1] = data.avgIpm.toFixed(1); 
+    row[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${data.avgRrD1.toFixed(0)}% → ${(data.avgRrD3 || 0).toFixed(0)}% → ${data.avgRrD7.toFixed(0)}%`;
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_3_1 - 1] = calculateCoefficient(data.avgRrD3 || 0, data.avgRrD1);
+    row[COLUMN_CONFIG.COLUMNS.RR_COEF_7_3 - 1] = calculateCoefficient(data.avgRrD7, data.avgRrD3 || 0);
     row[COLUMN_CONFIG.COLUMNS.EARPU - 1] = data.avgArpu.toFixed(3); row[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${data.avgERoas.toFixed(0)}%`; row[COLUMN_CONFIG.COLUMNS.EROAS_730 - 1] = eROAS730Display;
     row[COLUMN_CONFIG.COLUMNS.EPROFIT_730 - 1] = eProfit730Display; row[COLUMN_CONFIG.COLUMNS.EPROFIT_WOW - 1] = profitWoW; row[COLUMN_CONFIG.COLUMNS.GROWTH_STATUS - 1] = status; row[COLUMN_CONFIG.COLUMNS.COMMENTS - 1] = '';
   }
@@ -732,11 +756,17 @@ function createUnifiedRow(level, week, data, spendWoW, profitWoW, status, appNam
   return row;
 }
 
+function calculateCoefficient(value1, value2) {
+  if (!value2 || value2 === 0) return '-';
+  const coef = value1 / value2;
+  return coef.toFixed(1);
+}
+
 function getCachedWeekTotals(campaigns) {
   if (!campaigns || campaigns.length === 0) {
     return {
       totalSpend: 0, totalInstalls: 0, avgCpi: 0, avgRoasD1: 0, avgRoasD3: 0, avgRoasD7: 0, avgRoasD14: 0, avgRoasD30: 0,
-      avgIpm: 0, avgRrD1: 0, avgRrD7: 0, avgArpu: 0, avgERoas: 0, avgEROASD730: 0, totalProfit: 0
+      avgIpm: 0, avgRrD1: 0, avgRrD3: 0, avgRrD7: 0, avgArpu: 0, avgERoas: 0, avgEROASD730: 0, totalProfit: 0
     };
   }
   
@@ -764,6 +794,7 @@ function calculateWeekTotals(campaigns) {
   
   const avgIpm = campaigns.length ? campaigns.reduce((s, c) => s + c.ipm, 0) / campaigns.length : 0;
   const avgRrD1 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD1, 0) / campaigns.length : 0;
+  const avgRrD3 = campaigns.length ? campaigns.reduce((s, c) => s + (c.rrD3 || 0), 0) / campaigns.length : 0;
   const avgRrD7 = campaigns.length ? campaigns.reduce((s, c) => s + c.rrD7, 0) / campaigns.length : 0;
   const avgArpu = campaigns.length ? campaigns.reduce((s, c) => s + c.eArpuForecast, 0) / campaigns.length : 0;
   
@@ -796,7 +827,7 @@ function calculateWeekTotals(campaigns) {
   const totalProfit = campaigns.reduce((s, c) => s + c.eProfitForecast, 0);
 
   return {
-    totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD14, avgRoasD30, avgIpm, avgRrD1, avgRrD7,
+    totalSpend, totalInstalls, avgCpi, avgRoasD1, avgRoasD3, avgRoasD7, avgRoasD14, avgRoasD30, avgIpm, avgRrD1, avgRrD3, avgRrD7,
     avgArpu, avgERoas, avgEROASD730, totalProfit
   };
 }

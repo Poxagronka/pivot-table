@@ -26,7 +26,7 @@ function createUnifiedRowGrouping(sheet, tableData, data) {
     console.log(`Row grouping: ${allRequests.length} total requests`);
     
     // ОДИН batchUpdate для всего
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 100;
     for (let i = 0; i < allRequests.length; i += BATCH_SIZE) {
       Sheets.Spreadsheets.batchUpdate({
         requests: allRequests.slice(i, i + BATCH_SIZE)

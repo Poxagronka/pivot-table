@@ -83,7 +83,7 @@ function isAutoUpdateEnabled() {
 var UNIFIED_MEASURES = [
   { id: "cpi", day: null }, { id: "installs", day: null }, { id: "ipm", day: null },
   { id: "spend", day: null }, { id: "retention_rate", day: 1 }, { id: "roas", day: 1 }, 
-  { id: "roas", day: 3 }, { id: "retention_rate", day: 7 }, { id: "roas", day: 7 }, 
+  { id: "roas", day: 3 }, { id: "retention_rate", day: 3 }, { id: "retention_rate", day: 7 }, { id: "roas", day: 7 }, 
   { id: "roas", day: 14 }, { id: "roas", day: 30 }, { id: "e_arpu_forecast", day: 365 },
   { id: "e_roas_forecast", day: 365 }, { id: "e_profit_forecast", day: 730 },
   { id: "e_roas_forecast", day: 730 }
@@ -228,15 +228,21 @@ var COLUMN_CONFIG = {
     INSTALLS: 7,
     CPI: 8,
     ROAS_COMBINED: 9,
-    IPM: 10,
-    RR_COMBINED: 11,  // Объединенная RR D1→D7
-    EARPU: 12,
-    EROAS_365: 13,
-    EROAS_730: 14,
-    EPROFIT_730: 15,
-    EPROFIT_WOW: 16,
-    GROWTH_STATUS: 17,
-    COMMENTS: 18
+    ROAS_COEF_3_1: 10,    // NEW - коэффициент ROAS 3/1
+    ROAS_COEF_7_3: 11,    // NEW - коэффициент ROAS 7/3
+    ROAS_COEF_14_7: 12,   // NEW - коэффициент ROAS 14/7
+    ROAS_COEF_30_7: 13,   // NEW - коэффициент ROAS 30/7
+    IPM: 14,              // сдвигается с 10 на 14
+    RR_COMBINED: 15,      // сдвигается с 11 на 15
+    RR_COEF_3_1: 16,      // NEW - коэффициент RR 3/1
+    RR_COEF_7_3: 17,      // NEW - коэффициент RR 7/3
+    EARPU: 18,            // сдвигается с 12 на 18
+    EROAS_365: 19,        // сдвигается с 13 на 19
+    EROAS_730: 20,        // сдвигается с 14 на 20
+    EPROFIT_730: 21,      // сдвигается с 15 на 21
+    EPROFIT_WOW: 22,      // сдвигается с 16 на 22
+    GROWTH_STATUS: 23,    // сдвигается с 17 на 23
+    COMMENTS: 24          // сдвигается с 18 на 24
   },
   
   // Заголовки колонок
@@ -250,8 +256,14 @@ var COLUMN_CONFIG = {
     'Installs',
     'CPI',
     'ROAS D1→D3→D7→D14→D30',
+    'ROAS 3/1',           // NEW
+    'ROAS 7/3',           // NEW
+    'ROAS 14/7',          // NEW
+    'ROAS 30/7',          // NEW
     'IPM',
-    'RR D1→D7',  // Объединенная колонка вместо двух отдельных
+    'RR D1→D3→D7',        // UPDATED (добавили D3)
+    'RR 3/1',             // NEW
+    'RR 7/3',             // NEW
     'eARPU 365d',
     'eROAS 365d',
     'eROAS 730d (initial → actual)',
@@ -271,20 +283,26 @@ var COLUMN_CONFIG = {
     6: 55,   // Spend WoW %
     7: 55,   // Installs
     8: 45,   // CPI
-    9: 250,  // ROAS (увеличено для D14)
-    10: 37,  // IPM
-    11: 85,  // RR D1→D7 (объединенная)
-    12: 55,  // eARPU 365d
-    13: 55,  // eROAS 365d
-    14: 115, // eROAS 730d
-    15: 120, // eProfit 730d
-    16: 85,  // eProfit 730d WoW %
-    17: 160, // Growth Status
-    18: 450  // Comments
+    9: 270,  // ROAS combined
+    10: 50,  // NEW - ROAS 3/1
+    11: 50,  // NEW - ROAS 7/3
+    12: 50,  // NEW - ROAS 14/7
+    13: 50,  // NEW - ROAS 30/7
+    14: 37,  // IPM
+    15: 150,  // RR combined (увеличить с 85 до 95 для D3)
+    16: 50,  // NEW - RR 3/1
+    17: 50,  // NEW - RR 7/3
+    18: 55,  // eARPU
+    19: 55,  // eROAS 365d
+    20: 115, // eROAS 730d
+    21: 120, // eProfit 730d
+    22: 85,  // eProfit WoW
+    23: 160, // Growth Status
+    24: 450  // Comments
   },
   
   // Колонки для скрытия по умолчанию
-  HIDDEN_COLUMNS: [1, 3, 7, 12, 13]  // Level, ID, Installs, eARPU, eROAS 365d
+  HIDDEN_COLUMNS: [1, 3, 7, 10, 11, 12, 13, 16, 17, 18, 19]  // Level, ID, Installs, все ROAS коэффициенты, RR коэффициенты, eARPU, eROAS 365d
 };
 
 // Обновленный TABLE_CONFIG использующий COLUMN_CONFIG
