@@ -89,8 +89,16 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
           const combinedRoas = `${weekTotals.avgRoasD1.toFixed(0)}% → ${weekTotals.avgRoasD3.toFixed(0)}% → ${weekTotals.avgRoasD7.toFixed(0)}% → ${weekTotals.avgRoasD14.toFixed(0)}% → ${weekTotals.avgRoasD30.toFixed(0)}%`;
           weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas;
           
+          // Добавляем коэффициенты ROAS
+          weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1 - 1] = calculateCoefficient(weekTotals.avgRoasD3, weekTotals.avgRoasD1);
+          weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3 - 1] = calculateCoefficient(weekTotals.avgRoasD7, weekTotals.avgRoasD3);
+          weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7 - 1] = calculateCoefficient(weekTotals.avgRoasD14, weekTotals.avgRoasD7);
+          weekRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7 - 1] = calculateCoefficient(weekTotals.avgRoasD30, weekTotals.avgRoasD7);
+          
           weekRow[COLUMN_CONFIG.COLUMNS.IPM - 1] = weekTotals.avgIpm.toFixed(1);
           weekRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${weekTotals.avgRrD1.toFixed(0)}% → ${(weekTotals.avgRrD3 || 0).toFixed(0)}% → ${weekTotals.avgRrD7.toFixed(0)}%`;
+          weekRow[COLUMN_CONFIG.COLUMNS.RR_COEF_3_1 - 1] = calculateCoefficient(weekTotals.avgRrD3 || 0, weekTotals.avgRrD1);
+          weekRow[COLUMN_CONFIG.COLUMNS.RR_COEF_7_3 - 1] = calculateCoefficient(weekTotals.avgRrD7, weekTotals.avgRrD3 || 0);
           weekRow[COLUMN_CONFIG.COLUMNS.EARPU - 1] = weekTotals.avgArpu.toFixed(3);
           weekRow[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${weekTotals.avgERoas.toFixed(0)}%`;
           // Вместо простого форматирования, используем initialMetricsCache
@@ -143,8 +151,16 @@ function buildUnifiedTable(data, tableData, formatData, wow, initialMetricsCache
             const combinedRoas = `${(campaign.roasD1 || 0).toFixed(0)}% → ${(campaign.roasD3 || 0).toFixed(0)}% → ${(campaign.roasD7 || 0).toFixed(0)}% → ${(campaign.roasD14 || 0).toFixed(0)}% → ${(campaign.roasD30 || 0).toFixed(0)}%`;
             countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COMBINED - 1] = combinedRoas;
             
+            // Добавляем коэффициенты ROAS
+            countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_3_1 - 1] = calculateCoefficient(campaign.roasD3 || 0, campaign.roasD1 || 0);
+            countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_7_3 - 1] = calculateCoefficient(campaign.roasD7 || 0, campaign.roasD3 || 0);
+            countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_14_7 - 1] = calculateCoefficient(campaign.roasD14 || 0, campaign.roasD7 || 0);
+            countryRow[COLUMN_CONFIG.COLUMNS.ROAS_COEF_30_7 - 1] = calculateCoefficient(campaign.roasD30 || 0, campaign.roasD7 || 0);
+            
             countryRow[COLUMN_CONFIG.COLUMNS.IPM - 1] = (campaign.ipm || 0).toFixed(1);
-            countryRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${(campaign.rrD1 || 0).toFixed(0)}% → ${(campaign.rrD7 || 0).toFixed(0)}%`;
+            countryRow[COLUMN_CONFIG.COLUMNS.RR_COMBINED - 1] = `${(campaign.rrD1 || 0).toFixed(0)}% → ${(campaign.rrD3 || 0).toFixed(0)}% → ${(campaign.rrD7 || 0).toFixed(0)}%`;
+            countryRow[COLUMN_CONFIG.COLUMNS.RR_COEF_3_1 - 1] = calculateCoefficient(campaign.rrD3 || 0, campaign.rrD1 || 0);
+            countryRow[COLUMN_CONFIG.COLUMNS.RR_COEF_7_3 - 1] = calculateCoefficient(campaign.rrD7 || 0, campaign.rrD3 || 0);
             countryRow[COLUMN_CONFIG.COLUMNS.EARPU - 1] = (campaign.eArpuForecast || 0).toFixed(3);
             countryRow[COLUMN_CONFIG.COLUMNS.EROAS_365 - 1] = `${(campaign.eRoasForecast || 0).toFixed(0)}%`;
             // Для каждой страны добавить обработку initial метрик
